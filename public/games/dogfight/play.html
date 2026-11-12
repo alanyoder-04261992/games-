@@ -250,7 +250,7 @@ import * as THREE from 'three/webgpu';
 import {
   Fn, If, Discard, uniform, texture, attribute, uv as tslUv, float, vec2, vec3, vec4, normalize, mix, pow, clamp as tslClamp, max, dot, abs, length, exp, cos, sin,
   smoothstep, reflect, select, vertexStage, positionLocal, positionWorld, cameraPosition, cameraProjectionMatrix, modelViewMatrix, normalGeometry,
-  materialColor, instancedDynamicBufferAttribute, screenDPR, pass,
+  materialColor, instancedDynamicBufferAttribute, screenDPR, pass, output, sqrt, densityFogFactor, sRGBTransferOETF, sRGBTransferEOTF,
 } from 'three/tsl';
 
 // =====================================================================
@@ -304,7 +304,9 @@ const BOOTQ = QUALITY[settings.quality] || QUALITY.medium;
 const canvas = $('gl');
 // WebGPU where the browser has it, WebGL 2 otherwise (the renderer picks); boot() awaits renderer.init() before anything renders.
 // alpha: false keeps the canvas opaque, as it was with the WebGL renderer.
-const renderer = new THREE.WebGPURenderer({ canvas, antialias: BOOTQ.aa, powerPreference: 'high-performance', alpha: false });
+// With no WebGPU adapter we ask for WebGL 2 up front, which is what the renderer would fall back to anyway, minus its warning.
+const gpuAdapter = navigator.gpu ? await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }).catch(() => null) : null;
+const renderer = new THREE.WebGPURenderer({ canvas, antialias: BOOTQ.aa, powerPreference: 'high-performance', alpha: false, forceWebGL: !gpuAdapter });
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, QUALITY[settings.quality].pr));
 renderer.setSize(innerWidth, innerHeight, false);
 renderer.shadowMap.enabled = QUALITY[settings.quality].shadows;
@@ -423,6 +425,35 @@ const onAirfield = (x, z) => Math.abs(x - AF.x) < 170 && Math.abs(z - AF.z) < 95
 //  Shared water material
 // =====================================================================
 const fogU = { uFogColor: uniform(scene.fog.color), uFogDensity: uniform(FOG_DENSITY) };
+// Medium and Low drew straight to the canvas with the WebGL renderer, where three's built-in materials (terrain, buildings,
+// trees, cloud sprites) add fog after tone mapping and sRGB, so the fog colour mixed in display space. High went through a
+// post-processing target and fogged in linear light, which is what node materials always do. On Medium and Low this fog node
+// tone-maps the lit colour like the output pass (ACES at our exposure, then sRGB), mixes the fog there, and maps the result
+// back through the exact inverse, so after the output pass those pixels come out as before.
+const legacyFog = (() => {
+  const exposure = renderer.toneMappingExposure;
+  const IN = new THREE.Matrix3().set(0.59719, 0.35458, 0.04823, 0.07600, 0.90834, 0.01566, 0.02840, 0.13383, 0.83777);
+  const OUT = new THREE.Matrix3().set(1.60475, -0.53108, -0.07367, -0.10208, 1.10813, -0.00605, -0.00327, -0.07276, 1.07602);
+  const IN_INV = IN.clone().invert(), OUT_INV = OUT.clone().invert();
+  const mul = (m, v) => { const e = m.elements; return vec3(dot(vec3(e[0], e[3], e[6]), v), dot(vec3(e[1], e[4], e[7]), v), dot(vec3(e[2], e[5], e[8]), v)); };
+  const toDisplay = (c) => {
+    const x = mul(IN, c.mul(exposure / 0.6));
+    const y = x.mul(x.add(0.0245786)).sub(0.000090537).div(x.mul(x.mul(0.983729).add(0.4329510)).add(0.238081));
+    return sRGBTransferOETF(tslClamp(mul(OUT, y), 0, 1));
+  };
+  const fromDisplay = (d) => {
+    const y = tslClamp(mul(OUT_INV, sRGBTransferEOTF(d)), 0, 0.999); // the curve tops out at 1/0.983729
+    const A = y.mul(0.983729).sub(1), B = y.mul(0.4329510).sub(0.0245786), C = y.mul(0.238081).add(0.000090537);
+    const v = B.negate().sub(sqrt(B.mul(B).sub(A.mul(C).mul(4)).max(0))).div(A.mul(2));
+    return mul(IN_INV, v).mul(0.6 / exposure);
+  };
+  return Fn(() => {
+    const f = densityFogFactor(fogU.uFogDensity);
+    return vec4(fromDisplay(mix(toDisplay(output.rgb), fogU.uFogColor, f)), output.a);
+  })();
+})();
+const applyFogStyle = (q) => { scene.fogNode = QUALITY[q].bloom ? null : legacyFog; };
+applyFogStyle(settings.quality);
 // Sea, lake and river (TSL): waves, fresnel sky reflection, sun glint, shallow-water tint and surf from the baked depth map.
 const waterU = {
   uTime: uniform(0), uSun: uniform(SUN), uDeep: uniform(new THREE.Color('#0d3244')), uShallow: uniform(new THREE.Color('#22606c')), uReef: uniform(new THREE.Color('#4aa39a')),
@@ -2721,7 +2752,7 @@ function fillSettings() {
   else $('btnEnd').textContent = 'End mission';
 }
 $('setControl').addEventListener('change', e => { settings.control = e.target.value; saveSettings(); applyControlMode(); updateHint(); });
-$('setQuality').addEventListener('change', e => { settings.quality = e.target.value; saveSettings(); const q = QUALITY[settings.quality]; renderer.setPixelRatio(Math.min(devicePixelRatio || 1, q.pr)); renderer.shadowMap.enabled = q.shadows; scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); if (q.bloom) setupPost(); onResize(); $('qualityNote').hidden = false; });
+$('setQuality').addEventListener('change', e => { settings.quality = e.target.value; saveSettings(); const q = QUALITY[settings.quality]; renderer.setPixelRatio(Math.min(devicePixelRatio || 1, q.pr)); renderer.shadowMap.enabled = q.shadows; applyFogStyle(settings.quality); scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); if (q.bloom) setupPost(); onResize(); $('qualityNote').hidden = false; });
 $('setVolume').addEventListener('input', e => { settings.volume = +e.target.value; saveSettings(); Sfx.vol(settings.volume); });
 $('setInvert').addEventListener('change', e => { settings.invert = e.target.checked; saveSettings(); });
 $('setKill').addEventListener('change', e => { settings.killcam = e.target.checked; saveSettings(); });
