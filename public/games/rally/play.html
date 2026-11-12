@@ -1680,7 +1680,6 @@ function frame(now) {
 // QA hooks: run the race headless, or hold a frame still for a capture
 window.__sim = (seconds, dt = 1 / 60) => { const n = Math.round(seconds / dt); for (let i = 0; i < n && (G.state === 'race' || G.state === 'paused'); i++) simulate(dt); const p = RACE.player; return p && { state: G.state, phase: RACE.phase, lap: p.lap, pos: RACE.order.indexOf(p) + 1, of: RACE.order.length, mph: Math.round(p.speed * MPH), best: p.best, t: +RACE.t.toFixed(1), onRoad: p.onRoad, finished: p.finished }; };
 window.__game = { scene, ZENITH, HORIZON, RACE, G, T, settings, startRace, NET, TRACKS, CARS, camera, buildCircuit, set hud(v) { hud.hidden = !v; }, renderNow() { for (const c of RACE.cars) c.visuals(0.5); sky.position.copy(camera.position); if (postFX) postFX.pipeline.render(); else renderer.render(scene, camera); return canvas.toDataURL('image/png'); }, get post() { return !!postFX; }, frameAt };
-window.__renderer = renderer; // TEMP-WEBGPU-CHECK
 
 (async function boot() {
   resizeHUD();

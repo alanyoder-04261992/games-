@@ -1319,7 +1319,6 @@ export function createScene(container, { onPick, onHover } = {}) {
     // PCFShadowMap is the soft one (see sun.shadow.radius)
     renderer.shadowMap.type = THREE.PCFShadowMap;
     applyQuality();
-    window.__renderer = renderer; // TEMP-HOOK
     await renderer.init();
     if (destroyed) return;
     pmrem = new THREE.PMREMGenerator(renderer);
@@ -1348,7 +1347,6 @@ export function createScene(container, { onPick, onHover } = {}) {
   }
   const ready = start();
 
-  window.__hx = { camera, markers }; // TEMP-HOOK
   return {
     ready,
     setBoard,
