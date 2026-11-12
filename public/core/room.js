@@ -203,6 +203,7 @@ export class HostRoom extends Emitter {
     if (!p.connected) return;
     p.connected = false;
     p.link = null;
+    p.voice = null;
     this.#system(`${p.name} disconnected`);
     this.#broadcastLobby();
     this.schedule();
@@ -275,7 +276,16 @@ export class HostRoom extends Emitter {
       seats: this.seatInfo(),
       players: [...this.players.values()]
         .filter((p) => !p.kicked)
-        .map((p) => ({ id: p.id, name: p.name, hue: p.hue, connected: !!p.connected, isHost: !!p.isHost, seat: this.seatOf(p.id) })),
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          hue: p.hue,
+          connected: !!p.connected,
+          isHost: !!p.isHost,
+          seat: this.seatOf(p.id),
+          voice: p.voice || null,
+          hostMuted: !!p.hostMuted,
+        })),
       started: this.started,
     };
   }
@@ -410,6 +420,22 @@ export class HostRoom extends Emitter {
         this.chatLog.push(entry);
         this.chatLog = this.chatLog.slice(-80);
         this.#sendAll({ t: 'chat', ...entry });
+        break;
+      }
+      case 'voice':
+        // someone joined, left or muted themselves in voice chat (see core/voice.js)
+        p.voice = msg.on && msg.peerId ? { on: true, peerId: String(msg.peerId).slice(0, 80), muted: !!msg.muted } : null;
+        this.#broadcastLobby();
+        break;
+      case 'voice-force': {
+        // the host mutes (or unmutes) someone for the whole table
+        if (!p.isHost) return;
+        const target = this.players.get(msg.playerId);
+        if (!target || target.isHost) return;
+        target.hostMuted = !!msg.muted;
+        this.#send(target, { t: 'voice-force', muted: target.hostMuted });
+        this.#system(`${p.name} ${target.hostMuted ? 'muted' : 'unmuted'} ${target.name}`);
+        this.#broadcastLobby();
         break;
       }
       case 'autopilot':
@@ -589,6 +615,9 @@ class LocalClient extends Emitter {
     this.status = room.online ? 'connecting' : 'offline';
     this.on('status', (s) => (this.status = s));
   }
+  get peer() {
+    return this.room.peer;
+  }
   receive(msg) {
     // real-time messages skip the microtask hop; they are frequent and order-insensitive
     if (msg.t === 'rt') return dispatch(this, msg);
@@ -627,6 +656,9 @@ function dispatch(client, msg) {
       break;
     case 'rt':
       client.emit('rt', msg);
+      break;
+    case 'voice-force':
+      client.emit('voice-force', !!msg.muted);
       break;
     case 'toast':
       client.emit('toast', msg.text);

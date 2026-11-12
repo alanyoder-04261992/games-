@@ -19,6 +19,16 @@ Plain HTML, CSS and JavaScript modules — no build step, hosts anywhere static 
   water, a sky with drifting clouds, bloom): hide your fleet, then trade shots. Shells arc in, misses throw up water columns, hits start fires, and sunk ships roll over
   and go down. 8×8, 10×10 or 12×12 seas; one shot a turn, chain fire or barrage; computer
   admirals that hunt down your remaining ships.
+- **Escape the Grind** — a 3D personal-finance board game for 1–4 players. Start in a job living
+  paycheck to paycheck, buy rentals, shed lots, storage, businesses and stocks, and break out of
+  the Grind once your passive income beats your expenses. Then buy your Dream on the Freedom Ring
+  to win. Full 3D table (Three.js): walnut table, lamp lighting and soft shadows, rolling dice,
+  glossy pawns, cards that fly up to the camera, coin stacks and miniature buildings for everything
+  you own. Plays with mouse, touch, keyboard or a game controller (A choose, B back, Y statement,
+  X camera, right stick orbit, triggers zoom, Start full screen).
+  **Real-life economy** (advanced option): a market index runs through expansion, boom, slowdown,
+  recession and recovery. Deal prices, buyer offers, business income and loan rates follow it, and
+  a live stock market lets players buy the dip, sell the boom, and short stocks to profit from a fall.
 - **Four in a Row** — a small, complete example of how a game plugs in.
 - **Coastal Dogfight** — a real-time 3D flight game: 1940s fighters over a 20 km coastline.
   Up to four pilots team up against waves of raiders (you pick how many per wave and how
@@ -62,6 +72,8 @@ public/                 ← the website (deploy this folder)
   games/index.js        list of games
   games/rook/           Rook: engine.js, ai.js, ui.js, cards.js (art), rook.css, rules.html
   games/hexstead/       Hexstead: engine.js, ai.js, geometry.js, scene.js (3D board), ui.js, art.js
+  games/escape-grind/   Escape the Grind: engine.js, ai.js, cards.js (decks, jobs), scene.js (3D),
+                        textures.js (painted-in-code textures), ui.js (HUD, controller), escape.css
   games/four-in-a-row/  example game
   games/dogfight/       Coastal Dogfight: play.html (the game), index.js, ui.js (frame bridge)
   vendor/peerjs.min.js
