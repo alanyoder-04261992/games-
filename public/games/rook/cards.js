@@ -1,16 +1,18 @@
-// Card artwork, drawn as SVG. Original designs: cream linen faces, a colored frame, big
-// serif numerals, a color emblem (so the four colors are easy to tell apart, even for
-// color-blind players), and a gold coin showing what each card is worth.
+// Card artwork, drawn as SVG, in the look of a classic Rook deck: white cards, a big slab
+// numeral with the color's name in the corner, a little box with the point value on
+// counting cards, and the numeral again inside a thin square frame in the middle.
+// The Bird card and the card back are original designs.
 import { BIRD, cardPoints, colorOf, rankOf } from './engine.js';
 
 export const PALETTE = {
-  red: { ink: '#c0392b', deep: '#8e2219', tint: '#fbe3dc', name: 'Red' },
-  green: { ink: '#24834a', deep: '#145a31', tint: '#dcf1e1', name: 'Green' },
-  yellow: { ink: '#d99a06', deep: '#9a6a00', tint: '#fff1c7', name: 'Yellow' },
-  black: { ink: '#2b2d33', deep: '#0f1013', tint: '#e5e6ea', name: 'Black' },
+  red: { ink: '#d42a2f', deep: '#9b161b', tint: '#fde4e4', name: 'Red' },
+  green: { ink: '#16917a', deep: '#0c6656', tint: '#dcf3ee', name: 'Green' },
+  yellow: { ink: '#e3a300', deep: '#a77600', tint: '#fff3cf', name: 'Yellow' },
+  black: { ink: '#1b1b1d', deep: '#000000', tint: '#e7e7ea', name: 'Black' },
 };
+const BIRD_INK = '#2f8fc6';
 
-// Emblems, drawn in a 0..20 box centered on (10,10).
+// Emblems for the trump badge and the trump picker, drawn in a 0..20 box.
 const EMBLEM = {
   red: '<path d="M10 1.2 L18.2 10 L10 18.8 L1.8 10 Z"/>',
   green: '<circle cx="10" cy="5.6" r="4.3"/><circle cx="5.4" cy="11" r="4.3"/><circle cx="14.6" cy="11" r="4.3"/><path d="M10 10 L10 19" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>',
@@ -25,74 +27,68 @@ export function emblem(color, x, y, size, rotate = 0) {
   return `<g transform="translate(${x - size / 2} ${y - size / 2}) rotate(${rotate} ${size / 2} ${size / 2}) scale(${s})" fill="${c}" color="${c}">${EMBLEM[color]}</g>`;
 }
 
-const RAVEN = `
-  <path d="M38 118 C30 104 34 86 50 74 C58 68 66 62 70 50 C73 41 80 34 90 33 C99 32 106 37 109 44 L122 46 L110 52 C112 60 110 68 104 74 C118 78 134 88 146 104 C152 112 160 120 172 126 C156 128 142 124 130 118 C134 128 136 138 134 150 C126 140 118 134 108 132 C96 134 82 134 70 130 C58 132 46 128 38 118 Z" fill="#111318"/>
-  <path d="M62 92 C78 86 98 88 116 98 C128 105 138 114 146 124 C128 118 112 110 96 106 C84 104 72 100 62 92 Z" fill="#2c3440"/>
-  <path d="M70 104 C86 102 104 106 118 114" stroke="#4a5666" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-  <path d="M74 114 C88 114 102 118 114 124" stroke="#4a5666" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-  <circle cx="94" cy="43" r="4.2" fill="#f4c542"/><circle cx="95" cy="42.3" r="1.6" fill="#111318"/>
-  <path d="M84 132 L80 150 M92 133 L94 151" stroke="#111318" stroke-width="3.2" stroke-linecap="round"/>
-  <path d="M74 152 L80 150 L86 154 M88 153 L94 151 L100 155" stroke="#111318" stroke-width="2.6" stroke-linecap="round" fill="none"/>`;
+export function colorChip(color) {
+  if (!color) return '';
+  return `<svg viewBox="0 0 20 20" class="chip-emblem">${EMBLEM[color].replace(/currentColor/g, '#fff')}</svg>`;
+}
+
+// An original perched-bird drawing (one ink color, like a printed card), ~180x170 box.
+function bird(ink) {
+  return `<g fill="${ink}" stroke="none">
+    <path d="M18 120 C26 104 44 92 62 86 C70 70 76 52 90 40 C98 33 108 30 118 32 C126 33 132 38 135 45 L156 47 L137 56 C140 66 138 78 130 88 C146 94 160 106 170 122 C150 116 134 116 120 122 C110 128 96 132 80 132 C62 134 40 130 18 120 Z"/>
+    <path d="M60 96 C78 92 98 96 114 106" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" opacity=".85"/>
+    <path d="M52 108 C72 104 94 108 110 116" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" opacity=".85"/>
+    <path d="M70 84 C82 76 96 74 108 78" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".7"/>
+    <circle cx="121" cy="45" r="4.6" fill="#fff"/><circle cx="122" cy="44.5" r="2.2"/>
+    <path d="M86 131 L82 152 M100 130 L102 152" stroke="${ink}" stroke-width="4" stroke-linecap="round"/>
+    <path d="M74 154 L82 152 L90 157 M94 156 L102 152 L110 157" stroke="${ink}" stroke-width="3" stroke-linecap="round" fill="none"/>
+    <path d="M40 158 C80 150 130 150 172 158" stroke="${ink}" stroke-width="5" stroke-linecap="round" fill="none"/>
+  </g>`;
+}
 
 // Shared gradients and patterns, written once into the page.
 export const DEFS = `
 <svg width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
   <defs>
     <linearGradient id="rk-paper" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#fffdf7"/><stop offset=".55" stop-color="#fbf5e8"/><stop offset="1" stop-color="#efe4cc"/>
+      <stop offset="0" stop-color="#ffffff"/><stop offset=".7" stop-color="#fbfbf8"/><stop offset="1" stop-color="#f1f0ea"/>
     </linearGradient>
-    <pattern id="rk-linen" width="6" height="6" patternUnits="userSpaceOnUse">
-      <path d="M0 0h6v6H0z" fill="none"/><path d="M0 3h6M3 0v6" stroke="#b79b6b" stroke-opacity=".07" stroke-width=".8"/>
-    </pattern>
-    <radialGradient id="rk-coin" cx=".35" cy=".3" r=".8">
-      <stop offset="0" stop-color="#fff6c9"/><stop offset=".45" stop-color="#f2c94c"/><stop offset="1" stop-color="#a87412"/>
-    </radialGradient>
-    <linearGradient id="rk-gold" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#f7e3a1"/><stop offset=".5" stop-color="#c9982f"/><stop offset="1" stop-color="#8a6416"/>
-    </linearGradient>
-    <radialGradient id="rk-sky" cx=".5" cy=".38" r=".7">
-      <stop offset="0" stop-color="#f6e7c1"/><stop offset=".6" stop-color="#e3c78a"/><stop offset="1" stop-color="#b98d3e"/>
-    </radialGradient>
     <linearGradient id="rk-back" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1e3a5f"/><stop offset=".5" stop-color="#16304f"/><stop offset="1" stop-color="#0c1d33"/>
+      <stop offset="0" stop-color="#7cc2e6"/><stop offset=".5" stop-color="#5aa9d6"/><stop offset="1" stop-color="#3f8fc0"/>
     </linearGradient>
-    <pattern id="rk-lattice" width="22" height="22" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-      <rect width="22" height="22" fill="none"/>
-      <path d="M0 11h22M11 0v22" stroke="#d8b76a" stroke-opacity=".32" stroke-width="1.2"/>
-      <circle cx="11" cy="11" r="2.2" fill="#d8b76a" fill-opacity=".38"/>
-      <circle cx="0" cy="0" r="1.2" fill="#d8b76a" fill-opacity=".3"/>
+    <pattern id="rk-feathers" width="36" height="24" patternUnits="userSpaceOnUse" patternTransform="rotate(-18)">
+      <rect width="36" height="24" fill="none"/>
+      <path d="M0 12 C8 2 18 2 26 12 C18 8 8 8 0 12 Z" fill="#ffffff" fill-opacity=".18"/>
+      <path d="M18 24 C26 14 36 14 44 24 C36 20 26 20 18 24 Z" fill="#0d4f7a" fill-opacity=".16"/>
+      <path d="M-18 24 C-10 14 0 14 8 24 C0 20 -10 20 -18 24 Z" fill="#0d4f7a" fill-opacity=".16"/>
     </pattern>
     <radialGradient id="rk-gloss" cx=".3" cy=".1" r="1">
       <stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/>
     </radialGradient>
-    ${Object.entries(PALETTE)
-      .map(
-        ([k, p]) => `<radialGradient id="rk-med-${k}" cx=".4" cy=".35" r=".75">
-      <stop offset="0" stop-color="#fff"/><stop offset=".7" stop-color="${p.tint}"/><stop offset="1" stop-color="${p.tint}" stop-opacity=".9"/>
-    </radialGradient>`,
-      )
-      .join('')}
   </defs>
 </svg>`;
 
 const W = 250;
 const H = 350;
-const label = (r) => String(r);
+const SLAB = "'Roboto Slab', Rockwell, 'Courier New', Georgia, serif";
 const cache = new Map();
 
-function coin(x, y, value, r = 19) {
-  return `<g transform="translate(${x} ${y})">
-    <circle r="${r}" fill="url(#rk-coin)" stroke="#8a6416" stroke-width="1.6"/>
-    <circle r="${r - 4}" fill="none" stroke="#fff7d6" stroke-opacity=".7" stroke-width="1"/>
-    <text y="${r * 0.36}" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-weight="800" font-size="${r * 1.02}" fill="#5c3d05">${value}</text>
-  </g>`;
-}
+// Approximate width of a numeral string in the slab face at a given size.
+const numWidth = (s, size) => s.length * size * 0.62;
 
-function frame(stroke, inner = stroke) {
-  return `<rect x="1.5" y="1.5" width="${W - 3}" height="${H - 3}" rx="20" fill="url(#rk-paper)" stroke="#cdbf9f" stroke-width="2"/>
-    <rect x="1.5" y="1.5" width="${W - 3}" height="${H - 3}" rx="20" fill="url(#rk-linen)"/>
-    <rect x="13" y="13" width="${W - 26}" height="${H - 26}" rx="12" fill="none" stroke="${stroke}" stroke-width="3.2"/>
-    <rect x="19" y="19" width="${W - 38}" height="${H - 38}" rx="8" fill="none" stroke="${inner}" stroke-opacity=".35" stroke-width="1.2"/>`;
+function corner(rank, color, pts) {
+  const p = PALETTE[color];
+  const big = String(rank);
+  const fs = 64;
+  const nx = 20;
+  const wordX = nx + numWidth(big, fs) + 6;
+  const box = pts
+    ? `<rect x="${wordX}" y="46" width="${pts >= 10 ? 30 : 22}" height="22" fill="#fff" stroke="${p.ink}" stroke-width="2"/>
+       <text x="${wordX + (pts >= 10 ? 15 : 11)}" y="63" text-anchor="middle" font-family="${SLAB}" font-weight="800" font-size="16" fill="${p.ink}">${pts}</text>`
+    : '';
+  return `<text x="${nx}" y="74" font-family="${SLAB}" font-weight="900" font-size="${fs}" fill="${p.ink}" letter-spacing="-2">${big}</text>
+    <text x="${wordX}" y="38" font-family="${SLAB}" font-weight="800" font-size="17" letter-spacing="1" fill="${p.ink}">${p.name.toUpperCase()}</text>
+    ${box}`;
 }
 
 export function cardFace(card) {
@@ -104,25 +100,17 @@ export function cardFace(card) {
     const rank = rankOf(card);
     const p = PALETTE[color];
     const pts = cardPoints(card);
-    const big = label(rank);
-    const fs = big.length > 1 ? 118 : 138;
+    const big = String(rank);
+    const fs = big.length > 1 ? 104 : 124;
+    const underline = rank === 6 || rank === 9;
+    const cy = H / 2;
     svg = `<svg viewBox="0 0 ${W} ${H}" class="card-svg" aria-hidden="true">
-      ${frame(p.ink)}
-      <g class="corner">
-        <text x="40" y="70" text-anchor="middle" font-family="'Playfair Display', Georgia, serif" font-weight="900" font-size="50" fill="${p.ink}">${big}</text>
-        ${emblem(color, 40, 96, 22)}
-      </g>
-      <g transform="rotate(180 ${W / 2} ${H / 2})">
-        <text x="40" y="70" text-anchor="middle" font-family="'Playfair Display', Georgia, serif" font-weight="900" font-size="50" fill="${p.ink}">${big}</text>
-        ${emblem(color, 40, 96, 22)}
-      </g>
-      <circle cx="${W / 2}" cy="${H / 2}" r="74" fill="url(#rk-med-${color})" stroke="${p.ink}" stroke-width="3"/>
-      <circle cx="${W / 2}" cy="${H / 2}" r="66" fill="none" stroke="${p.ink}" stroke-opacity=".3" stroke-width="1.2" stroke-dasharray="2 4"/>
-      <text x="${W / 2}" y="${H / 2 + fs * 0.35}" text-anchor="middle" font-family="'Playfair Display', Georgia, serif" font-weight="900" font-size="${fs}" fill="${p.deep}" opacity=".18" transform="translate(3 4)">${big}</text>
-      <text x="${W / 2}" y="${H / 2 + fs * 0.35}" text-anchor="middle" font-family="'Playfair Display', Georgia, serif" font-weight="900" font-size="${fs}" fill="${p.ink}">${big}</text>
-      ${emblem(color, W / 2, 62, 26)}
-      ${emblem(color, W / 2, H - 62, 26, 180)}
-      ${pts ? coin(W - 42, 44, pts) + `<g transform="rotate(180 ${W / 2} ${H / 2})">${coin(W - 42, 44, pts)}</g>` : ''}
+      <rect x="1.5" y="1.5" width="${W - 3}" height="${H - 3}" rx="18" fill="url(#rk-paper)" stroke="#cfcfcf" stroke-width="2"/>
+      ${corner(rank, color, pts)}
+      <g transform="rotate(180 ${W / 2} ${H / 2})">${corner(rank, color, pts)}</g>
+      <rect x="${W / 2 - 66}" y="${cy - 66}" width="132" height="132" fill="none" stroke="${p.ink}" stroke-width="2.2"/>
+      <text x="${W / 2}" y="${cy + fs * 0.36}" text-anchor="middle" font-family="${SLAB}" font-weight="900" font-size="${fs}" letter-spacing="-4" fill="${p.ink}">${big}</text>
+      ${underline ? `<rect x="${W / 2 - 30}" y="${cy + fs * 0.36 + 8}" width="60" height="6" fill="${p.ink}"/>` : ''}
     </svg>`;
   }
   cache.set(card, svg);
@@ -130,39 +118,27 @@ export function cardFace(card) {
 }
 
 function birdFace() {
+  const ink = BIRD_INK;
+  const side = (x, y, rot) =>
+    `<text transform="translate(${x} ${y}) rotate(${rot})" font-family="${SLAB}" font-weight="900" font-size="30" letter-spacing="6" fill="${ink}">BIRD</text>`;
   return `<svg viewBox="0 0 ${W} ${H}" class="card-svg" aria-hidden="true">
-    ${frame('url(#rk-gold)', '#8a6416')}
-    <circle cx="${W / 2}" cy="${H / 2}" r="92" fill="url(#rk-sky)" stroke="url(#rk-gold)" stroke-width="6"/>
-    <circle cx="${W / 2}" cy="${H / 2}" r="82" fill="none" stroke="#fff6d8" stroke-opacity=".55" stroke-width="1.5"/>
-    <g transform="translate(${W / 2 - 104} ${H / 2 - 94}) scale(1.04)">${RAVEN}</g>
-    <text x="${W / 2}" y="58" text-anchor="middle" font-family="'Playfair Display', Georgia, serif" font-weight="900" font-size="30" letter-spacing="7" fill="#7a5410">BIRD</text>
-    <text x="${W / 2}" y="${H - 38}" text-anchor="middle" font-family="'Playfair Display', Georgia, serif" font-weight="900" font-size="30" letter-spacing="7" fill="#7a5410" transform="rotate(180 ${W / 2} ${H - 48})">BIRD</text>
-    ${coin(42, 44, 20)}
-    <g transform="rotate(180 ${W / 2} ${H / 2})">${coin(42, 44, 20)}</g>
+    <rect x="1.5" y="1.5" width="${W - 3}" height="${H - 3}" rx="18" fill="url(#rk-paper)" stroke="#cfcfcf" stroke-width="2"/>
+    ${side(28, 22, 90)}
+    <g transform="rotate(180 ${W / 2} ${H / 2})">${side(28, 22, 90)}</g>
+    <g transform="translate(${W / 2 - 92} 64) scale(1.02)">${bird(ink)}</g>
+    <text x="${W / 2 + 8}" y="${H - 54}" text-anchor="middle" font-family="${SLAB}" font-weight="900" font-size="92" letter-spacing="-4" fill="${ink}">20</text>
   </svg>`;
 }
 
 export function cardBack() {
   if (cache.has('back')) return cache.get('back');
   const svg = `<svg viewBox="0 0 ${W} ${H}" class="card-svg" aria-hidden="true">
-    <rect x="1.5" y="1.5" width="${W - 3}" height="${H - 3}" rx="20" fill="#f6efe0" stroke="#cdbf9f" stroke-width="2"/>
-    <rect x="12" y="12" width="${W - 24}" height="${H - 24}" rx="12" fill="url(#rk-back)"/>
-    <rect x="12" y="12" width="${W - 24}" height="${H - 24}" rx="12" fill="url(#rk-lattice)"/>
-    <rect x="20" y="20" width="${W - 40}" height="${H - 40}" rx="8" fill="none" stroke="#d8b76a" stroke-opacity=".7" stroke-width="1.6"/>
-    <g transform="translate(${W / 2} ${H / 2})">
-      <circle r="46" fill="#0c1d33" stroke="url(#rk-gold)" stroke-width="4"/>
-      <circle r="38" fill="none" stroke="#d8b76a" stroke-opacity=".5" stroke-width="1"/>
-      <path d="M0 -30 L7 -7 L30 0 L7 7 L0 30 L-7 7 L-30 0 L-7 -7 Z" fill="url(#rk-gold)"/>
-      <path d="M0 -18 L4 -4 L18 0 L4 4 L0 18 L-4 4 L-18 0 L-4 -4 Z" fill="#0c1d33" transform="rotate(45)"/>
-      <circle r="4" fill="#f7e3a1"/>
-    </g>
-    <rect x="12" y="12" width="${W - 24}" height="${H - 24}" rx="12" fill="url(#rk-gloss)"/>
+    <rect x="1.5" y="1.5" width="${W - 3}" height="${H - 3}" rx="18" fill="#ffffff" stroke="#cfcfcf" stroke-width="2"/>
+    <rect x="13" y="13" width="${W - 26}" height="${H - 26}" rx="10" fill="url(#rk-back)"/>
+    <rect x="13" y="13" width="${W - 26}" height="${H - 26}" rx="10" fill="url(#rk-feathers)"/>
+    <g transform="translate(${W / 2 - 64} ${H / 2 - 72}) scale(.7)" opacity=".9">${bird('#0f4c74')}</g>
+    <rect x="13" y="13" width="${W - 26}" height="${H - 26}" rx="10" fill="url(#rk-gloss)"/>
   </svg>`;
   cache.set('back', svg);
   return svg;
-}
-
-export function colorChip(color) {
-  if (!color) return '';
-  return `<svg viewBox="0 0 20 20" class="chip-emblem">${EMBLEM[color].replace(/currentColor/g, '#fff')}</svg>`;
 }

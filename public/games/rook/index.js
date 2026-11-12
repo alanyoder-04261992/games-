@@ -7,14 +7,14 @@ const TILE = `
 <svg viewBox="0 0 200 140" aria-hidden="true">
   <defs>
     <linearGradient id="rt-felt" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2f8f5b"/><stop offset="1" stop-color="#11402a"/></linearGradient>
-    <linearGradient id="rt-card" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fffdf6"/><stop offset="1" stop-color="#eadfc4"/></linearGradient>
+    <linearGradient id="rt-card" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#ecece6"/></linearGradient>
   </defs>
   <rect width="200" height="140" fill="url(#rt-felt)"/>
   <g transform="translate(100 150)">
-    <g transform="rotate(-26) translate(-23 -120)"><rect width="46" height="64" rx="6" fill="url(#rt-card)" stroke="#c0392b" stroke-width="2"/><text x="23" y="42" text-anchor="middle" font-family="Playfair Display, Georgia" font-weight="900" font-size="26" fill="#c0392b">14</text></g>
-    <g transform="rotate(-9) translate(-23 -124)"><rect width="46" height="64" rx="6" fill="url(#rt-card)" stroke="#24834a" stroke-width="2"/><text x="23" y="42" text-anchor="middle" font-family="Playfair Display, Georgia" font-weight="900" font-size="28" fill="#24834a">1</text></g>
-    <g transform="rotate(9) translate(-23 -124)"><rect width="46" height="64" rx="6" fill="url(#rt-card)" stroke="#d99a06" stroke-width="2"/><text x="23" y="42" text-anchor="middle" font-family="Playfair Display, Georgia" font-weight="900" font-size="26" fill="#d99a06">10</text></g>
-    <g transform="rotate(26) translate(-23 -120)"><rect width="46" height="64" rx="6" fill="#f3e3b5" stroke="#b8862b" stroke-width="2"/><circle cx="23" cy="32" r="15" fill="#e3c78a" stroke="#b8862b" stroke-width="2"/><path d="M15 38 C14 31 19 26 24 25 C26 22 29 21 31 23 L35 24 L31 26 C32 30 30 34 27 36 C24 39 19 40 15 38Z" fill="#111"/></g>
+    <g transform="rotate(-26) translate(-23 -120)"><rect width="46" height="64" rx="6" fill="url(#rt-card)" stroke="#cfcfcf" stroke-width="1.5"/><text x="23" y="42" text-anchor="middle" font-family="Roboto Slab, Rockwell, Georgia" font-weight="900" font-size="26" fill="#d42a2f">14</text></g>
+    <g transform="rotate(-9) translate(-23 -124)"><rect width="46" height="64" rx="6" fill="url(#rt-card)" stroke="#cfcfcf" stroke-width="1.5"/><text x="23" y="42" text-anchor="middle" font-family="Roboto Slab, Rockwell, Georgia" font-weight="900" font-size="28" fill="#16917a">1</text></g>
+    <g transform="rotate(9) translate(-23 -124)"><rect width="46" height="64" rx="6" fill="url(#rt-card)" stroke="#cfcfcf" stroke-width="1.5"/><text x="23" y="42" text-anchor="middle" font-family="Roboto Slab, Rockwell, Georgia" font-weight="900" font-size="26" fill="#e3a300">10</text></g>
+    <g transform="rotate(26) translate(-23 -120)"><rect width="46" height="64" rx="6" fill="url(#rt-card)" stroke="#cfcfcf" stroke-width="1.5"/><path d="M11 36 C10 29 16 24 22 23 C24 19 28 18 31 20 L36 21 L31 24 C32 28 30 32 27 34 C23 38 16 39 11 36Z" fill="#2f8fc6"/><text x="23" y="56" text-anchor="middle" font-family="Roboto Slab, Rockwell, Georgia" font-weight="900" font-size="15" fill="#2f8fc6">20</text></g>
   </g>
 </svg>`;
 
