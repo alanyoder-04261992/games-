@@ -68,11 +68,12 @@ const engine = {
 // 2. Computer player: gets one seat's view and the legal moves, returns a move.
 // ---------------------------------------------------------------------
 const DEPTH = { easy: 1, normal: 4, hard: 7 };
-function choose(view, moves, level = 'normal') {
+// `random` can be replaced with a seeded generator (the tests do this so they are repeatable).
+function choose(view, moves, level = 'normal', random = Math.random) {
   const me = view.seat;
   const depth = DEPTH[level] ?? 4;
   const board = view.board.slice();
-  if (level === 'easy' && Math.random() < 0.35) return moves[Math.floor(Math.random() * moves.length)];
+  if (level === 'easy' && random() < 0.35) return moves[Math.floor(random() * moves.length)];
   let best = moves[0], bestScore = -Infinity;
   const order = [...moves].sort((a, b) => Math.abs(3 - a.col) - Math.abs(3 - b.col));
   for (const m of order) {

@@ -78,7 +78,7 @@ export class HostRoom extends Emitter {
       this.lastEvent = null;
     } else {
       this.seats = [];
-      for (let i = 0; i < game.seats; i++)
+      for (let i = 0; i < seatCount(game, this.options); i++)
         this.seats.push(i === 0 ? { kind: 'human', playerId: 'host' } : online ? { kind: 'open' } : this.#newBot(i));
       this.state = null;
       this.seq = 0;
@@ -203,6 +203,7 @@ export class HostRoom extends Emitter {
     if (!p.connected) return;
     p.connected = false;
     p.link = null;
+    p.voice = null;
     this.#system(`${p.name} disconnected`);
     this.#broadcastLobby();
     this.schedule();
@@ -275,7 +276,16 @@ export class HostRoom extends Emitter {
       seats: this.seatInfo(),
       players: [...this.players.values()]
         .filter((p) => !p.kicked)
-        .map((p) => ({ id: p.id, name: p.name, hue: p.hue, connected: !!p.connected, isHost: !!p.isHost, seat: this.seatOf(p.id) })),
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          hue: p.hue,
+          connected: !!p.connected,
+          isHost: !!p.isHost,
+          seat: this.seatOf(p.id),
+          voice: p.voice || null,
+          hostMuted: !!p.hostMuted,
+        })),
       started: this.started,
     };
   }
@@ -288,7 +298,20 @@ export class HostRoom extends Emitter {
   setOption(key, value) {
     if (this.started) return;
     this.options[key] = value;
+    this.#resizeSeats();
     this.#broadcastLobby();
+  }
+
+  // Games whose player count is a table option (game.seatCount) grow or shrink the table here.
+  #resizeSeats() {
+    const want = seatCount(this.game, this.options);
+    while (this.seats.length < want) this.seats.push(this.online ? { kind: 'open' } : this.#newBot(this.seats.length));
+    while (this.seats.length > want) {
+      // drop an empty or computer seat from the end first; a person left without a seat watches
+      let i = this.seats.findLastIndex((s) => s.kind !== 'human');
+      if (i < 0) i = this.seats.length - 1;
+      this.seats.splice(i, 1);
+    }
   }
 
   setSetting(key, value) {
@@ -399,6 +422,22 @@ export class HostRoom extends Emitter {
         this.#sendAll({ t: 'chat', ...entry });
         break;
       }
+      case 'voice':
+        // someone joined, left or muted themselves in voice chat (see core/voice.js)
+        p.voice = msg.on && msg.peerId ? { on: true, peerId: String(msg.peerId).slice(0, 80), muted: !!msg.muted } : null;
+        this.#broadcastLobby();
+        break;
+      case 'voice-force': {
+        // the host mutes (or unmutes) someone for the whole table
+        if (!p.isHost) return;
+        const target = this.players.get(msg.playerId);
+        if (!target || target.isHost) return;
+        target.hostMuted = !!msg.muted;
+        this.#send(target, { t: 'voice-force', muted: target.hostMuted });
+        this.#system(`${p.name} ${target.hostMuted ? 'muted' : 'unmuted'} ${target.name}`);
+        this.#broadcastLobby();
+        break;
+      }
       case 'autopilot':
         p.autopilot = !!msg.on;
         this.#broadcastLobby();
@@ -411,6 +450,15 @@ export class HostRoom extends Emitter {
       case 'rematch':
         if (p.isHost && this.game.engine.isOver(this.state)) this.rematch();
         break;
+      case 'rt': {
+        // Real-time channel for action games (see docs/ADDING_A_GAME.md). Relayed to everyone
+        // else at the table as-is: no rules engine, no saving, no seat checks. Games that use
+        // it decide for themselves what each message means.
+        if (!this.started) return;
+        const out = { t: 'rt', from: this.seatOf(playerId), player: playerId, data: msg.data };
+        for (const other of this.players.values()) if (other.id !== playerId && !other.kicked) this.#send(other, out);
+        break;
+      }
     }
   }
 
@@ -546,6 +594,11 @@ export class HostRoom extends Emitter {
   }
 }
 
+function seatCount(game, options) {
+  const n = game.seatCount ? Number(game.seatCount(options)) : game.seats;
+  return Number.isInteger(n) && n > 0 ? n : game.seats;
+}
+
 function defaultOptions(game) {
   const o = {};
   for (const opt of game.options || []) o[opt.key] = opt.default;
@@ -562,7 +615,12 @@ class LocalClient extends Emitter {
     this.status = room.online ? 'connecting' : 'offline';
     this.on('status', (s) => (this.status = s));
   }
+  get peer() {
+    return this.room.peer;
+  }
   receive(msg) {
+    // real-time messages skip the microtask hop; they are frequent and order-insensitive
+    if (msg.t === 'rt') return dispatch(this, msg);
     // async like a real network, so the UI code path is the same for everyone
     queueMicrotask(() => dispatch(this, msg));
   }
@@ -595,6 +653,12 @@ function dispatch(client, msg) {
       break;
     case 'chat':
       client.emit('chat', msg);
+      break;
+    case 'rt':
+      client.emit('rt', msg);
+      break;
+    case 'voice-force':
+      client.emit('voice-force', !!msg.muted);
       break;
     case 'toast':
       client.emit('toast', msg.text);

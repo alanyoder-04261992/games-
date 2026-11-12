@@ -3,11 +3,24 @@ import assert from 'node:assert/strict';
 import game from '../public/games/four-in-a-row/index.js';
 
 const { engine, bot } = game;
+
+// Seeded random numbers so the Easy computer's random moves are the same on every run.
+function seeded(seed) {
+  let t = seed >>> 0;
+  return () => {
+    t = (t + 0x6d2b79f5) >>> 0;
+    let x = Math.imul(t ^ (t >>> 15), t | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 function play(seed, levels) {
+  const random = seeded(seed + 1);
   let s = engine.setup({ seed });
   while (!engine.isOver(s)) {
     const seat = engine.actors(s)[0];
-    s = engine.apply(s, seat, bot.choose(engine.view(s, seat), engine.legal(s, seat), levels[seat]));
+    s = engine.apply(s, seat, bot.choose(engine.view(s, seat), engine.legal(s, seat), levels[seat], random));
   }
   return s;
 }

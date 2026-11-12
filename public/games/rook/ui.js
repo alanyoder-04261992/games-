@@ -51,6 +51,10 @@ class RookTable {
     this.unsub.push(this.client.on('state', (msg) => this.enqueue(msg)));
     this.unsub.push(this.client.on('chat', (m) => this.bubble(m)));
     this.unsub.push(this.client.on('reject', (text) => this.ctx.toast(text, { kind: 'warn' })));
+    if (ctx.voice) {
+      const paint = () => this.paintVoice();
+      this.unsub.push(ctx.voice.on('speaking', paint), ctx.voice.on('change', paint));
+    }
     this.onResize = () => {
       this.layout();
       if (this.view && !this.pending) this.renderAll();
@@ -423,6 +427,21 @@ class RookTable {
         ),
         last ? h('div.rk-bubble' + (last.type === 'pass' ? '.pass' : ''), last.type === 'pass' ? 'Pass' : last.amount) : null,
       );
+    }
+    this.paintVoice();
+  }
+
+  // voice chat: light up whoever is talking, mark who is muted
+  paintVoice() {
+    const voice = this.ctx.voice;
+    if (!voice || !this.view) return;
+    const roster = voice.roster();
+    for (let s = 0; s < 4; s++) {
+      const id = this.seats[s]?.playerId;
+      const el = this.seatEl(s);
+      const r = id && roster.find((x) => x.id === id);
+      el.classList.toggle('speaking', !!(id && voice.speaking.has(id)));
+      el.classList.toggle('mic-off', !!(r && (r.muted || r.hostMuted)));
     }
   }
 

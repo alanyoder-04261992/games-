@@ -4,6 +4,8 @@ import { $, h, store, toast, avatar, share, escapeHtml, ROBOT_SVG } from './util
 import { sound } from './sound.js';
 import { HostRoom, GuestClient, SPEEDS } from './room.js';
 import { GAME_MODULES } from '../games/index.js';
+import { onlineGuide } from './guide.js';
+import { Voice } from './voice.js';
 
 const app = document.getElementById('app');
 const GAMES = new Map();
@@ -56,6 +58,11 @@ function route() {
     return go('#/');
   }
   if (page === 'lobby') return current ? showLobby() : go('#/');
+  if (page === 'help') {
+    leaveCurrent(false);
+    showHome();
+    return showGuide();
+  }
   if (page === 'game' && GAMES.has(arg)) return showSetup(GAMES.get(arg));
   leaveCurrent(false);
   showHome();
@@ -73,6 +80,7 @@ function leaveCurrent(ask = true) {
     if (started && !confirm(msg)) return false;
   }
   current.ui?.destroy?.();
+  current.voice?.destroy();
   current.client.leave();
   current = null;
   document.body.classList.remove('in-game');
@@ -219,7 +227,7 @@ function showHome() {
           },
           h('label', 'Join a friend’s table'),
           h('div.gc-join-row', code, h('button.btn.gold', { type: 'submit' }, 'Join')),
-          h('small', 'Ask the host for the 5-letter code, or open their invite link.'),
+          h('small', 'Ask the host for the 5-letter code, or open their invite link. ', h('button.gc-link', { type: 'button', onclick: () => showGuide() }, 'How does online play work?')),
         ),
       ),
       saves.length || (guest && Date.now() - guest.at < 6 * 3600e3)
@@ -250,7 +258,7 @@ function showHome() {
           )
         : null,
       h('section.gc-games', h('h2', 'Games'), h('div.gc-grid', tiles)),
-      h('footer.gc-foot', h('span', 'Online play is peer-to-peer: the host’s device runs the table. Keep the host’s screen open.'), h('button.btn.text', { onclick: () => ((sound.enabled = !sound.enabled), showHome()) }, sound.enabled ? 'Sound on' : 'Sound off')),
+      h('footer.gc-foot', h('span', 'Online play is peer-to-peer: the host’s device runs the table. Keep the host’s screen open. ', h('button.gc-link', { onclick: () => showGuide() }, 'How to play online')), h('button.btn.text', { onclick: () => ((sound.enabled = !sound.enabled), showHome()) }, sound.enabled ? 'Sound on' : 'Sound off')),
     ),
   );
 }
@@ -261,6 +269,32 @@ function ago(ts) {
   if (s < 3600) return `${Math.round(s / 60)} min ago`;
   if (s < 86400) return `${Math.round(s / 3600)} h ago`;
   return `${Math.round(s / 86400)} days ago`;
+}
+
+function showGuide() {
+  const rook = GAMES.get('rook') || [...GAMES.values()][0];
+  const inGame = !!current;
+  const sheet = modal(
+    h(
+      'div.gc-doc',
+      onlineGuide({
+        onHost: inGame || !rook ? null : () => (sheet.close(), needName(() => hostOnline(rook))),
+        onJoin: inGame
+          ? null
+          : () => {
+              sheet.close();
+              const input = $('.gc-join .gc-input');
+              input?.focus();
+              input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            },
+      }),
+      h(
+        'div.gc-actions',
+        h('button.btn.ghost', { onclick: () => navigator.clipboard?.writeText(`${location.origin}${location.pathname}#/help`).then(() => toast('Guide link copied')) }, 'Copy link to this guide'),
+      ),
+    ),
+    { cls: 'wide' },
+  );
 }
 
 function showAddGame() {
@@ -508,7 +542,7 @@ function showLobby() {
             h('button.btn.gold', { onclick: () => share({ title: `Play ${game.name}`, text: `Join my ${game.name} table — code ${lobby.code}`, url }) }, h('span', { html: ICON.share }), 'Invite'),
             h('button.btn.ghost', { onclick: () => navigator.clipboard?.writeText(url).then(() => toast('Invite link copied')) }, 'Copy link'),
           ),
-          h('p.gc-hint', 'Friends open the link (or enter the code on the home page). Empty seats get computer players when you start.'),
+          h('p.gc-hint', 'Friends open the link (or enter the code on the home page). Empty seats get computer players when you start. ', h('button.gc-link', { onclick: () => showGuide() }, 'Step-by-step guide')),
         ),
         h(
           'section.gc-seats',
@@ -527,6 +561,8 @@ function showLobby() {
             h('li', h('span', 'Speed'), h('strong', SPEEDS[lobby.settings.speed]?.label || '')),
           ),
           isHost ? h('button.btn.text', { onclick: () => lobbyOptions(game, room) }, 'Change rules') : null,
+          h('h2', 'Voice chat'),
+          voiceBox(),
           h('h2', 'Chat'),
           chat.el,
         ),
@@ -633,9 +669,10 @@ async function showTable() {
   const bar = h(
     'div.gc-gamebar',
     h('button.gc-icon-btn', { onclick: () => leaveCurrent() && go('#/'), title: 'Back to Game Center', 'aria-label': 'Back' }, h('span', { html: ICON.back })),
-    h('div.gc-gamebar-title', h('strong', game.name), online ? h('button.gc-room-chip', { onclick: () => inviteSheet(game, code) }, h('span.gc-conn', { dataset: { status: client.isHost ? current.room.status : client.status } }), code) : null),
+    h('div.gc-gamebar-title', h('strong', game.name), online ? h('button.gc-room-chip', { onclick: () => inviteSheet(game, code) }, h('span.gc-conn', { dataset: { status: client.isHost ? current.room.status : client.status } }), code) : null, online ? voiceStrip() : null),
     h(
       'div.gc-gamebar-right',
+      online ? micButton() : null,
       online
         ? h(
             'button.gc-icon-btn',
@@ -653,7 +690,7 @@ async function showTable() {
         : null,
       h('button.gc-icon-btn', { title: 'Sound', onclick: (e) => ((sound.enabled = !sound.enabled), (e.currentTarget.firstChild.innerHTML = sound.enabled ? ICON.sound : ICON.mute)) }, h('span', { html: sound.enabled ? ICON.sound : ICON.mute })),
       h('button.gc-icon-btn', { title: 'Settings', onclick: () => settingsSheet() }, h('span', { html: ICON.gear })),
-      h('button.gc-icon-btn', { title: 'How to play', onclick: () => rulesSheet(game) }, h('span', { html: ICON.help })),
+      h('button.gc-icon-btn', { title: 'How to play', onclick: () => rulesSheet(game, online) }, h('span', { html: ICON.help })),
     ),
   );
   const offline = h('div.gc-offline-banner');
@@ -673,6 +710,7 @@ async function showTable() {
     game,
     prefs,
     toast,
+    voice: online ? voiceFor() : null,
     leave: () => {
       leaveCurrent(false);
       go('#/');
@@ -680,6 +718,165 @@ async function showTable() {
   });
   if (client.isHost) client.send({ t: 'sync' });
   else client.send({ t: 'sync' });
+}
+
+// ---------------------------------------------------------------------
+// voice chat (see core/voice.js)
+// ---------------------------------------------------------------------
+function voiceFor() {
+  if (!current) return null;
+  if (!current.voice) {
+    const voice = new Voice(current.client);
+    voice.on('state', (state, detail) => state === 'error' && toast(detail, { kind: 'warn', ms: 5000 }));
+    voice.on('forced', (muted) => toast(muted ? 'The host muted your microphone' : 'The host unmuted you — you can talk again', { kind: muted ? 'warn' : '' }));
+    voice.on('blocked', () => toast('Tap anywhere to hear voice chat'));
+    current.voice = voice;
+  }
+  return current.voice;
+}
+
+// Re-render `build()` into `el` whenever voice changes, until `el` leaves the page.
+// Only things without buttons re-render on 'speaking' (it fires many times a second while
+// people talk); anything with buttons re-renders on 'change' and updates the glow in place,
+// so a tap never lands on a button that was just replaced.
+function live(el, build, events = ['change']) {
+  const voice = voiceFor();
+  const paint = () => el.replaceChildren(...[build(voice)].flat());
+  const offs = events.map((ev) =>
+    voice.on(ev, () => {
+      if (!el.isConnected && el.dataset.mounted) return offs.forEach((off) => off());
+      paint();
+    }),
+  );
+  requestAnimationFrame(() => (el.dataset.mounted = '1'));
+  paint();
+  return el;
+}
+
+function onSpeaking(el, fn) {
+  const voice = voiceFor();
+  const off = voice.on('speaking', () => {
+    if (!el.isConnected && el.dataset.mounted) return off();
+    fn(voice.speaking);
+  });
+  fn(voice.speaking);
+}
+
+function micState(voice) {
+  if (voice.state === 'starting') return { cls: 'starting', icon: ICON.mic, label: 'Starting voice…' };
+  if (voice.state !== 'on') return { cls: 'off', icon: ICON.micPlus, label: 'Join voice chat' };
+  if (voice.hostMuted) return { cls: 'host-muted', icon: ICON.micOff, label: 'The host muted you' };
+  if (voice.muted) return { cls: 'muted', icon: ICON.micOff, label: 'You are muted — tap to talk' };
+  return { cls: 'live', icon: ICON.mic, label: 'Your mic is on — tap to mute' };
+}
+
+function pressMic(voice) {
+  if (voice.state === 'on') {
+    if (!voice.toggleMute()) toast('The host muted you. Ask them to unmute you.');
+  } else voice.join();
+}
+
+function micButton() {
+  const wrap = h('div.gc-mic-wrap');
+  onSpeaking(wrap, (speaking) => wrap.classList.toggle('talking', speaking.has(current?.client.playerId)));
+  return live(wrap, (voice) => {
+    const st = micState(voice);
+    return [
+      h(`button.gc-icon-btn.gc-mic.${st.cls}`, { title: st.label, 'aria-label': st.label, onclick: () => pressMic(voice) }, h('span', { html: st.icon }), h('i.gc-mic-level')),
+      voice.state === 'on' ? h('button.gc-icon-btn.gc-mic-more', { title: 'Voice chat', 'aria-label': 'Voice chat people', onclick: () => voicePanel() }, h('span', { html: ICON.people })) : null,
+    ];
+  });
+}
+
+function voiceStrip() {
+  const el = h('button.gc-voice-strip', { title: 'Voice chat', onclick: () => voicePanel() });
+  return live(
+    el,
+    (voice) =>
+    voice.roster().map((r) =>
+      h(
+        'span.gc-vs-face' + (r.speaking ? '.speaking' : '') + (r.muted || r.hostMuted || r.localMuted ? '.muted' : ''),
+        { title: `${r.name}${r.me ? ' (you)' : ''}${r.hostMuted ? ' — muted by host' : r.muted ? ' — muted' : ''}` },
+        avatar(r.name, r.hue, { size: 'sm' }),
+        r.muted || r.hostMuted || r.localMuted ? h('i', { html: ICON.micOff }) : null,
+      ),
+    ),
+    ['change', 'speaking'],
+  );
+}
+
+function voiceBox() {
+  const el = h('div.gc-voice-box');
+  return live(el, (voice) => {
+    const st = micState(voice);
+    const people = voice.roster();
+    return [
+      voice.state === 'on'
+        ? h('div.gc-voice-row', h(`button.btn.${st.cls === 'live' ? 'ghost' : 'gold'}`, { onclick: () => pressMic(voice) }, h('span', { html: st.icon }), st.cls === 'live' ? 'Mute' : st.cls === 'host-muted' ? 'Muted by host' : 'Unmute'), h('button.btn.text', { onclick: () => voicePanel() }, `${people.length} in voice`), h('button.btn.text', { onclick: () => voice.leave() }, 'Leave'))
+        : h('div.gc-voice-row', h('button.btn.gold', { onclick: () => voice.join(), disabled: voice.state === 'starting' }, h('span', { html: ICON.mic }), voice.state === 'starting' ? 'Starting…' : 'Join voice'), people.length ? h('small', `${people.length} talking now`) : h('small', 'Talk while you play. Your mic stays on; mute any time.')),
+      people.length ? h('div.gc-voice-faces', voiceStrip()) : null,
+    ];
+  });
+}
+
+function voicePanel() {
+  const voice = voiceFor();
+  const isHost = current.client.isHost;
+  const body = h('div.gc-form.gc-voice-panel');
+  const sheet = modal(body);
+  let statusOf = null;
+  live(body, () => {
+    const roster = voice.roster();
+    const inVoice = new Set(roster.map((r) => r.id));
+    const others = (current?.client.lobby?.players || []).filter((p) => !inVoice.has(p.id) && p.connected);
+    const status = (r) =>
+      r.hostMuted ? 'Muted by host' : r.muted ? 'Muted' : !r.connected ? 'Connecting…' : r.speaking ? 'Talking' : r.me ? 'Mic on' : 'Listening';
+    statusOf = status;
+    return [
+      h('h2', 'Voice chat'),
+      h('p.gc-hint', 'Everyone in voice hears everyone else. ', isHost ? 'As the host you can mute anyone for the whole table.' : 'Mute someone just for yourself with the speaker button.'),
+      h(
+        'div.gc-voice-list',
+        roster.map((r) =>
+          h(
+            'div.gc-voice-person' + (r.speaking ? '.speaking' : ''),
+            { dataset: { id: r.id } },
+            h('span.gc-vs-face' + (r.speaking ? '.speaking' : ''), avatar(r.name, r.hue)),
+            h('div.gc-voice-who', h('strong', r.name, r.me ? ' (you)' : '', r.isHost ? h('span.gc-host-tag', 'Host') : null), h('small.' + (r.hostMuted || r.muted ? 'off' : r.speaking ? 'on' : ''), status(r))),
+            h(
+              'div.gc-voice-actions',
+              r.me
+                ? h(`button.btn.chip${voice.muted ? '.on' : ''}`, { disabled: voice.hostMuted, onclick: () => voice.toggleMute() }, h('span', { html: voice.muted || voice.hostMuted ? ICON.micOff : ICON.mic }), voice.muted ? 'Unmute' : 'Mute')
+                : h(`button.btn.chip${r.localMuted ? '.on' : ''}`, { title: 'Only you stop hearing them', onclick: () => voice.setLocalMute(r.id, !r.localMuted) }, h('span', { html: r.localMuted ? ICON.mute : ICON.sound }), r.localMuted ? 'Hear' : 'Silence'),
+              isHost && !r.me ? h(`button.btn.chip${r.hostMuted ? '.on' : '.danger'}`, { onclick: () => voice.hostMute(r.id, !r.hostMuted) }, r.hostMuted ? 'Allow to talk' : 'Mute for all') : null,
+            ),
+          ),
+        ),
+      ),
+      others.length ? h('p.gc-hint', `Not in voice: ${others.map((p) => p.name).join(', ')}`) : null,
+      isHost && others.some((p) => p.hostMuted) ? h('p.gc-hint', 'Players you muted stay muted if they rejoin voice.') : null,
+      h(
+        'div.gc-actions',
+        voice.state === 'on' ? h('button.btn.ghost', { onclick: () => (voice.leave(), sheet.close()) }, 'Leave voice') : h('button.btn.gold', { onclick: () => voice.join() }, h('span', { html: ICON.mic }), 'Join voice'),
+        h('button.btn.ghost', { onclick: () => sheet.close() }, 'Done'),
+      ),
+    ];
+  });
+  // the talking glow updates in place, without replacing any buttons
+  onSpeaking(body, () => {
+    if (!statusOf) return;
+    for (const r of voice.roster()) {
+      const row = body.querySelector(`.gc-voice-person[data-id="${r.id}"]`);
+      if (!row) continue;
+      row.classList.toggle('speaking', r.speaking);
+      row.querySelector('.gc-vs-face')?.classList.toggle('speaking', r.speaking);
+      const small = row.querySelector('.gc-voice-who small');
+      if (small) {
+        small.textContent = statusOf(r);
+        small.className = r.hostMuted || r.muted ? 'off' : r.speaking ? 'on' : '';
+      }
+    }
+  });
 }
 
 function loadStyles(game) {
@@ -702,7 +899,7 @@ function inviteSheet(game, code) {
       'div.gc-form',
       h('h2', 'Invite to this table'),
       h('div.gc-code', code),
-      h('p.gc-hint', 'People who join during a game can be seated in place of a computer player from Settings.'),
+      h('p.gc-hint', 'People who join during a game can be seated in place of a computer player from Settings. ', h('button.gc-link', { onclick: () => showGuide() }, 'Online play help')),
       h(
         'div.gc-actions',
         h('button.btn.gold', { onclick: () => share({ title: `Play ${game.name}`, text: `Join my ${game.name} table — code ${code}`, url }) }, 'Share invite'),
@@ -787,7 +984,7 @@ function seatManager(room, redraw) {
   );
 }
 
-async function rulesSheet(game) {
+async function rulesSheet(game, online = false) {
   let html = '<p>No rules page yet.</p>';
   try {
     const res = await fetch(new URL(`../games/${game.id}/rules.html`, import.meta.url));
@@ -795,10 +992,21 @@ async function rulesSheet(game) {
   } catch {
     /* offline */
   }
-  modal(h('div.gc-doc.rules', { html }), { cls: 'wide' });
+  const sheet = modal(
+    h(
+      'div',
+      h('div.gc-doc.rules', { html }),
+      h('div.gc-actions', h('button.btn.ghost', { onclick: () => (sheet.close(), showGuide()) }, online ? 'Online play help' : 'How to play online with friends')),
+    ),
+    { cls: 'wide' },
+  );
 }
 
 const ICON = {
+  mic: '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  micOff: '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4 4l16 16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+  micPlus: '<svg viewBox="0 0 24 24"><rect x="7" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M3.5 11a6.5 6.5 0 0 0 11.6 4M10 17.5V21M6.5 21h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19 6v6M16 9h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  people: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M3 19c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M16 5.2a3 3 0 0 1 0 5.6M18 13.8c1.8.7 3 2.4 3 5.2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>',
   back: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   gear: '<svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
   chat: '<svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',

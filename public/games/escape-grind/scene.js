@@ -1,7 +1,7 @@
 // Escape the Grind — the 3D table. A walnut table under a warm lamp, the round board with its
 // two loops of raised tiles, glossy pawns, rolling dice, flying cards, gold-coin stacks and a
 // tray for each player with miniature buildings for everything they own.
-import * as THREE from '../../vendor/three/three.module.js';
+import * as THREE from '../../vendor/three/three.module.min.js';
 import { RoomEnvironment } from '../../vendor/three/RoomEnvironment.js';
 import { RoundedBoxGeometry } from '../../vendor/three/RoundedBoxGeometry.js';
 import { OrbitControls } from '../../vendor/three/OrbitControls.js';

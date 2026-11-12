@@ -32,6 +32,7 @@ export default {
   tagline: 'One line for the home page tile.',
   description: 'A paragraph for the setup page.',
   seats: 2,                      // how many seats at the table
+  // seatCount: (options) => options.players,  // optional: let a table option set the seat count
   seatLabels: ['Red', 'Blue'],   // optional
   teams: [[0, 2], [1, 3]],       // optional, for partnership games
   joinOrder: [1],                // optional: which seat the first friend gets
@@ -94,6 +95,23 @@ export function mount(ctx) {
 
 Send moves with `ctx.client.act(move)`. Never change the view yourself — wait for the next
 `state` message. That's what keeps every player's screen in sync.
+
+## Real-time games
+
+Turn-based games never need this. A game where everyone acts at once (like Coastal Dogfight)
+can use the room's real-time channel next to the rules engine:
+
+```js
+ctx.client.send({ t: 'rt', data: { … } });          // goes to everyone else at the table
+ctx.client.on('rt', ({ from, player, data }) => …);  // from = sender's seat (null if watching)
+```
+
+The host relays these messages as they are. They are not checked, saved or replayed, so keep
+them small and frequent (positions) or idempotent (events), and let the rules engine hold
+anything that must survive a refresh. `actors()` can return `[]` so nobody is waited on, and
+an action like `{ type: 'finish', results }` can end the round so rematches work as usual.
+See `public/games/dogfight/` for a full example. It runs the game in a frame and bridges
+these messages with `postMessage`.
 
 ## 4. Register it
 

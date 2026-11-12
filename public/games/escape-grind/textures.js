@@ -1,6 +1,6 @@
 // Escape the Grind — every texture is painted in code (no image downloads): wood, the printed
 // board, space tiles, playing cards, dice faces and building windows.
-import * as THREE from '../../vendor/three/three.module.js';
+import * as THREE from '../../vendor/three/three.module.min.js';
 import { SPACE_INFO, STOCKS } from './cards.js';
 import { money } from './engine.js';
 
