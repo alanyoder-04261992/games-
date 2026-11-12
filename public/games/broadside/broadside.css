@@ -1,0 +1,88 @@
+/* Broadside: the 3D sea fills the screen; glassy panels float over it. */
+.bs { position: absolute; inset: 0; overflow: hidden; background: #1b5f86; color: #f2f5f8; --glass: rgba(8, 20, 34, 0.7); --edge: rgba(255, 255, 255, 0.13); }
+.bs-3d { position: absolute; inset: 0; }
+.bs-gl { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
+.bs-nogl { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 24px; background: #0b1424; }
+.bs-nogl p { color: var(--muted); }
+
+.bs-top { position: absolute; top: 8px; left: 8px; right: 8px; display: flex; justify-content: space-between; gap: 10px; pointer-events: none; z-index: 5; }
+.bs-admiral { pointer-events: auto; width: min(330px, 48%); background: var(--glass); border: 1px solid var(--edge); border-left: 4px solid var(--c); border-radius: 14px; padding: 8px 10px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3); transition: box-shadow 0.3s; }
+.bs-admiral.active { box-shadow: 0 0 0 2px var(--c), 0 10px 26px rgba(0, 0, 0, 0.35); }
+.bs-admiral.won { box-shadow: 0 0 0 3px #ffd75e, 0 0 26px rgba(255, 215, 94, 0.55); }
+.bs-admiral-head { display: flex; align-items: center; gap: 8px; }
+.bs-admiral-head .bs-who { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
+.bs-admiral-head strong { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bs-admiral-head small { font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--c); filter: brightness(1.35); }
+.bs-admiral .avatar { width: 30px; height: 30px; font-size: 12px; flex: none; }
+.bs-tag { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); white-space: nowrap; }
+.bs-fleet { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 6px; align-items: center; }
+.bs-ship-icon { display: inline-flex; }
+.bs-ship-icon svg { display: block; height: 15px; width: auto; }
+.bs-ship-icon.sunk { opacity: 0.75; }
+.bs-stats { font-size: 11.5px; color: #c9d4de; margin-top: 4px; }
+
+.bs-banner { position: absolute; left: 50%; top: 116px; transform: translateX(-50%); z-index: 4; pointer-events: none; max-width: calc(100% - 24px); }
+.bs-banner-in { background: rgba(6, 16, 28, 0.6); border: 1px solid var(--edge); padding: 8px 18px; border-radius: 999px; text-align: center; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; flex-direction: column; align-items: center; }
+.bs-banner strong { font-family: var(--display); font-size: 19px; }
+.bs-banner small { color: #d3dde7; font-size: 12.5px; }
+.bs.my-turn .bs-banner-in { border-color: rgba(255, 221, 85, 0.6); box-shadow: 0 0 24px rgba(255, 210, 90, 0.25); }
+
+.bs-flash { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); z-index: 8; pointer-events: none; font-family: var(--display); font-weight: 900; font-size: clamp(22px, 4.5vw, 40px); padding: 10px 26px; border-radius: 16px; background: rgba(6, 16, 28, 0.66); border: 1px solid var(--edge); text-shadow: 0 3px 12px rgba(0, 0, 0, 0.5); animation: bs-flash-in 0.35s cubic-bezier(.2, 1.4, .4, 1); transition: opacity 0.5s, transform 0.5s; white-space: nowrap; }
+.bs-flash.good { color: #ffe08a; border-color: rgba(255, 224, 138, 0.5); }
+.bs-flash.bad { color: #ff9a8a; border-color: rgba(255, 120, 100, 0.5); }
+.bs-flash.out { opacity: 0; transform: translate(-50%, -70%); }
+@keyframes bs-flash-in { from { transform: translate(-50%, -50%) scale(0.6); opacity: 0; } }
+
+.bs-mini { position: absolute; right: 10px; bottom: 84px; z-index: 5; background: var(--glass); border: 1px solid var(--edge); border-radius: 12px; padding: 6px; cursor: pointer; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; flex-direction: column; gap: 4px; color: inherit; }
+.bs-mini[hidden] { display: none; }
+.bs-mini small { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #c9d4de; }
+.bs-mini-grid { display: grid; grid-template-columns: repeat(var(--n), 1fr); gap: 1px; width: 136px; aspect-ratio: 1; background: rgba(255, 255, 255, 0.12); border-radius: 4px; overflow: hidden; }
+.bs-mini-grid i { background: #154a6a; position: relative; }
+.bs-mini-grid i.ship { background: #8795a3; }
+.bs-mini-grid i.miss::after { content: ''; position: absolute; inset: 32%; border-radius: 50%; background: #f2f5f2; }
+.bs-mini-grid i.hit { background: #c0392b; }
+.bs-mini-grid i.hit::after { content: ''; position: absolute; inset: 28%; border-radius: 50%; background: #ffd27a; }
+
+.bs-dock { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; display: flex; align-items: flex-end; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 10px 12px calc(12px + var(--safe-bottom)); background: linear-gradient(180deg, transparent, rgba(4, 12, 22, 0.55) 45%, rgba(4, 12, 22, 0.8)); pointer-events: none; }
+.bs-dock > * { pointer-events: auto; }
+.bs-dock:empty { display: none; }
+.bs-ships { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.bs-pick { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 10px; border-radius: 12px; border: 1px solid var(--edge); background: rgba(16, 32, 52, 0.9); cursor: pointer; color: inherit; font-size: 12.5px; font-weight: 700; min-width: 92px; }
+.bs-pick small { font-size: 10.5px; color: #b8c6d4; font-weight: 600; }
+.bs-pick-icon svg { height: 18px; width: auto; }
+.bs-pick.on { background: linear-gradient(180deg, #ffe08a, #e2a73a); color: #3b2805; border-color: #ffe08a; }
+.bs-pick.on small { color: #5a3e0c; }
+.bs-pick.done { opacity: 0.55; }
+.bs-pick.done::after { content: '✓ placed'; font-size: 10px; color: #7dffb0; }
+.bs-place-btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.bs-mode { font-size: 12px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; padding: 8px 12px; border-radius: 999px; background: rgba(255, 221, 85, 0.15); color: #ffe08a; }
+
+.bs-report-host { position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; pointer-events: none; padding: 16px; }
+.bs-report { pointer-events: auto; width: min(460px, 100%); background: linear-gradient(180deg, rgba(20, 34, 54, 0.97), rgba(10, 20, 34, 0.97)); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 20px; padding: 18px; box-shadow: 0 30px 70px rgba(0, 0, 0, 0.55); animation: bs-flash-in 0.4s ease-out; }
+.bs-report h3 { margin: 0 0 10px; font-family: var(--display); font-size: 28px; text-align: center; }
+.bs-report table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.bs-report th { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 4px; }
+.bs-report td { text-align: center; padding: 8px 4px; border-top: 1px solid rgba(255, 255, 255, 0.07); }
+.bs-report td:first-child { text-align: left; }
+.bs-report tr.win td { background: rgba(255, 215, 94, 0.12); }
+.bs-report-btns { display: flex; gap: 10px; justify-content: flex-end; align-items: center; margin-top: 14px; }
+
+@media (max-width: 640px) {
+  .bs-top { gap: 6px; top: 6px; left: 6px; right: 6px; }
+  .bs-admiral { padding: 6px 7px; border-radius: 12px; }
+  .bs-admiral .avatar { display: none; }
+  .bs-admiral-head strong { font-size: 12.5px; }
+  .bs-tag { font-size: 10px; padding: 2px 6px; }
+  .bs-ship-icon svg { height: 11px; }
+  .bs-fleet { gap: 2px 5px; }
+  .bs-stats { font-size: 10px; }
+  .bs-banner { top: 104px; }
+  .bs-banner-in { border-radius: 14px; padding: 6px 12px; }
+  .bs-banner strong { font-size: 15px; }
+  .bs-banner small { font-size: 11px; }
+  .bs-mini { bottom: 70px; right: 6px; }
+  .bs-mini-grid { width: 96px; }
+  .bs-pick { min-width: 0; padding: 5px 7px; font-size: 11px; }
+  .bs-pick small { display: none; }
+  .bs-dock { gap: 6px; padding: 6px 6px calc(8px + var(--safe-bottom)); }
+}
