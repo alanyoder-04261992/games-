@@ -2056,7 +2056,7 @@ function remoteStep(p, dt) {
 }
 function netObjective() {
   const m = G.mission, w = NET.w || {};
-  if (m && m.phase === 'takeoff') return 'Take off · full throttle, lift off near 160 km/h';
+  if (m && m.phase === 'takeoff') return 'Take off · full throttle, lift off near 100 mph';
   if (NET.opts.mode === 'versus') { const me = NET.board[NET.seat]; return `Free-for-all · first to ${NET.opts.kills} kills · you have ${me ? me.kills : 0}`; }
   if (!w.phase || w.phase === 'waiting') return 'Waiting for the host to launch';
   if (w.phase === 'rtb') return NET.host ? 'All raiders down · land at the airfield to finish' : 'All raiders down · the host lands to finish';
@@ -2530,7 +2530,7 @@ function drawHUD(rdt) {
     if (s.ok) { hx.strokeStyle = '#97c46f'; hx.lineWidth = 2; hx.strokeRect(s.x - 10, s.y - 10, 20, 20); txt(`BASE ${(d / 1000).toFixed(1)} km`, s.x, s.y + 26, 11, '#97c46f', 'center'); }
   }
   // objective, score
-  const obj = !m ? '' : NET.on ? netObjective() : m.phase === 'takeoff' ? 'Take off · full throttle, lift off near 160 km/h' : m.phase === 'combat' ? (m.next !== null ? `Wave ${m.wave + 1} inbound in ${Math.ceil(m.next)} s` : `Wave ${m.wave} of ${WAVES.length} · ${enemies().length} bandit${enemies().length === 1 ? '' : 's'} remaining`) : m.phase === 'rtb' ? 'Return to base and land on the runway' : m.phase === 'landed' ? 'Landed' : '';
+  const obj = !m ? '' : NET.on ? netObjective() : m.phase === 'takeoff' ? 'Take off · full throttle, lift off near 100 mph' : m.phase === 'combat' ? (m.next !== null ? `Wave ${m.wave + 1} inbound in ${Math.ceil(m.next)} s` : `Wave ${m.wave} of ${WAVES.length} · ${enemies().length} bandit${enemies().length === 1 ? '' : 's'} remaining`) : m.phase === 'rtb' ? 'Return to base and land on the runway' : m.phase === 'landed' ? 'Landed' : '';
   txt(obj.toUpperCase(), HW / 2, safeT + 18, isTouch ? 13 : 15, '#f1e8d2', 'center', COND, 600);
   // on phones the score sits under the button row
   const scoreX = HW - safeL, scoreY = isTouch ? safeT + 66 : safeT;
@@ -2551,10 +2551,11 @@ function drawHUD(rdt) {
   if (threat) warns.unshift(isTouch ? 'MISSILE · BREAK AND FLARE' : 'MISSILE · BREAK HARD, F FOR FLARES');
   if (warns.length && (G.time * 3 % 1) < 0.7) warns.forEach((w, i) => txt(w, HW / 2, HH * 0.32 + i * 24, 20, '#e2553f', 'center', COND, 700));
   // flight data
-  const ias = p.V * 3.6 * Math.sqrt(Math.exp(-Math.max(0, p.pos.y) / 8500));
+  const MPH = 2.23694; // m/s to mph
+  const ias = p.V * MPH * Math.sqrt(Math.exp(-Math.max(0, p.pos.y) / 8500));
   const ammoTxt = `MG ${p.ammo.m}  CN ${p.ammo.c}  MSL ${p.missiles}  FLR ${p.flares}`;
   if (isTouch) {
-    const line = `${Math.round(ias)} km/h · ${Math.round(p.pos.y)} m · G ${p.gs.toFixed(1)} · THR ${Math.round(p.throttle * 100)}${p.boosting ? ' · BOOST' : ''} · WEP ${Math.round(p.wep * 100)}%`;
+    const line = `${Math.round(ias)} mph · ${Math.round(p.pos.y)} m · G ${p.gs.toFixed(1)} · THR ${Math.round(p.throttle * 100)}${p.boosting ? ' · BOOST' : ''} · WEP ${Math.round(p.wep * 100)}%`;
     const lx = Math.min(HW / 2, (HW - 230) / 2 + 40);
     txt(line, lx, HH - 34, 12, '#f1e8d2', 'center');
     txt(`${ammoTxt} · FUEL ${Math.round(p.fuel / p.spec.fuel * 100)}%${p.gear ? ' · GEAR' : ''}${p.flaps ? ' · FLAPS' : ''}`, lx, HH - 16, 11, '#c4bba3', 'center');
@@ -2562,7 +2563,7 @@ function drawHUD(rdt) {
   } else {
     const x0 = safeL + 4, y0 = HH - 128;
     hx.fillStyle = 'rgba(20,24,18,0.45)'; hx.fillRect(x0 - 8, y0 - 20, 200, 130);
-    txt(`IAS  ${String(Math.round(ias)).padStart(4)} km/h`, x0, y0, 14); txt(`ALT  ${String(Math.round(p.pos.y)).padStart(4)} m`, x0, y0 + 20, 14);
+    txt(`IAS  ${String(Math.round(ias)).padStart(4)} mph`, x0, y0, 14); txt(`ALT  ${String(Math.round(p.pos.y)).padStart(4)} m`, x0, y0 + 20, 14);
     txt(`VS   ${(p.vel.y >= 0 ? '+' : '') + p.vel.y.toFixed(0)} m/s`, x0, y0 + 40, 13, '#c4bba3');
     txt(`G    ${p.gs.toFixed(1)}`, x0, y0 + 60, 13, p.gs > 6 ? '#eaa53c' : '#c4bba3');
     txt(`THR  ${Math.round(p.throttle * 100)}%`, x0, y0 + 80, 13, '#c4bba3'); hx.fillStyle = '#eaa53c'; hx.fillRect(x0 + 100, y0 + 72, 80 * p.throttle, 6); hx.strokeStyle = 'rgba(241,232,210,.4)'; hx.lineWidth = 1; hx.strokeRect(x0 + 100, y0 + 72, 80, 6);
@@ -2645,7 +2646,7 @@ function drawGauges(p) {
     const a = a0 + clamp(v / max, 0, 1) * sweep; x.strokeStyle = '#f2d48a'; x.lineWidth = 3; x.beginPath(); x.moveTo(cx, cy); x.lineTo(cx + Math.cos(a) * r * 0.8, cy + Math.sin(a) * r * 0.8); x.stroke();
     x.fillStyle = '#b8ae94'; x.font = '600 9px monospace'; x.fillText(label, cx, cy + r * 0.62);
   };
-  dial(62, 100, 52, 'KM/H', p.V * 3.6, 800, 8, v => Math.round(v / 100));
+  dial(62, 100, 52, 'MPH ×100', p.V * 2.23694, 500, 10, v => Math.round(v / 100));
   dial(320, 100, 52, 'ALT ×100 M', ((p.pos.y % 1000) + 1000) % 1000, 1000, 10, v => Math.round(v / 100), true);
   dial(448, 100, 52, 'RPM ×1000', p.rpm, 3500, 7, v => (v / 1000).toFixed(0));
   // attitude
