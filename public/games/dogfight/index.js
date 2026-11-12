@@ -87,6 +87,13 @@ export default {
   options: [
     { key: 'mode', label: 'Mode', type: 'select', default: 'coop', choices: [{ value: 'coop', label: 'Co-op vs raiders' }, { value: 'versus', label: 'Free-for-all' }] },
     {
+      key: 'difficulty',
+      label: 'Difficulty',
+      type: 'select',
+      default: 'normal',
+      choices: [{ value: 'easy', label: 'Easy' }, { value: 'normal', label: 'Normal' }, { value: 'hard', label: 'Hard' }, { value: 'ace', label: 'Ace' }],
+    },
+    {
       key: 'enemies',
       label: 'Raiders per wave',
       type: 'select',

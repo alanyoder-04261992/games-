@@ -14,12 +14,29 @@ npm start        # Game Center at http://localhost:8080, Coastal Dogfight is a t
 
 `/games/dogfight/play.html` also opens on its own as a single-player game.
 
+## Difficulty, missiles, map and boost
+
+- **Difficulty** (Easy, Normal, Hard, Ace) moves every raider up or down a skill level, sharpens or blunts their aim, and scales the damage you take: half on Easy, 1.5× on Ace. It also decides who carries missiles: nobody on Easy, the ace on Normal, veterans and aces on Hard, and everyone on Ace. Online, the host sets it as a table option.
+- **Missiles** lock automatically. Keep a hostile near your nose and a square closes in with a growl; when it flashes red and the tone goes steady, fire with MSL, X, right click or LB. Missiles burn for 3 s, home with a lead on the target, are limited in how hard they can turn, and fuse by proximity. Manual lock (in settings) needs the target held near the centre for longer. You carry 4, or 6 on Easy.
+- **Flares** (FLARE, F or RB) can pull an incoming missile away. A missile warning beeps faster as it closes, and a red arrow points at it.
+- **Corner map**: the radar, a map of the whole sector, or off (MAP, M or Y).
+- **Boost**: hold Shift at full throttle, or drag into the red top of the touch slider, for about 18 seconds of extra power.
+- **Rearm**: land and stop on the airfield for 3 seconds to rearm, refuel and repair.
+- **Kill streaks**: two or more kills within 10 seconds earn a bonus, and score pop-ups mark each shoot-down.
+
+## Graphics
+
+Rendering uses ACES tone mapping. The aircraft have metallic and glossy materials that reflect a blurred copy of the sky, and their paint is weathered with panel lines, rivets and chipped seams. The water shades shallow water turquoise and shows surf along the shore, using a depth map baked from the terrain. Trees are layered conifers and multi-crown broadleaves with trunks, with lone trees dotted among the fields. Clouds have shaded bases, high cirrus streaks run across the sky, and contrails form above 2,700 m. Muzzle flashes light the wings, and the field of view widens with speed.
+
+The **High** graphics setting adds bloom, which makes the sun, tracers, fires and explosions glow. It also turns on 4× multisampling, finer terrain and textures, and more trees. Phones default to Medium.
+
 ## Single player options
 
 The game's menu has:
 
 - **Enemies per wave**: Standard (2, then 3, then more), or a fixed 1, 2, 3, 4, 6, 8 or 12.
 - **Waves**: 1, 2, 3, 5 or 8. Skill rises through the sortie, and the last wave brings an ace.
+- **Difficulty**, **Missile lock** (auto or manual) and **Corner map** are in the same menu and in the pause menu.
 - **Phone mode**: Auto turns the touch controls on for phones. On forces them, which is useful on a tablet or a touch laptop. Off hides them in favour of the keyboard and mouse. The same switch is in the pause menu.
 
 ## Multiplayer

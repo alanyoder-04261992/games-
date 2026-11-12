@@ -25,6 +25,6 @@ test('dogfight: finishing records a clean scoreboard and ends the round', () => 
 });
 
 test('dogfight: options cover mode, raider count and waves', () => {
-  for (const k of ['mode', 'enemies', 'waves', 'kills', 'wingmen']) assert.ok(game.options.find((o) => o.key === k), k);
+  for (const k of ['mode', 'difficulty', 'enemies', 'waves', 'kills', 'wingmen']) assert.ok(game.options.find((o) => o.key === k), k);
   JSON.stringify(engine.setup({ seed: 3, options })); // states must be plain JSON
 });
