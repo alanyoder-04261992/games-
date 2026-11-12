@@ -215,7 +215,7 @@ table.res i{display:inline-block;width:10px;height:10px;border-radius:2px;margin
 // Three.js r187 drawing with WebGPU (WebGPURenderer falls back to WebGL2 by itself), through
 // the import map above so the add-ons share one copy of it. Shaders are written in TSL.
 import * as THREE from 'three/webgpu';
-import { Fn, uniform, texture, uv, vec2, vec3, vec4, float, mix, smoothstep, pow, exp, dot, normalize, reflect, cos, positionWorld, positionGeometry, normalGeometry, cameraPosition, positionView, screenDPR, instancedDynamicBufferAttribute, pass, sample, rtt, unpackRGBToNormal } from 'three/tsl';
+import { Fn, uniform, texture, pmremTexture, diffuseColor, normalWorld, uv, vec2, vec3, vec4, float, mix, smoothstep, pow, exp, dot, normalize, reflect, cos, positionWorld, positionGeometry, normalGeometry, cameraPosition, positionView, screenDPR, instancedDynamicBufferAttribute, pass, sample, rtt, unpackRGBToNormal } from 'three/tsl';
 import { SkyMesh } from 'three/addons/objects/SkyMesh.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -398,7 +398,7 @@ async function buildCircuit(key) {
   $('loading').hidden = false; progress('Surveying the course…', 0.02); await nextFrame();
   if (world) { world.traverse(o => { if (o.geometry) o.geometry.dispose(); }); scene.remove(world); }
   world = new THREE.Group(); scene.add(world);
-  seedNoise(tr.seed); await applySky(tr.sky);
+  seedNoise(tr.seed); await applySky(tr.sky); buildEnv(); // before the materials, which take sky light from it
   // --- centre line
   const pts = tr.pts.map(([x, z]) => new V3(x * tr.scale, 0, z * tr.scale));
   const curve = new THREE.CatmullRomCurve3(pts, true, 'centripetal');
@@ -451,7 +451,6 @@ async function buildCircuit(key) {
   progress('Planting trees…', 0.84); await nextFrame();
   buildTrees(tr, Q.trees);
   if (tr.lake) buildLake(tr);
-  buildEnv();
   progress('Ready', 1); await nextFrame();
   $('loading').hidden = true;
 }
@@ -486,7 +485,7 @@ function buildTerrainMesh(tr) {
   // the field colours, broken up by three scales of detail noise laid in world space
   const wxz = positionWorld.xz, base = texture(tex, uv());
   const grain = texture(detail, wxz.mul(0.06)).r.mul(0.5).add(0.75).mul(texture(detail, wxz.mul(0.009)).g.mul(0.34).add(0.83)).mul(texture(detail, wxz.mul(0.31)).r.mul(0.26).add(0.87));
-  const mat = new THREE.MeshLambertNodeMaterial({ colorNode: vec4(base.rgb.mul(grain), base.a) });
+  const mat = lambert({ colorNode: vec4(base.rgb.mul(grain), base.a) });
   const m = new THREE.Mesh(geo, mat); m.receiveShadow = true; world.add(m);
 }
 function makeDetailTexture() {
@@ -530,16 +529,21 @@ function buildRoad(tr) {
   };
   const roadMat = new THREE.MeshStandardMaterial({ map: roadTexture(), roughness: 0.86, metalness: 0.0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   ribbon(-HALF_W, HALF_W, 0.06, 0.06, roadMat, 24);
-  const vergeMat = new THREE.MeshLambertMaterial({ map: stripTexture('verge'), polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  const vergeMat = lambert({ map: stripTexture('verge'), polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
   ribbon(-HALF_W - VERGE, -HALF_W, -0.05, 0.05, vergeMat, 6);
   ribbon(HALF_W, HALF_W + VERGE, 0.05, -0.05, vergeMat, 6);
   // red and white kerbs on the inside and outside of the real corners
-  const curbMat = new THREE.MeshLambertMaterial({ map: stripTexture('curb'), polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+  const curbMat = lambert({ map: stripTexture('curb'), polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
   const corner = j => Math.abs(T.k[j]) > 0.006;
   ribbon(-HALF_W - 1.3, -HALF_W + 0.2, 0.1, 0.09, curbMat, 4, corner);
   ribbon(HALF_W - 0.2, HALF_W + 1.3, 0.09, 0.1, curbMat, 4, corner);
 }
-const lam = (hex, extra = {}) => new THREE.MeshLambertMaterial({ color: hex, ...extra });
+// Matte surfaces. WebGL's Lambert also took diffuse light from the scene's sky environment map;
+// WebGPU's only reflects it, so that sky light is added here: the surface colour times the
+// pre-filtered sky seen along its normal (roughness 1), at the scene's environment intensity.
+const ENV = { tex: null, irr: null };
+function lambert(params) { const m = new THREE.MeshLambertNodeMaterial(params); m.emissiveNode = ENV.irr ? diffuseColor.rgb.mul(ENV.irr) : null; return m; }
+const lam = (hex, extra = {}) => lambert({ color: hex, ...extra });
 function addBox(w, h, d, mat, x, y, z, ry = 0, parent = world) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.rotation.y = ry; m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; }
 function frameAt(i) { return { x: T.cx[i], z: T.cz[i], h: T.h[i], tx: T.tx[i], tz: T.tz[i], rx: -T.tz[i], rz: T.tx[i], yaw: Math.atan2(-T.tx[i], -T.tz[i]) }; }
 const START = { gantry: null, lights: [] };
@@ -549,7 +553,7 @@ function buildStartArea(tr) {
   const c = document.createElement('canvas'); c.width = 128; c.height = 16; const x = c.getContext('2d');
   for (let i = 0; i < 16; i++) for (let j = 0; j < 2; j++) { x.fillStyle = (i + j) % 2 ? '#111' : '#f4f4f0'; x.fillRect(i * 8, j * 8, 8, 8); }
   const ct = new THREE.CanvasTexture(c); ct.colorSpace = THREE.SRGBColorSpace;
-  const line = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_W, 1.6), new THREE.MeshLambertMaterial({ map: ct, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+  const line = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_W, 1.6), lambert({ map: ct, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
   line.rotation.set(-Math.PI / 2, 0, f.yaw); line.position.set(f.x, f.h + 0.08, f.z); world.add(line);
   // gantry with five start lights
   const g = new THREE.Group(); g.position.set(f.x, f.h, f.z); g.rotation.y = f.yaw; world.add(g);
@@ -570,7 +574,7 @@ function buildStartArea(tr) {
   for (let i = 0; i < 700; i++) { cx.fillStyle = `hsl(${r() * 360},${40 + r() * 40}%,${35 + r() * 35}%)`; cx.beginPath(); cx.arc(r() * 512, 10 + r() * 50, 2.6, 0, 6.283); cx.fill(); }
   const crowdT = new THREE.CanvasTexture(crowd); crowdT.colorSpace = THREE.SRGBColorSpace;
   const conc = lam(0xb9b6ad), roofM = new THREE.MeshStandardMaterial({ color: 0xd8d4c8, roughness: 0.6, metalness: 0.3, side: THREE.DoubleSide });
-  for (let i = 0; i < 6; i++) { addBox(70, 1, 2.4, conc, 0, 0.5 + i * 1, -i * 2.4, 0, stand); const cr = new THREE.Mesh(new THREE.PlaneGeometry(68, 1.1), new THREE.MeshLambertMaterial({ map: crowdT })); cr.position.set(0, 1.55 + i, 1.21 - i * 2.4); stand.add(cr); }
+  for (let i = 0; i < 6; i++) { addBox(70, 1, 2.4, conc, 0, 0.5 + i * 1, -i * 2.4, 0, stand); const cr = new THREE.Mesh(new THREE.PlaneGeometry(68, 1.1), lambert({ map: crowdT })); cr.position.set(0, 1.55 + i, 1.21 - i * 2.4); stand.add(cr); }
   addBox(72, 0.3, 16, roofM, 0, 9.5, -6, 0, stand);
   for (const px of [-34, 0, 34]) addBox(0.4, 9.5, 0.4, conc, px, 4.75, -13.5, 0, stand);
   const wall = lam(0xe8e6df);
@@ -610,7 +614,7 @@ function buildFarms(tr) {
   const roofGeo = new THREE.ExtrudeGeometry(sh, { depth: 1, bevelEnabled: false }).translate(0, 0, -0.5);
   const mk = (geo, list, scaleFn) => {
     if (!list.length) return;
-    const im = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color: 0xffffff }), list.length);
+    const im = new THREE.InstancedMesh(geo, lambert({ color: 0xffffff }), list.length);
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new V3(), p = new V3(), col = new THREE.Color(), up = new V3(0, 1, 0);
     list.forEach((b, i) => { p.set(b.x, b.y, b.z); q.setFromAxisAngle(up, b.rot); scaleFn(b, s); m.compose(p, q, s); im.setMatrixAt(i, m); im.setColorAt(i, col.set(b.c)); });
     im.castShadow = true; im.receiveShadow = true; world.add(im);
@@ -652,7 +656,7 @@ function buildTrees(tr, count) {
   const dec = mergeColored([[new THREE.CylinderGeometry(0.25, 0.35, 3.6, 5).translate(0, 1.8, 0), TR], [new THREE.IcosahedronGeometry(3.4, 0).translate(0, 6.0, 0), [0.11, 0.21, 0.06]], [new THREE.IcosahedronGeometry(2.7, 0).translate(1.7, 5.2, 0.9), [0.14, 0.25, 0.07]], ...(hi ? [[new THREE.IcosahedronGeometry(2.5, 0).translate(-1.5, 5.6, -1.0), [0.13, 0.24, 0.065]]] : [])]);
   for (const [geo, sel] of [[con, true], [dec, false]]) {
     const items = list.filter(t => t.con === sel); if (!items.length) continue;
-    const im = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }), items.length);
+    const im = new THREE.InstancedMesh(geo, lambert({ vertexColors: true }), items.length);
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new V3(), p = new V3(), c = new THREE.Color(), up = new V3(0, 1, 0);
     items.forEach((t, i) => { p.set(t.x, t.h - 0.5, t.z); q.setFromAxisAngle(up, t.c * 6.28); sc.set(t.s, t.s * (0.85 + t.c * 0.35), t.s); m.compose(p, q, sc); im.setMatrixAt(i, m); const b = 0.85 + t.c * 0.45; im.setColorAt(i, c.setRGB(b * (0.92 + t.c * 0.16), b, b * 0.9)); });
     im.castShadow = BOOTQ.shadows; world.add(im);
@@ -1601,7 +1605,9 @@ function buildEnv() {
   try {
     const pm = new THREE.PMREMGenerator(renderer), es = probe.scene, at = sky.position.clone(); sky.position.set(0, 0, 0); es.add(sky);
     const gr = new THREE.Mesh(new THREE.CircleGeometry(390, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(SKIES[TRACKS[curTrack]?.sky]?.hg ?? 0x4f5a3a).multiplyScalar(0.8) })); gr.position.y = -20; es.add(gr);
-    const old = scene.environment; scene.environment = pm.fromScene(es, 0.02, 0.1, 50000).texture; if (old) old.dispose();
+    const old = scene.environment; scene.environment = pm.fromScene(es, 0.02, 0.1, 50000).texture;
+    if (ENV.tex) ENV.tex.value = scene.environment; else { ENV.tex = pmremTexture(scene.environment, normalWorld, float(1)); ENV.irr = ENV.tex.rgb.mul(uniform(scene.environmentIntensity)); }
+    if (old) old.dispose();
     es.remove(gr); gr.geometry.dispose(); gr.material.dispose(); scene.add(sky); sky.position.copy(at); pm.dispose();
   } catch (e) { console.warn(e); scene.add(sky); }
 }

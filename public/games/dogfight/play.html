@@ -428,8 +428,9 @@ const fogU = { uFogColor: uniform(scene.fog.color), uFogDensity: uniform(FOG_DEN
 // Medium and Low drew straight to the canvas with the WebGL renderer, where three's built-in materials (terrain, buildings,
 // trees, cloud sprites) add fog after tone mapping and sRGB, so the fog colour mixed in display space. High went through a
 // post-processing target and fogged in linear light, which is what node materials always do. On Medium and Low this fog node
-// tone-maps the lit colour like the output pass (ACES at our exposure, then sRGB), mixes the fog there, and maps the result
-// back through the exact inverse, so after the output pass those pixels come out as before.
+// tone-maps the lit colour like the output pass (ACES at our exposure, then sRGB), mixes in the fog colour as sRGB (WebGL
+// passed it to those shaders in output colour space), and maps the result back through the exact inverse, so after the
+// output pass those pixels come out as before.
 const legacyFog = (() => {
   const exposure = renderer.toneMappingExposure;
   const IN = new THREE.Matrix3().set(0.59719, 0.35458, 0.04823, 0.07600, 0.90834, 0.01566, 0.02840, 0.13383, 0.83777);
@@ -447,9 +448,10 @@ const legacyFog = (() => {
     const v = B.negate().sub(sqrt(B.mul(B).sub(A.mul(C).mul(4)).max(0))).div(A.mul(2));
     return mul(IN_INV, v).mul(0.6 / exposure);
   };
+  const fogSRGB = scene.fog.color.clone().convertLinearToSRGB();
   return Fn(() => {
     const f = densityFogFactor(fogU.uFogDensity);
-    return vec4(fromDisplay(mix(toDisplay(output.rgb), fogU.uFogColor, f)), output.a);
+    return vec4(fromDisplay(mix(toDisplay(output.rgb), uniform(fogSRGB), f)), output.a);
   })();
 })();
 const applyFogStyle = (q) => { scene.fogNode = QUALITY[q].bloom ? null : legacyFog; };

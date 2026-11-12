@@ -63,9 +63,10 @@ const std = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, rough
 // ---------------------------------------------------------------------
 // tone mapping
 // ---------------------------------------------------------------------
-// WebGPURenderer tone-maps the finished frame in one pass at the end, so (unlike WebGLRenderer)
-// it can't leave out the sky (an sRGB background) or the markers (toneMapped: false). untone()
-// runs three's ACES Filmic curve backwards, so those still reach the screen in their own colours.
+// WebGPURenderer tone-maps the finished frame in one pass at the end, so (unlike the old WebGL
+// renderer) it can't leave out the sky (an sRGB background) or the markers (toneMapped: false).
+// untone() runs three's ACES Filmic curve backwards, so those still reach the screen in their own
+// colours.
 const EXPOSURE = 1.05;
 const rowsOf = (m) => {
   const e = m.transpose().elements;
@@ -671,26 +672,21 @@ export function createScene(container, { onPick, onHover } = {}) {
   // the island being shown; bigger islands (5–8 players) swap these in setBoard()
   let { HEXES, VERTS, EDGES, HARBOR_SLOTS } = islandGeometry('base');
   let scale = 1; // island size relative to the standard island
-  // WebGPU where the browser has it; three falls back to WebGL 2 by itself when it doesn't
-  const renderer = new THREE.WebGPURenderer({ antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = EXPOSURE;
-  renderer.shadowMap.enabled = true;
-  // PCFShadowMap is the soft one (see sun.shadow.radius)
-  renderer.shadowMap.type = THREE.PCFShadowMap;
-  container.append(renderer.domElement);
-  renderer.domElement.className = 'hx-gl';
-  window.__renderer = renderer; // TEMP-HOOK
+  // The canvas goes in now; the WebGPURenderer that draws on it is made once we know whether
+  // the browser has WebGPU (see start() below).
+  const el = document.createElement('canvas');
+  el.className = 'hx-gl';
+  container.append(el);
+  let renderer = null;
+  let highQuality = true;
 
   const scene = new THREE.Scene();
   // the sky gradient fills the screen behind everything, untouched by tone mapping as before
   const sky = skyTexture();
   scene.backgroundNode = vec4(untoneNode(texture(sky, screenUV.flipY()).rgb), 1);
-  // Fog. WebGLRenderer mixed it in after tone mapping, in screen colours; WebGPURenderer would mix
-  // it in before (so the far sea turned pale sooner and greyer). This fog node does it the old way:
-  // tone-map the surface, mix with '#d9e6ec' in sRGB, then untone() the result.
+  // Fog. The old WebGL renderer mixed it in after tone mapping, in screen colours; WebGPURenderer
+  // would mix it in before (so the far sea turned pale sooner and greyer). This fog node does it
+  // the old way: tone-map the surface, mix with '#d9e6ec' in sRGB, then untone() the result.
   const fogNear = uniform(22), fogFar = uniform(52);
   scene.fogNode = Fn(() => {
     const f = rangeFogFactor(fogNear, fogFar);
@@ -703,7 +699,7 @@ export function createScene(container, { onPick, onHover } = {}) {
   scene.environmentIntensity = 0.55;
 
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 120);
-  const controls = new OrbitControls(camera, renderer.domElement);
+  const controls = new OrbitControls(camera, el);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
   controls.enablePan = true;
@@ -1072,7 +1068,7 @@ export function createScene(container, { onPick, onHover } = {}) {
   const ndc = new THREE.Vector2();
   function hitAt(ev) {
     if (!targets) return null;
-    const rect = renderer.domElement.getBoundingClientRect();
+    const rect = el.getBoundingClientRect();
     ndc.set(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
     const hits = ray.intersectObjects(markers.children.filter((m) => m.userData.vis), false);
@@ -1084,7 +1080,6 @@ export function createScene(container, { onPick, onHover } = {}) {
     return null;
   }
   let down = null;
-  const el = renderer.domElement;
   const onDown = (ev) => (down = { x: ev.clientX, y: ev.clientY, t: performance.now() });
   const onUp = (ev) => {
     if (!down) return;
@@ -1258,7 +1253,7 @@ export function createScene(container, { onPick, onHover } = {}) {
     const aspect = w / h;
     camera.aspect = aspect;
     camera.updateProjectionMatrix();
-    renderer.setSize(w, h, false);
+    renderer?.setSize(w, h, false);
     const dist = scale * (aspect >= 1.2 ? 14.2 : Math.min(28, 14.2 * (1.25 / Math.max(aspect, 0.45)) ** 0.9));
     const polar = aspect >= 1 ? 0.78 : 0.62;
     const pos = new THREE.Vector3().setFromSphericalCoords(dist, polar, 0).add(controls.target);
@@ -1279,7 +1274,7 @@ export function createScene(container, { onPick, onHover } = {}) {
     const w = container.clientWidth, h = container.clientHeight;
     camera.aspect = w / Math.max(1, h);
     camera.updateProjectionMatrix();
-    renderer.setSize(w, h, false);
+    renderer?.setSize(w, h, false);
   });
   ro.observe(container);
   fitCamera(true);
@@ -1322,9 +1317,29 @@ export function createScene(container, { onPick, onHover } = {}) {
     renderer.render(scene, camera);
   }
 
-  // WebGPURenderer starts asynchronously (adapter, device, or the WebGL 2 fallback). The API
-  // below works straight away; drawing starts once the renderer is ready.
-  const ready = renderer.init().then(() => {
+  function applyQuality() {
+    if (!renderer) return;
+    // materials pick up the shadow switch by themselves (it is part of their cache key)
+    renderer.shadowMap.enabled = highQuality;
+    renderer.setPixelRatio(highQuality ? Math.min(window.devicePixelRatio || 1, 2) : 1);
+    renderer.setSize(container.clientWidth, container.clientHeight, false);
+  }
+
+  // The renderer starts asynchronously. WebGPU when the browser offers an adapter, otherwise
+  // WebGPURenderer's WebGL 2 backend, asked for up front (so three doesn't warn about falling
+  // back). The API below works straight away; drawing starts once the renderer is ready.
+  async function start() {
+    const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' }).catch(() => null);
+    if (destroyed) return;
+    renderer = new THREE.WebGPURenderer({ canvas: el, antialias: true, powerPreference: 'high-performance', forceWebGL: !adapter });
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = EXPOSURE;
+    // PCFShadowMap is the soft one (see sun.shadow.radius)
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+    applyQuality();
+    window.__renderer = renderer; // TEMP-HOOK
+    await renderer.init();
     if (destroyed) return;
     pmrem = new THREE.PMREMGenerator(renderer);
     // three r183 lowered the room by 3.5 (brighter, shifted highlights); keep the room where it was
@@ -1334,7 +1349,8 @@ export function createScene(container, { onPick, onHover } = {}) {
     room.dispose();
     timer.reset(); // count from the first frame, as THREE.Clock did
     frame();
-  });
+  }
+  const ready = start();
 
   window.__hx = { camera, markers }; // TEMP-HOOK
   return {
@@ -1355,11 +1371,8 @@ export function createScene(container, { onPick, onHover } = {}) {
       controls.update();
     },
     setQuality(high) {
-      // materials pick up the shadow switch by themselves (it is part of their cache key)
-      renderer.shadowMap.enabled = high;
-      renderer.setPixelRatio(high ? Math.min(window.devicePixelRatio || 1, 2) : 1);
-      const w = container.clientWidth, h = container.clientHeight;
-      renderer.setSize(w, h, false);
+      highQuality = high;
+      applyQuality();
     },
     destroy() {
       destroyed = true;
@@ -1373,7 +1386,7 @@ export function createScene(container, { onPick, onHover } = {}) {
       scene.environment?.dispose();
       sky.dispose();
       pmrem?.dispose();
-      renderer.dispose();
+      renderer?.dispose();
       el.remove();
     },
   };
