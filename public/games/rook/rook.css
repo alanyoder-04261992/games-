@@ -331,3 +331,17 @@
   content: ''; position: absolute; left: -6px; bottom: -4px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #0b1424;
   background: #b3261e url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='9' y='3' width='6' height='11' rx='3' fill='white'/%3E%3Cpath d='M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21' fill='none' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M4 4l16 16' stroke='white' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E") center / 12px no-repeat;
 }
+
+/* ---------- the 3D table (scene.js) ---------- */
+.rk-stage3d { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
+.rk-stage3d .rk-canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; outline: none; -webkit-tap-highlight-color: transparent; }
+.rook.r3d { background: #0a0705; }
+.rook.r3d .rk-felt, .rook.r3d .rk-opp, .rook.r3d .rk-center, .rook.r3d .rk-hand { display: none; }
+.rook.r3d .rk-mine { z-index: 36; }
+/* the seats follow the players around the 3D table */
+.rook.r3d .rk-seat.top, .rook.r3d .rk-seat.left, .rook.r3d .rk-seat.right { left: var(--sx); top: var(--sy); right: auto; bottom: auto; transform: translate(-50%, -50%); }
+.rook.r3d .rk-seat.left, .rook.r3d .rk-seat.right { flex-direction: column; }
+.rook.r3d .rk-seat.left .rk-bubble { left: calc(100% + 4px); right: auto; }
+.rook.r3d .rk-seat.right .rk-bubble { right: calc(100% + 4px); left: auto; }
+.rook.r3d .rk-ticker { top: var(--tick-y, 60%); }
+.rook.r3d .rk-nameplate { background: rgba(10, 6, 3, 0.7); }

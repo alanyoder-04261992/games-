@@ -23,7 +23,7 @@ import { chooseAction, suggestDiscard } from './ai.js';
 
 const POS = ['bottom', 'left', 'top', 'right'];
 const SPEED = { relaxed: 1.45, normal: 1, fast: 0.6, turbo: 0.3 };
-const PREF_DEFAULTS = { autoSingle: true, autoContinue: true, hints: false, bigCards: false, sortTrumpRight: true };
+const PREF_DEFAULTS = { autoSingle: true, autoContinue: true, hints: false, bigCards: false, sortTrumpRight: true, table3d: true };
 
 export function mount(ctx) {
   const ui = new RookTable(ctx);
@@ -48,9 +48,17 @@ class RookTable {
     this.unsub = [];
     this.timers = new Set();
     this.build();
+    // the 3D table loads first; state updates wait for it (or for the 2D fallback)
+    this.boot = this.prefs.table3d ? this.start3d() : Promise.resolve();
+    this.queue = this.boot;
     this.unsub.push(this.client.on('state', (msg) => this.enqueue(msg)));
     this.unsub.push(this.client.on('chat', (m) => this.bubble(m)));
-    this.unsub.push(this.client.on('reject', (text) => this.ctx.toast(text, { kind: 'warn' })));
+    this.unsub.push(
+      this.client.on('reject', (text) => {
+        this.ctx.toast(text, { kind: 'warn' });
+        if (this.sentCard) (this.sentCard = null), this.sync3d();
+      }),
+    );
     if (ctx.voice) {
       const paint = () => this.paintVoice();
       this.unsub.push(ctx.voice.on('speaking', paint), ctx.voice.on('change', paint));
@@ -71,7 +79,145 @@ class RookTable {
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('keydown', this.onKey);
     for (const t of this.timers) clearTimeout(t);
+    this.t3d?.destroy();
+    this.t3d = null;
     this.root.remove();
+  }
+
+  // ------------------------------------------------------------------
+  // The 3D table (scene.js). Everything else — seats, score panels, bidding, modals — stays
+  // the same HTML on top of it; only the felt and the cards move into 3D.
+  // ------------------------------------------------------------------
+  async start3d() {
+    if (this.t3d || this.dead) return;
+    const stage = (this.stage3d = h('div.rk-stage3d'));
+    this.root.prepend(stage);
+    try {
+      const { createTable3D } = await import('./scene.js');
+      const made = createTable3D(stage, {
+        onTap: (card) => this.tap3d(card),
+        onLost: () => this.fallback2d('The 3D table stopped (graphics reset) — switched to the 2D table.'),
+      });
+      const t = await Promise.race([made, sleep(15000).then(() => null)]);
+      if (!t) {
+        made.then((late) => late.destroy()).catch(() => {});
+        throw new Error('3D table took too long to start');
+      }
+      if (this.dead || !this.prefs.table3d) {
+        t.destroy();
+        return;
+      }
+      this.t3d = t;
+      t.setSpeed(this.speed);
+      this.root.classList.add('r3d');
+      this.root.dataset.renderer = t.backend;
+      this.layout();
+    } catch (e) {
+      this.fallback2d('This device can’t show the 3D table — using the 2D table.', e);
+    }
+  }
+
+  fallback2d(message, err) {
+    if (err) console.info('Rook: 3D table unavailable —', err?.message || err);
+    this.t3d?.destroy();
+    this.t3d = null;
+    this.stage3d?.remove();
+    this.stage3d = null;
+    this.root.classList.remove('r3d');
+    delete this.root.dataset.renderer;
+    for (const el of this.seatEls) el.style.removeProperty('--sx'), el.style.removeProperty('--sy');
+    if (message && !this.dead) this.ctx.toast(message);
+    this.layout();
+    if (this.view && !this.pending) this.renderAll();
+  }
+
+  set3d(on) {
+    this.prefs.table3d = on;
+    this.savePrefs();
+    if (on && !this.t3d) {
+      this.pending++;
+      this.queue = this.queue
+        .then(() => this.start3d())
+        .catch((e) => console.error(e))
+        .finally(() => {
+          this.pending--;
+          if (this.view) this.renderAll();
+          if (!this.pending) this.idle();
+        });
+    } else if (!on && this.t3d) this.fallback2d();
+  }
+
+  tap3d(card) {
+    if (this.pending || this.waiting || !this.legalSet().has(card)) return;
+    this.clickCard(card);
+  }
+
+  // What the 3D table should show for a view.
+  desc3d(v = this.view) {
+    const me = this.mySeat;
+    const hands = {};
+    for (let s = 0; s < 4; s++) hands[this.pos(s)] = v.handSizes?.[s] || 0;
+    const plays = v.trick?.plays || [];
+    const piles = {};
+    for (const t of v.tricks || []) {
+      const p = this.pos(t.winner);
+      piles[p] = (piles[p] || 0) + t.plays.length;
+    }
+    const total = v.options?.lowCards === false ? 33 : 45;
+    const held = (v.handSizes || []).reduce((a, b) => a + b, 0) + (v.nestSize || 0) + plays.length + Object.values(piles).reduce((a, b) => a + b, 0);
+    const buried = v.contract && total - held > 0 ? { pos: this.pos(v.contract.bidder), n: total - held } : null;
+    const legal = this.legalSet();
+    const interactive = !this.pending && !this.waiting && legal.size > 0;
+    let hint = null;
+    if (this.prefs.hints && interactive) {
+      const c = this.hintCard();
+      if (c) hint = new Set([].concat(c));
+    }
+    const selected = v.phase === 'discard' ? new Set(this.selected) : v.phase === 'gift' && this.giftPick ? new Set([this.giftPick]) : null;
+    const c = v.contract;
+    const high = v.bidding?.high;
+    return {
+      myHandIds: me != null ? [...(v.hand || [])] : null,
+      hands,
+      trick: plays.map((p) => ({ pos: this.pos(p.seat), id: p.card })),
+      nest: v.nestSize || 0,
+      nestAside: v.phase !== 'bid' && (v.nestSize || 0) > 0,
+      piles,
+      buried,
+      deck: 0,
+      dealer: this.pos(v.dealer ?? 0),
+      dealerButton: v.phase === 'bid' ? this.pos(v.dealer) : null,
+      trickSize: v.sittingOut == null ? 4 : 3,
+      legal,
+      interactive,
+      dimIllegal: v.phase === 'play',
+      dragPlay: v.phase === 'play',
+      selected,
+      hint,
+      newCards: this.newCards ? new Set(this.newCards) : null,
+      winning: v.trick && plays.length > 1 ? this.pos(winnerOf(plays, v.trump)) : null,
+      taker: this.takerSeat != null ? this.pos(this.takerSeat) : null,
+      sent: this.sentCard || null,
+      bid: c ? { pos: this.pos(c.bidder), amount: c.amount, won: true } : high ? { pos: this.pos(high.seat), amount: high.amount, won: false } : null,
+      trump: v.trump ? { color: v.trump, pos: c ? this.pos(c.bidder) : 'bottom' } : null,
+    };
+  }
+
+  sync3d(opts) {
+    if (!this.t3d || !this.view) return Promise.resolve();
+    return this.t3d.sync(this.desc3d(), opts);
+  }
+
+  // HTML seats sit where the 3D table puts each player
+  place3d() {
+    if (!this.t3d) return;
+    const a = this.t3d.anchors();
+    for (const p of ['top', 'left', 'right']) {
+      const el = this.seatEls[POS.indexOf(p)];
+      el.style.setProperty('--sx', `${a[p].x}px`);
+      el.style.setProperty('--sy', `${a[p].y}px`);
+    }
+    this.root.style.setProperty('--tick-y', `${a.ticker.y}px`);
   }
 
   later(fn, ms) {
@@ -93,6 +239,7 @@ class RookTable {
       { label: 'Auto-continue after each round', value: this.prefs.autoContinue, set: (v) => ((this.prefs.autoContinue = v), this.savePrefs()) },
       { label: 'Show suggestions (coach)', value: this.prefs.hints, set: (v) => ((this.prefs.hints = v), this.savePrefs(), this.renderAll()) },
       { label: 'Large cards', value: this.prefs.bigCards, set: (v) => ((this.prefs.bigCards = v), this.savePrefs(), this.layout(), this.renderAll()) },
+      { label: '3D table (turn off on slow phones)', value: this.prefs.table3d, set: (v) => this.set3d(v) },
     ];
   }
 
@@ -105,6 +252,7 @@ class RookTable {
       document.body.append(d);
     }
     this.root = h('div.rook', { dataset: { phase: 'loading' } });
+    this.root.rookTable = this; // handy from the console: document.querySelector('.rook').rookTable
     this.felt = h('div.rk-felt', h('div.rk-felt-light'), h('div.rk-felt-logo', { html: `<span>ROOK</span>` }));
     this.hud = h('div.rk-hud');
     this.seatEls = POS.map((p) => h(`div.rk-seat.${p}`));
@@ -146,6 +294,13 @@ class RookTable {
     this.root.style.setProperty('--ch', this.ch + 'px');
     this.root.classList.toggle('portrait', portrait);
     this.root.classList.toggle('compact', W < 520);
+    if (this.t3d) {
+      const o = this.root.getBoundingClientRect();
+      const hud = this.hud.getBoundingClientRect();
+      const safeBottom = Math.max(0, (parseFloat(getComputedStyle(this.handEl).bottom) || 6) - 6);
+      this.t3d.setMetrics({ cw, safeBottom, hud: Math.max(40, hud.bottom - o.top) });
+      this.place3d();
+    }
   }
 
   pos(seat) {
@@ -191,9 +346,11 @@ class RookTable {
     const seatChanged = this.mySeat !== msg.seat;
     this.mySeat = msg.seat;
     this.speed = SPEED[msg.speed] ?? 1;
+    this.t3d?.setSpeed(this.speed);
     this.claim = msg.claim;
     this.seq = msg.seq;
     this.waiting = false;
+    this.sentCard = null;
     const ev = msg.event;
     this.root.dataset.phase = next.phase;
 
@@ -233,6 +390,11 @@ class RookTable {
         break;
       }
       case 'give': {
+        if (this.t3d) {
+          // the partner's card and the nest go to the bidder together
+          await this.nestToBidder(next, true);
+          break;
+        }
         await this.flyBacks(seat, next.contract.bidder, 1, 420);
         this.view = next;
         this.renderAll();
@@ -385,6 +547,14 @@ class RookTable {
         : null,
     );
     this.hud.replaceChildren(team(us, 'Us'), mid, team(them, 'Them'), buttons);
+    // the 3D camera frames the table under the score panels, so re-fit if their height changed
+    if (this.t3d) {
+      const hb = this.hud.getBoundingClientRect().bottom - this.root.getBoundingClientRect().top;
+      if (Math.abs(hb - (this.hudBottom || 0)) > 2) {
+        this.hudBottom = hb;
+        this.layout();
+      }
+    }
   }
 
   renderSeats() {
@@ -446,6 +616,7 @@ class RookTable {
   }
 
   renderOpp() {
+    if (this.t3d) return void this.sync3d();
     const v = this.view;
     for (let s = 0; s < 4; s++) {
       const el = this.oppHands[POS.indexOf(this.pos(s))];
@@ -469,6 +640,7 @@ class RookTable {
   }
 
   renderNest() {
+    if (this.t3d) return void this.sync3d();
     const v = this.view;
     const n = v.nestSize;
     const cards = [];
@@ -493,6 +665,7 @@ class RookTable {
   }
 
   renderTrick(plays = this.view.trick?.plays || []) {
+    if (this.t3d) return void this.sync3d();
     const cards = plays.map(({ seat, card }) => {
       const [x, y] = this.slotOffset(seat);
       const c = this.cardEl(card);
@@ -530,6 +703,7 @@ class RookTable {
   renderHand() {
     const v = this.view;
     if (!v) return;
+    if (this.t3d) return void this.sync3d();
     const hand = v.hand || [];
     const legal = this.legalSet();
     const interactive = !this.pending && !this.waiting && legal.size > 0;
@@ -635,6 +809,11 @@ class RookTable {
       return;
     }
     this.act({ type: 'play', card });
+    if (this.t3d) {
+      this.sentCard = card;
+      this.sync3d({ dur: 0.2 });
+      return;
+    }
     const el = this.handEl.querySelector(`[data-card="${card}"]`);
     el?.classList.add('sent');
   }
@@ -857,6 +1036,7 @@ class RookTable {
   }
   seatPoint(seat) {
     const p = this.pos(seat);
+    if (this.t3d) return this.t3d.anchors().pile[p];
     if (p === 'bottom') {
       const r = this.rel(this.handEl);
       return { x: r.x, y: r.y };
@@ -894,6 +1074,7 @@ class RookTable {
   }
 
   async playAnimation(prev, next, seat, action) {
+    if (this.t3d) return this.playAnimation3d(prev, next, seat, action);
     const card = action.card;
     const [ox, oy] = this.slotOffset(seat);
     const c = this.centerPoint();
@@ -952,6 +1133,50 @@ class RookTable {
     }
   }
 
+  // The same steps as playAnimation, on the 3D table: the card flies (and turns over) into the
+  // trick; a full trick pauses, the winning card glows, and the trick slides to the winner's pile.
+  async playAnimation3d(prev, next, seat, action) {
+    const card = action.card;
+    sound.card();
+    if (action.trump && prev.trump == null) this.tick(`${this.name(seat)} named ${PALETTE[action.trump].name} trump`);
+    else if (prev.trump == null) this.tick(`${PALETTE[colorOf(card)].name} is trump`);
+    const trickSize = prev.sittingOut == null ? 4 : 3;
+    const completes = prev.trick.plays.length + 1 === trickSize;
+    const plays = [...prev.trick.plays, { seat, card }];
+    if (seat !== this.mySeat) this.t3d.prepPlay(this.pos(seat), card);
+    this.sentCard = null;
+    this.view = { ...prev, hand: seat === this.mySeat ? prev.hand.filter((x) => x !== card) : prev.hand, handSizes: next.handSizes, trick: { ...prev.trick, plays }, trump: next.trump, turn: completes ? null : next.turn };
+    if (prev.trump == null) this.view.hand = next.phase === 'play' ? next.hand : this.view.hand;
+    await this.sync3d({ dur: 0.43 });
+    this.renderSeats();
+    this.renderHud();
+    if (!completes) {
+      this.view = next;
+      this.renderSeats();
+      this.renderHud();
+      return;
+    }
+    const done = next.lastTrick && next.lastTrick.plays.length === plays.length ? next.lastTrick : null;
+    const winner = done ? done.winner : winnerOf(plays, next.trump ?? prev.trump);
+    const pts = sumPoints(plays.map((p) => p.card));
+    await this.wait(520);
+    this.takerSeat = winner;
+    this.sync3d();
+    this.tick(`${this.name(winner)} take${winner === this.mySeat ? '' : 's'} it${pts ? ` · ${pts} pts` : ''}`);
+    await this.wait(720);
+    this.takerSeat = null;
+    sound.sweep();
+    this.view = next;
+    const swept = this.sync3d({ dur: 0.48, stagger: 0.05 });
+    if (pts) this.floatText(this.seatPoint(winner), `+${pts}`, teamOf(winner) === this.myTeam() ? 'good' : 'bad');
+    await swept;
+    this.renderAll();
+    if (next.phase === 'score' || next.phase === 'over') {
+      await this.wait(350);
+      this.showSummary(next);
+    }
+  }
+
   async sweep(winner, pts) {
     const target = this.seatPoint(winner);
     const cards = [...this.trickEl.children];
@@ -975,6 +1200,7 @@ class RookTable {
   }
 
   async dealAnimation(v) {
+    if (this.t3d) return this.dealAnimation3d(v);
     this.renderHud();
     this.renderSeats();
     this.handEl.replaceChildren();
@@ -1013,6 +1239,20 @@ class RookTable {
     this.later(() => this.handEl.classList.remove('dealt'), 900);
   }
 
+  async dealAnimation3d(v) {
+    this.view = v;
+    this.newCards = null;
+    this.takerSeat = null;
+    this.sentCard = null;
+    this.renderHud();
+    this.renderSeats();
+    this.tick(`Round ${v.round} · ${this.name(v.dealer)} deal${v.dealer === this.mySeat ? '' : 's'}${v.redeals ? ' (redealt: a hand had no points)' : ''}`);
+    sound.shuffle();
+    const order = [1, 2, 3, 0].map((i) => this.pos((v.dealer + i) % 4));
+    this.later(() => sound.deal(24), 650 * this.speed);
+    await this.t3d.deal(this.desc3d(v), order);
+  }
+
   async afterBidding(prev, next) {
     const c = next.contract;
     this.tick(`${this.name(c.bidder)} won the bid at ${c.amount}${c.solo ? ' — solo!' : ''}`);
@@ -1029,6 +1269,24 @@ class RookTable {
   }
 
   async nestToBidder(next, afterGift) {
+    if (this.t3d) {
+      const bidder = next.contract.bidder;
+      if (bidder === this.mySeat) {
+        const before = new Set(this.view?.hand || []);
+        this.newCards = new Set(next.hand.filter((x) => !before.has(x)));
+        this.t3d.prepFaces('nest', [...this.newCards]);
+        this.later(() => {
+          this.newCards = null;
+          if (!this.pending) this.sync3d();
+        }, 6000);
+      }
+      this.view = next;
+      sound.deal(5);
+      await this.sync3d({ dur: 0.46, stagger: 0.07 });
+      this.renderAll();
+      if (!afterGift && bidder === this.mySeat) this.ctx.toast('The nest is yours. Bury the cards you don’t want.');
+      return;
+    }
     const bidder = next.contract.bidder;
     const c = this.centerPoint();
     const to = this.seatPoint(bidder);
@@ -1051,6 +1309,14 @@ class RookTable {
   }
 
   async buryAnimation(prev, next, seat, action) {
+    if (this.t3d) {
+      this.view = next;
+      this.selected.clear();
+      this.newCards = null;
+      sound.deal(action.count ?? action.cards?.length ?? 5);
+      await this.sync3d({ dur: 0.48, stagger: 0.06 });
+      return;
+    }
     const c = this.centerPoint();
     if (seat === this.mySeat && action.cards) {
       const flights = action.cards.map((card, i) => {

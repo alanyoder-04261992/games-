@@ -8,6 +8,8 @@ import { ROOK_TILE as TILE } from './tile.js';
 export default {
   id: 'rook',
   name: 'Rook',
+  // 2.0: the 3D table (scene.js, WebGPU) — the 2D table is still in the game's settings
+  version: '2.0',
   tagline: 'The classic trick-taking bidding game for four.',
   description:
     'Two teams of partners bid for the nest, name trump with the first lead, and race to 1000. Bird card, solo 400 and 800 bids, smart computer partners.',

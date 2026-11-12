@@ -14,6 +14,12 @@ Games plug in as folders under `public/games/` — read `docs/ADDING_A_GAME.md` 
   and run `npm run update-three`. Don't hand-copy files from three's repo.
 - Pages that use an import map (games in an `<iframe>`, like `games/dogfight/play.html`)
   must map `"three"` and `"three/addons/"` to the shared folder.
+- WebGPU games (Rook's `scene.js`) import `../../vendor/three/three.webgpu.min.js` and TSL from
+  `../../vendor/three/three.tsl.min.js` — never the WebGL build in the same game. WebGPURenderer
+  falls back to WebGL 2 by itself, so: no `WebGLRenderer`, no GLSL (`ShaderMaterial`,
+  `onBeforeCompile`), custom shading in TSL, and glow/post effects through `THREE.RenderPipeline`
+  (not `EffectComposer` or the old `PostProcessing` name). Check `navigator.gpu.requestAdapter()`
+  first and pass `forceWebGL` when there is none, so the fallback logs no warning.
 - Write r187 code: `THREE.Timer` (not `THREE.Clock`), `PCFShadowMap`/`VSMShadowMap` (not the
   removed `PCFSoftShadowMap`), `colorSpace` (not `encoding`). The console should show no
   `THREE.` warnings when a game runs.

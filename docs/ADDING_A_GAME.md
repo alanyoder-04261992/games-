@@ -135,6 +135,15 @@ import { OrbitControls } from '../../vendor/three/addons/controls/OrbitControls.
 - **Write current API:** `THREE.Timer` instead of `THREE.Clock`; `PCFShadowMap` (or
   `VSMShadowMap`) because `PCFSoftShadowMap` was removed; `texture.colorSpace` instead of
   `encoding`. A running game should log no `THREE.` warnings.
+- **WebGPU:** the shared folder also has `three.webgpu.min.js` (WebGPURenderer, node materials,
+  `RenderPipeline`) and `three.tsl.min.js` (TSL), built on the same `three.core.min.js`. A WebGPU
+  game imports only those two (`tsl/display/...` add-ons work too). WebGPURenderer runs on WebGL 2
+  where a device has no WebGPU, so don't keep a WebGL code path: shade in TSL, do glow and other
+  post effects with `RenderPipeline`. `public/games/rook/scene.js` is the example. To try real
+  WebGPU headless in Chromium/Playwright use `--enable-unsafe-webgpu --enable-features=Vulkan
+  --use-vulkan=swiftshader --use-angle=swiftshader --use-webgpu-adapter=swiftshader` (without
+  `--use-vulkan=swiftshader` the adapter appears but nothing draws), and
+  `--disable-features=WebGPU` to test the WebGL 2 fallback.
 - **Upgrading three.js** happens for every game at once: `npm run update-three -- <version>`,
   bump `REQUIRED_REVISION` in `tests/three.test.mjs`, fix each 3D game's console warnings, and
   run `npm test`.
