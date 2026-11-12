@@ -496,15 +496,37 @@ class Particles {
 // ---------------------------------------------------------------------
 // the scene
 // ---------------------------------------------------------------------
-export function createScene(container, { onCell, onHover, quality = 'high' } = {}) {
-  let high = quality !== 'low';
-  if (!navigator.gpu) {
+// Starts the renderer (asynchronous: WebGPU hands out its device through promises) and builds the
+// sea. WebGPU where the browser has a usable adapter, WebGL 2 otherwise. Asking for an adapter
+// first lets a browser without one go straight to the WebGL 2 backend instead of through the
+// renderer's own fallback (same result, minus a console warning); the renderer still falls back
+// by itself if WebGPU fails later in start-up. Rejects when neither is available.
+export async function createScene(container, options = {}) {
+  let forceWebGL = !navigator.gpu;
+  if (!forceWebGL) {
+    try {
+      forceWebGL = !(await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }));
+    } catch {
+      forceWebGL = true;
+    }
+  }
+  if (forceWebGL) {
     const gl = document.createElement('canvas').getContext('webgl2');
     if (!gl) throw new Error('Neither WebGPU nor WebGL 2 is available');
     gl.getExtension('WEBGL_lose_context')?.loseContext();
   }
-  // WebGPU where the browser has it, WebGL 2 otherwise (the renderer picks; fallback stays on)
-  const renderer = new THREE.WebGPURenderer({ antialias: true, powerPreference: 'high-performance' });
+  const renderer = new THREE.WebGPURenderer({ antialias: true, powerPreference: 'high-performance', forceWebGL });
+  try {
+    await renderer.init();
+  } catch (e) {
+    renderer.dispose();
+    throw e;
+  }
+  return buildScene(container, renderer, options);
+}
+
+function buildScene(container, renderer, { onCell, onHover, quality = 'high' } = {}) {
+  let high = quality !== 'low';
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, high ? 2 : 1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -512,7 +534,6 @@ export function createScene(container, { onCell, onHover, quality = 'high' } = {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.domElement.className = 'bs-gl';
-  window.__renderer = renderer; // TEMP-DEBUG
   container.append(renderer.domElement);
 
   const scene = new THREE.Scene();
@@ -537,9 +558,15 @@ export function createScene(container, { onCell, onHover, quality = 'high' } = {
   };
   const sky = makeSky();
   scene.add(sky);
-  // light the scene with the sky itself (baked once the renderer is ready, see start())
+  // light the scene with the sky itself (a second sky, baked once into a PMREM environment map)
   const pmrem = new THREE.PMREMGenerator(renderer);
-  let envTarget = null;
+  const envScene = new THREE.Scene();
+  const envSky = makeSky();
+  envScene.add(envSky);
+  const envTarget = pmrem.fromScene(envScene);
+  envSky.geometry.dispose();
+  envSky.material.dispose();
+  scene.environment = envTarget.texture;
   scene.environmentIntensity = 0.5;
 
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 2000);
@@ -1190,29 +1217,7 @@ export function createScene(container, { onCell, onHover, quality = 'high' } = {
   }
   makePipeline();
   buildBoards(10);
-  // WebGPU (or the WebGL 2 fallback) starts asynchronously: bake the sky into the environment
-  // map once the backend is ready, then start the frame loop. Calls made before then (ships,
-  // shots) just queue up in the scene and animate from the first frame.
-  renderer
-    .init()
-    .then(() => {
-      if (destroyed) return;
-      const envScene = new THREE.Scene();
-      const envSky = makeSky();
-      envScene.add(envSky);
-      envTarget = pmrem.fromScene(envScene);
-      envSky.geometry.dispose();
-      envSky.material.dispose();
-      scene.environment = envTarget.texture;
-      renderer.setAnimationLoop(frame);
-    })
-    .catch((e) => {
-      console.error(e);
-      const msg = document.createElement('div');
-      msg.className = 'bs-nogl';
-      msg.innerHTML = '<strong>3D graphics are not available on this device.</strong><p>Broadside needs WebGPU or WebGL 2. Try another browser or turn on hardware acceleration.</p>';
-      container.append(msg);
-    });
+  renderer.setAnimationLoop(frame);
 
   return {
     get quality() {
@@ -1286,7 +1291,7 @@ export function createScene(container, { onCell, onHover, quality = 'high' } = {
       pipeNodes.forEach((n) => n.dispose());
       if (water?.isWaterMesh) water.dispose();
       else water?.material.dispose();
-      envTarget?.dispose();
+      envTarget.dispose();
       pmrem.dispose();
       renderer.dispose();
       el.remove();

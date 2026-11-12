@@ -3,6 +3,7 @@
 // with brick stacks, snowy quarry peaks, harbors with piers and sailboats, painted wooden
 // homesteads, barns with silos, trails, a bandit in a wide-brim hat, and dice that tumble.
 import * as THREE from '../../vendor/three/three.webgpu.min.js';
+import { vec3, vec4, texture, screenUV } from '../../vendor/three/three.tsl.min.js';
 import { OrbitControls } from '../../vendor/three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from '../../vendor/three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from '../../vendor/three/addons/geometries/RoundedBoxGeometry.js';
@@ -58,6 +59,41 @@ const ease = {
   },
 };
 const std = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0, ...extra });
+
+// ---------------------------------------------------------------------
+// tone mapping
+// ---------------------------------------------------------------------
+// WebGPURenderer tone-maps the finished frame in one pass at the end, so (unlike WebGLRenderer)
+// it can't leave out the sky (an sRGB background) or the markers (toneMapped: false). untone()
+// runs three's ACES Filmic curve backwards, so those still reach the screen in their own colours.
+const EXPOSURE = 1.05;
+const rowsOf = (m) => {
+  const e = m.transpose().elements;
+  return [e.slice(0, 3), e.slice(3, 6), e.slice(6, 9)];
+};
+// three's ACESOutputMat and ACESInputMat, inverted
+const ACES_OUT_INV = rowsOf(new THREE.Matrix3().set(1.60475, -0.53108, -0.07367, -0.10208, 1.10813, -0.00605, -0.00327, -0.07276, 1.07602).invert());
+const ACES_IN_INV = rowsOf(new THREE.Matrix3().set(0.59719, 0.35458, 0.04823, 0.076, 0.90834, 0.01566, 0.0284, 0.13383, 0.83777).invert());
+// inverse of the RRT/ODT fit (v² + 0.0245786v − 0.000090537) / (0.983729v² + 0.432951v + 0.238081)
+const fitInv = (y) => {
+  y = Math.min(1, Math.max(0, y));
+  const a = 0.983729 * y - 1, b = 0.432951 * y - 0.0245786, c = 0.238081 * y + 0.000090537;
+  return (-b - Math.sqrt(b * b - 4 * a * c)) / (2 * a);
+};
+const mul3 = (rows, [r, g, b]) => rows.map(([x, y, z]) => x * r + y * g + z * b);
+function untone(color) {
+  const c = new THREE.Color(color);
+  const u = mul3(ACES_IN_INV, mul3(ACES_OUT_INV, [c.r, c.g, c.b]).map(fitInv));
+  return new THREE.Color(...u.map((x) => Math.max(0, (x * 0.6) / EXPOSURE)));
+}
+// the same, as a shader node
+function untoneNode(rgb) {
+  const m = (rows, v) => vec3(...rows.map((r) => vec3(...r).dot(v)));
+  const y = m(ACES_OUT_INV, rgb).clamp(0, 1);
+  const a = y.mul(0.983729).sub(1), b = y.mul(0.432951).sub(0.0245786), c = y.mul(0.238081).add(0.000090537);
+  const v = b.mul(-1).sub(b.mul(b).sub(a.mul(c).mul(4)).sqrt()).div(a.mul(2));
+  return m(ACES_IN_INV, v).mul(0.6 / EXPOSURE).max(0);
+}
 
 // tileable noise built from integer-frequency waves
 function waveNoise(seed, w, h) {
@@ -640,7 +676,7 @@ export function createScene(container, { onPick, onHover } = {}) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = EXPOSURE;
   renderer.shadowMap.enabled = true;
   // PCFShadowMap is the soft one (see sun.shadow.radius)
   renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -649,8 +685,11 @@ export function createScene(container, { onPick, onHover } = {}) {
   window.__renderer = renderer; // TEMP-HOOK
 
   const scene = new THREE.Scene();
-  scene.background = skyTexture();
-  scene.fog = new THREE.Fog('#d9e6ec', 22, 52);
+  // the sky gradient fills the screen behind everything, untouched by tone mapping as before
+  const sky = skyTexture();
+  scene.backgroundNode = vec4(untoneNode(texture(sky, screenUV.flipY()).rgb), 1);
+  // fog is mixed in before tone mapping now; untone it so the far sea still fades to '#d9e6ec'
+  scene.fog = new THREE.Fog(untone('#d9e6ec'), 22, 52);
   let pmrem = null;
   // r181–r186 PBR made diffuse surfaces a little darker; 0.55 (was 0.5) matches the old look
   scene.environmentIntensity = 0.55;
@@ -734,6 +773,9 @@ export function createScene(container, { onPick, onHover } = {}) {
   const pieces = new THREE.Group();
   scene.add(pieces);
   const markers = new THREE.Group();
+  // after the see-through sea rings, which would tint the far markers (orange under WebGPU's
+  // blending, olive under WebGL's)
+  markers.renderOrder = 1;
   scene.add(markers);
   const fx = new THREE.Group();
   scene.add(fx);
@@ -944,9 +986,12 @@ export function createScene(container, { onPick, onHover } = {}) {
   }
 
   // ---------- targets (where the player can click) ----------
-  const markerMat = new THREE.MeshBasicMaterial({ color: '#ffd23f', transparent: true, opacity: 0.95, depthWrite: false, toneMapped: false });
-  const markerHot = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 1, depthWrite: false, toneMapped: false });
-  const haloMat = new THREE.MeshBasicMaterial({ color: '#ffe680', transparent: true, opacity: 0.45, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+  // bright, untone-mapped marker colours (see untone())
+  const markerMat = new THREE.MeshBasicMaterial({ color: untone('#ffd23f'), transparent: true, opacity: 0.95, depthWrite: false });
+  const markerHot = new THREE.MeshBasicMaterial({ color: untone('#ffffff'), transparent: true, opacity: 1, depthWrite: false });
+  // the halo is see-through, and WebGPU blends before tone mapping: this colour and opacity were
+  // fitted so it blends over the tiles like the old untone-mapped '#ffe680' at 45%
+  const haloMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.3, 1.07, 0.18), transparent: true, opacity: 0.165, depthWrite: false, side: THREE.DoubleSide });
   const haloGeo = new THREE.RingGeometry(0.11, 0.17, 32).rotateX(-Math.PI / 2);
   const hitMat = new THREE.MeshBasicMaterial({ visible: false });
   const ringGeo = new THREE.RingGeometry(0.62, 0.8, 6).rotateX(-Math.PI / 2).rotateY(Math.PI / 6);
@@ -1283,6 +1328,7 @@ export function createScene(container, { onPick, onHover } = {}) {
     frame();
   });
 
+  window.__hx = { camera, markers }; // TEMP-HOOK
   return {
     ready,
     setBoard,
@@ -1317,6 +1363,7 @@ export function createScene(container, { onPick, onHover } = {}) {
       controls.dispose();
       timer.dispose();
       scene.environment?.dispose();
+      sky.dispose();
       pmrem?.dispose();
       renderer.dispose();
       el.remove();

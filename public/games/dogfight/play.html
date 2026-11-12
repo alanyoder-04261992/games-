@@ -1141,7 +1141,7 @@ function updateTracers() {
     for (let k = 0; k < 4; k++) tracerCol.set([r, gg, bb, 0.95 * fog], t * 16 + k * 4);
     t++;
   }
-  tracerMesh.geometry.setDrawRange(0, t * 6);
+  tracerMesh.geometry.setDrawRange(0, t * 6); tracerMesh.visible = t > 0; // WebGPU flags a zero-length draw
   tracerMesh.geometry.attributes.position.needsUpdate = true; tracerMesh.geometry.attributes.color.needsUpdate = true;
 }
 
@@ -2811,8 +2811,8 @@ function simulate(dt) {
   for (const m of G.msgs) m.t -= dt / Math.max(G.timeScale, 0.2);
   G.msgs = G.msgs.filter(m => m.t > 0);
 }
+// Driven by renderer.setAnimationLoop, so the node system starts a new frame (render passes, bloom) before each call.
 function frame(now) {
-  requestAnimationFrame(frame);
   if (window.__freeze) return; // QA: hold the picture still for a staged capture
   let rdt = Math.min(0.1, (now - last) / 1000); last = now; G.frame++;
   // online the world keeps going while you look at a menu
@@ -2877,7 +2877,15 @@ function updateFov(rdt) {
 // QA hook: run the simulation headless, e.g. window.__sim(60)
 window.__sim = (seconds, dt = 1 / 60) => { const n = Math.round(seconds / dt); for (let i = 0; i < n && G.state === 'play'; i++) { simulate(dt); smokeFX.update(dt); fireFX.update(dt); } const p = G.player; return p && { state: G.state, phase: G.mission && G.mission.phase, wave: G.mission && G.mission.wave, alive: p.alive, onGround: p.onGround, alt: +p.pos.y.toFixed(1), speedKmh: +(p.V * 3.6).toFixed(0), gear: p.gear, kills: G.stats.kills, shots: G.stats.shots, hits: G.stats.hits, enemies: enemies().length, fuel: +p.fuel.toFixed(0), time: +G.time.toFixed(1) }; };
 window.__game = { get post() { return !!renderPipeline; }, get fx() { return { smokeFX, fireFX }; }, camera, B, world: { coastX, groundH, TOWN, AF }, set hud(v) { hud.hidden = !v; },
-  renderNow(dt = 0) { smokeFX.update(dt); fireFX.update(dt); for (const p of G.planes) if (!p.gone) p.visuals(0); sky.position.copy(camera.position); updateTracers(); if (renderPipeline) renderPipeline.render(); else renderer.render(scene, camera); return canvas.toDataURL('image/png'); }, G, settings, startMission, SPECS, NET, netSend, finishNet, MSL, LOCK, launchMissile, dropFlares, DIFF };
+  // resolves with a PNG of the next frame (rendered inside the renderer's loop, so the bloom pipeline's scene pass is fresh)
+  renderNow(dt = 0) {
+    return new Promise(resolve => renderer.setAnimationLoop(() => {
+      renderer.setAnimationLoop(frame);
+      smokeFX.update(dt); fireFX.update(dt); for (const p of G.planes) if (!p.gone) p.visuals(0); sky.position.copy(camera.position); updateTracers();
+      if (renderPipeline) renderPipeline.render(); else renderer.render(scene, camera);
+      resolve(canvas.toDataURL('image/png'));
+    }));
+  }, G, settings, startMission, SPECS, NET, netSend, finishNet, MSL, LOCK, launchMissile, dropFlares, DIFF };
 
 (async function boot() {
   resizeHUD();
@@ -2893,7 +2901,7 @@ window.__game = { get post() { return !!renderPipeline; }, get fx() { return { s
   $('btnOnline').hidden = EMBED || !/\/games\/dogfight\/play\.html$/.test(location.pathname);
   G.state = 'menu'; showScreen('menu');
   if (EMBED) post({ type: 'ready' });
-  requestAnimationFrame(t => { last = t; frame(t); });
+  last = performance.now(); renderer.setAnimationLoop(frame);
   if (AUTOPILOT) { console.log('[QA] autopilot sortie'); startMission('sortie'); }
 })();
 </script>

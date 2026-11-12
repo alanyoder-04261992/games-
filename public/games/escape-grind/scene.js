@@ -2,7 +2,7 @@
 // two loops of raised tiles, glossy pawns, rolling dice, flying cards, gold-coin stacks and a
 // tray for each player with miniature buildings for everything they own.
 import * as THREE from '../../vendor/three/three.webgpu.min.js';
-import { context, renderOutput } from '../../vendor/three/three.tsl.min.js';
+import { context, renderOutput, rangeFogFactor, mix, vec3, vec4 } from '../../vendor/three/three.tsl.min.js';
 import { RoomEnvironment } from '../../vendor/three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from '../../vendor/three/addons/geometries/RoundedBoxGeometry.js';
 import { OrbitControls } from '../../vendor/three/addons/controls/OrbitControls.js';
@@ -60,9 +60,11 @@ export class Table3D {
     r.domElement.className = 'eg-canvas';
 
     const scene = (this.scene = new THREE.Scene());
-    // the clear color is written to the canvas as is (no output pass), so give it already encoded
-    scene.background = new THREE.Color().setRGB(0x0b / 255, 0x08 / 255, 0x06 / 255, THREE.LinearSRGBColorSpace);
-    scene.fog = new THREE.Fog('#0b0806', 34, 70);
+    // The clear color is written to the canvas as is (no output pass), so give it already encoded.
+    // The fog fades to the same encoded color after tone mapping, as it did under WebGL (#output),
+    // so it isn't a scene.fog, which three.js would mix in before tone mapping (to near-black).
+    const bg = (scene.background = new THREE.Color().setRGB(0x0b / 255, 0x08 / 255, 0x06 / 255, THREE.LinearSRGBColorSpace));
+    this.fog = { color: vec3(bg.r, bg.g, bg.b), near: 34, far: 70 };
 
     const cam = (this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 200));
     scene.add(cam);
@@ -131,9 +133,11 @@ export class Table3D {
   // things marked toneMapped: false (the card print held up to the camera, the pawn glow rings).
   // Instead every material maps and encodes its own color as it draws, exactly as the WebGL
   // renderer did, so those stay true to color and transparent pieces blend the same way.
+  // The distance fog goes on last, toward the encoded room color, again as under WebGL.
   // Installed after the environment map is made: that has to stay linear HDR.
   #output() {
     const r = this.renderer;
+    const { color: fogColor, near, far } = this.fog;
     r.contextNode = context({
       ...r.contextNode.getFlowContextData(),
       getOutput: (color, builder) => {
@@ -141,7 +145,8 @@ export class Table3D {
         const mat = builder.material;
         const out = renderOutput(color, mat?.toneMapped === false ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping, THREE.SRGBColorSpace);
         out.premultipliedAlpha = !!mat?.premultipliedAlpha;
-        return out;
+        if (mat?.fog === false) return out;
+        return vec4(mix(out.rgb, fogColor, rangeFogFactor(near, far)), out.a);
       },
     });
   }
