@@ -45,32 +45,10 @@ const isOver = (s) => s.over;
 
 export const engine = { setup, actors, legal, check, apply, view, isOver };
 
-const tile = `<svg viewBox="0 0 200 140" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="df-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3d6aa3"/><stop offset="1" stop-color="#c3d3df"/></linearGradient>
-    <linearGradient id="df-sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b6a72"/><stop offset="1" stop-color="#123a4c"/></linearGradient>
-  </defs>
-  <rect width="200" height="140" fill="url(#df-sky)"/>
-  <ellipse cx="44" cy="38" rx="26" ry="9" fill="#fff" opacity=".85"/><ellipse cx="60" cy="33" rx="16" ry="8" fill="#fff" opacity=".9"/>
-  <ellipse cx="160" cy="26" rx="20" ry="7" fill="#fff" opacity=".8"/>
-  <path d="M0 98 L40 88 L70 92 L96 84 L120 96 L120 140 L0 140Z" fill="#5f7d3e"/>
-  <path d="M96 84 L120 96 L104 99Z" fill="#d6cfb4"/>
-  <rect x="0" y="98" width="200" height="42" fill="url(#df-sea)" opacity=".0"/>
-  <path d="M112 97 L200 92 L200 140 L118 140Z" fill="url(#df-sea)"/>
-  <g transform="translate(100 62) rotate(-12)">
-    <ellipse cx="0" cy="0" rx="46" ry="9" fill="#4a5833"/>
-    <ellipse cx="0" cy="2" rx="46" ry="5" fill="#7b6744" opacity=".7"/>
-    <rect x="-5" y="-6" width="10" height="34" rx="5" fill="#4a5833"/>
-    <ellipse cx="0" cy="-7" rx="9" ry="3" fill="#1d1f1d" opacity=".5"/>
-    <circle cx="-30" cy="0" r="4.5" fill="#2b3f6e"/><circle cx="-30" cy="0" r="2.2" fill="#a9302b"/>
-    <circle cx="30" cy="0" r="4.5" fill="#2b3f6e"/><circle cx="30" cy="0" r="2.2" fill="#a9302b"/>
-    <ellipse cx="0" cy="27" rx="15" ry="3.5" fill="#4a5833"/>
-  </g>
-  <g transform="translate(160 64) rotate(18) scale(.42)" opacity=".9">
-    <ellipse cx="0" cy="0" rx="42" ry="7" fill="#6d777b"/><rect x="-4" y="-6" width="8" height="30" rx="4" fill="#6d777b"/><circle cx="0" cy="-8" r="4" fill="#d4ab2e"/>
-  </g>
-  <path d="M120 60 L150 63" stroke="#ffd27a" stroke-width="2" stroke-linecap="round" opacity=".9"/>
-  <path d="M126 66 L154 68" stroke="#ffd27a" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+// Tile art: a real frame from the game, rendered on the High setting
+// (tools/dogfight-thumbnail.cjs stages and captures it).
+const tile = `<svg viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A camouflaged fighter banks after a burning enemy over the coast">
+  <image href="${new URL('./tile.jpg', import.meta.url).href}" width="200" height="120" preserveAspectRatio="xMidYMid slice"/>
 </svg>`;
 
 export default {
