@@ -640,7 +640,8 @@ export function createScene(container, { onPick, onHover } = {}) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // three r182+ dropped PCFSoftShadowMap; PCFShadowMap is the soft one now (see sun.shadow.radius)
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   container.append(renderer.domElement);
   renderer.domElement.className = 'hx-gl';
 
@@ -648,7 +649,11 @@ export function createScene(container, { onPick, onHover } = {}) {
   scene.background = skyTexture();
   scene.fog = new THREE.Fog('#d9e6ec', 22, 52);
   const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  // three r183 lowered the room by 3.5 (brighter, shifted highlights); keep the room where it was
+  const room = new RoomEnvironment();
+  room.position.y = 0;
+  scene.environment = pmrem.fromScene(room, 0.04).texture;
+  room.dispose();
   scene.environmentIntensity = 0.5;
 
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 120);
@@ -672,6 +677,7 @@ export function createScene(container, { onPick, onHover } = {}) {
   Object.assign(sun.shadow.camera, { left: -7.5, right: 7.5, top: 7.5, bottom: -7.5, near: 2, far: 30 });
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.02;
+  sun.shadow.radius = 1.7; // same penumbra width as the old PCFSoftShadowMap
   scene.add(sun);
 
   // ocean
@@ -1229,13 +1235,14 @@ export function createScene(container, { onPick, onHover } = {}) {
 
   // ---------- loop ----------
   let raf = 0;
-  const clock = new THREE.Clock();
+  const timer = new THREE.Timer();
+  timer.reset(); // count from the first frame, as THREE.Clock did
   function frame() {
     if (destroyed) return;
     raf = requestAnimationFrame(frame);
     if (document.hidden) return;
-    const t = clock.getElapsedTime();
     const now = performance.now();
+    const t = timer.update(now).getElapsed();
     normals.offset.set(t * 0.012, t * 0.007);
     foam.material.opacity = 0.35 + Math.sin(t * 1.3) * 0.15;
     for (const b of boats) {
@@ -1297,6 +1304,7 @@ export function createScene(container, { onPick, onHover } = {}) {
       el.removeEventListener('pointerup', onUp);
       el.removeEventListener('pointermove', onMove);
       controls.dispose();
+      timer.dispose();
       renderer.dispose();
       pmrem.dispose();
       el.remove();
