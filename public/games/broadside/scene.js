@@ -260,6 +260,24 @@ const MAT = {
 };
 const navGeo = new THREE.SphereGeometry(0.016, 8, 6);
 
+// Geometries, materials and textures used by many objects at once. disposeTree() frees
+// everything else an object owns (a ship's hull and flag, a board's labels, a ghost's squares)
+// and leaves these alone.
+const SHARED = new WeakSet();
+const share = (...xs) => xs.forEach((x) => SHARED.add(x));
+share(navGeo, ...Object.values(MAT));
+function disposeTree(root) {
+  root.traverse((o) => {
+    // sprites all share one built-in quad, so only their materials are theirs
+    if (o.geometry && !o.isSprite && !SHARED.has(o.geometry)) o.geometry.dispose();
+    for (const m of [o.material].flat()) {
+      if (!m || SHARED.has(m)) continue;
+      if (m.map && !SHARED.has(m.map)) m.map.dispose();
+      m.dispose();
+    }
+  });
+}
+
 function hullShape(L, W, bow = 0.32, sh = new THREE.Shape()) {
   const x0 = -L / 2, x1 = L / 2;
   sh.moveTo(x0 + 0.04, -W / 2);
@@ -670,6 +688,7 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
   let destroyed = false;
   let aim = { board: null, enabled: false };
   let hover = null;
+  let pointer = null; // where the pointer rests on the sea, so the reticle can follow aim changes
 
   const cellPos = (b, i, y = 0) => new THREE.Vector3((i % N) - (N - 1) / 2, y, boardZ[b] + Math.floor(i / N) - (N - 1) / 2);
 
@@ -678,7 +697,10 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
   const buoyMats = [std('#e34b3a', { roughness: 0.7, metalness: 0 }), std('#e9e9e2', { roughness: 0.75, metalness: 0 })];
   const lampGeo = new THREE.SphereGeometry(0.022, 8, 6);
   const lampMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(8, 4, 0.8), toneMapped: false });
+  share(buoyGeo, ...buoyMats, lampGeo, lampMat);
   function buildBoards(size) {
+    // the old boards' water patches, grid lines, labels, markers and ships go with them
+    for (const B of boards) disposeTree(B.group);
     world.clear();
     N = size;
     const gap = 3;
@@ -773,6 +795,8 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
   const scorchGeo = new THREE.CircleGeometry(0.42, 24).rotateX(-Math.PI / 2);
   const scorchMat = new THREE.MeshBasicMaterial({ color: '#1a0f0a', transparent: true, opacity: 0.45, depthWrite: false });
   const ringGeo = new THREE.RingGeometry(0.2, 0.26, 32).rotateX(-Math.PI / 2);
+  const missRingMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.35, depthWrite: false });
+  share(missMat, hitMat, pegGeo, capGeo, scorchGeo, scorchMat, ringGeo, missRingMat);
 
   function addMarker(b, shot, onShip) {
     const B = boards[b];
@@ -797,7 +821,7 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
       peg.scale.setScalar(0.75);
       cap.scale.setScalar(0.75);
       peg.castShadow = cap.castShadow = true;
-      const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.35, depthWrite: false }));
+      const ring = new THREE.Mesh(ringGeo, missRingMat);
       ring.position.y = 0.02;
       g.add(peg, cap, ring);
       g.userData.bob = Math.random() * 6;
@@ -826,6 +850,7 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
       if (!sh || sh.x !== obj.userData.x || sh.y !== obj.userData.y || sh.dir !== obj.userData.dir) {
         B.ships.remove(obj);
         B.shipObjs.delete(id);
+        disposeTree(obj); // moving a ship while placing (or Shuffle) builds a new one
       }
     }
     for (const [id, sh] of want) {
@@ -877,11 +902,23 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
   const ghost = new THREE.Group();
   const ghostOk = new THREE.MeshBasicMaterial({ color: '#7dffb0', transparent: true, opacity: 0.42, depthWrite: false });
   const ghostBad = new THREE.MeshBasicMaterial({ color: '#ff6b6b', transparent: true, opacity: 0.42, depthWrite: false });
+  share(ghostOk, ghostBad);
+  let ghostKey = null;
   function setGhost(g) {
+    // the ghost is rebuilt as the pointer crosses squares; skip it when nothing would change
+    const key = g ? `${N}:${g.id}:${g.x}:${g.y}:${g.dir}:${g.ok}` : null;
+    if (key === ghostKey) return;
+    ghostKey = key;
+    disposeTree(ghost);
     ghost.clear();
     if (!g) return;
     const obj = buildShip(g.id, '#ffffff');
-    obj.traverse((m) => m.isMesh && ((m.material = g.ok ? ghostOk : ghostBad), (m.castShadow = false)));
+    obj.traverse((m) => {
+      if (!m.isMesh) return;
+      if (!SHARED.has(m.material)) m.material.dispose(); // its own flag material, never drawn
+      m.material = g.ok ? ghostOk : ghostBad;
+      m.castShadow = false;
+    });
     const cells = [];
     for (let k = 0; k < SHIPS[g.id].len; k++) {
       const cx = g.dir === 'h' ? g.x + k : g.x;
@@ -943,7 +980,8 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
         opacity: 0.85,
       });
     }
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.3, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8, depthWrite: false }));
+    // its own material (each ring fades on its own), freed when it has spread out
+    const ring = new THREE.Mesh(splashGeo, new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8, depthWrite: false }));
     ring.position.copy(p).setY(0.02);
     world.add(ring);
     anims.push({
@@ -953,7 +991,10 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
         ring.scale.setScalar(1 + k * 4);
         ring.material.opacity = 0.8 * (1 - k);
       },
-      done: () => world.remove(ring),
+      done() {
+        world.remove(ring);
+        ring.material.dispose();
+      },
     });
     shake = Math.max(shake, 0.05);
   }
@@ -1034,6 +1075,8 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
   }
   const shockGeo = new THREE.RingGeometry(0.35, 0.5, 48).rotateX(-Math.PI / 2);
   const debrisGeo = new THREE.BoxGeometry(0.06, 0.02, 0.05);
+  const splashGeo = new THREE.RingGeometry(0.2, 0.3, 40).rotateX(-Math.PI / 2);
+  share(shellGeo, shellMat, shockGeo, debrisGeo, splashGeo);
 
   // ---------- picking ----------
   const ray = new THREE.Raycaster();
@@ -1064,6 +1107,7 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
     if (c) onCell?.(c.board, c.i, c.x, c.y);
   };
   const onMove = (ev) => {
+    pointer = { clientX: ev.clientX, clientY: ev.clientY };
     const c = cellAt(ev);
     const key = c ? `${c.board}:${c.i}` : null;
     if (key === hover) return;
@@ -1076,6 +1120,7 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
   el.addEventListener('pointermove', onMove);
   el.addEventListener('pointerleave', () => {
     hover = null;
+    pointer = null;
     updateReticle(null);
     onHover?.(null, null);
   });
@@ -1098,16 +1143,21 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
     const pos = look.clone().add(new THREE.Vector3(0, dist * 0.82, dist * 0.62));
     return { pos, look };
   }
+  // stop any camera move in flight (it would otherwise keep flying to the board it set out for)
+  function stopCamera() {
+    for (const a of anims) if (a.camera) a.cancelled = true;
+    anims = anims.filter((a) => !a.camera);
+  }
   function setFocus(b, animate = true) {
     focus = b;
     const to = camFor(b);
+    stopCamera();
     if (!animate) {
       camState.pos.copy(to.pos);
       camState.look.copy(to.look);
       return;
     }
     const from = { pos: camState.pos.clone(), look: camState.look.clone() };
-    anims = anims.filter((a) => !a.camera);
     anims.push({
       camera: true,
       t0: performance.now(),
@@ -1182,7 +1232,14 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
     const rs = 1 + Math.sin(t * 6) * 0.06;
     reticle.scale.set(rs, 1, rs);
     flashLight.intensity *= 0.86;
-    anims = anims.filter((a) => {
+    // Step a snapshot of the running animations. A done() may start new ones (a shell landing
+    // starts its explosion or splash, which push their shockwave, ring and debris animations):
+    // those go into a fresh list and are merged back, rather than being pushed onto the array
+    // being filtered and then dropped when the filter's result replaces it.
+    const running = anims;
+    anims = [];
+    const still = running.filter((a) => {
+      if (a.cancelled) return false;
       if (now < a.t0) return true;
       if (!a.started) {
         a.started = true;
@@ -1196,6 +1253,7 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
       }
       return true;
     });
+    anims = still.concat(anims);
     particles.update(dt);
     camera.position.copy(camState.pos);
     if (shake > 0.002) {
@@ -1249,7 +1307,7 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
     focus: () => focus,
     // place the camera by hand (used to render the home-page thumbnail)
     setCamera(pos, look) {
-      anims = anims.filter((a) => !a.camera);
+      stopCamera();
       camState.pos.set(...pos);
       camState.look.set(...look);
     },
@@ -1257,7 +1315,9 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
     setFocus,
     setAim(board, enabled) {
       aim = { board, enabled };
-      if (!enabled) updateReticle(null);
+      // show (or hide) the reticle under a pointer already resting on the sea (the camera may
+      // have moved since it last moved, so look again at which square it is over)
+      updateReticle(pointer && cellAt(pointer));
     },
     syncShips,
     addMarker,
@@ -1272,6 +1332,8 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
     hasMarker: (b, i) => boards[b]?.shots.has(i),
     clearBoard(b) {
       const B = boards[b];
+      disposeTree(B.markers);
+      disposeTree(B.ships);
       B.markers.clear();
       B.shots.clear();
       B.ships.clear();
