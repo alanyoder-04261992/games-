@@ -4,6 +4,8 @@
   "files": [
     "three.module.min.js",
     "three.core.min.js",
+    "three.webgpu.min.js",
+    "three.tsl.min.js",
     "addons/controls/OrbitControls.js",
     "addons/environments/RoomEnvironment.js",
     "addons/geometries/RoundedBoxGeometry.js",

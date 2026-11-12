@@ -29,7 +29,7 @@ Plain HTML, CSS and JavaScript modules — no build step, hosts anywhere static 
   **Real-life economy** (advanced option): a market index runs through expansion, boom, slowdown,
   recession and recovery. Deal prices, buyer offers, business income and loan rates follow it, and
   a live stock market lets players buy the dip, sell the boom, and short stocks to profit from a fall.
-- **Four in a Row** — a small, complete example of how a game plugs in.
+- **Four in a Row** — a small, complete example of how a game plugs in, with a 3D board (three.js on WebGPU) and a flat one.
 - **Coastal Dogfight** — a real-time 3D flight game: 1940s fighters over a 20 km coastline.
   Up to four pilots team up against waves of raiders (you pick how many per wave and how
   many waves) or fight a free-for-all. Phone touch controls, mouse aim, keyboard and gamepad.

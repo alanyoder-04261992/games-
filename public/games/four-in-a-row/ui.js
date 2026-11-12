@@ -1,94 +1,119 @@
-// Four in a Row screen: draws the view it receives and sends { type: 'drop', col } back.
-// Looks like the real thing: a molded plastic rack on a wooden table, ridged checkers that
-// drop and bounce, a hovering checker that follows your pointer, and a glowing winning line.
+// Four in a Row screen. This file runs the game side of the screen: it reads each state
+// message, shows the players and whose turn it is, sends { type: 'drop', col } when you pick a
+// column, and offers "Play again" at the end.
+//
+// The board itself is drawn by one of two interchangeable modules with the same interface:
+//   scene.js    the 3D board (three.js WebGPURenderer), loaded only when it's used
+//   board2d.js  the flat HTML/CSS board
+// The "3D board" setting (saved on this device with ctx.prefs) picks one. If the device can't
+// run 3D graphics, the flat board is used instead.
 import { h, avatar } from '../../core/util.js';
 import { sound } from '../../core/sound.js';
+import { createFlatBoard } from './board2d.js';
 
 const COLS = 7;
 const ROWS = 6;
+const PREF_3D = 'four.3d';
 
 export function mount(ctx) {
   const root = h('div.f4');
-  const status = h('div.f4-status');
   const players = h('div.f4-players');
-  const discs = h('div.f4-discs');
-  const rack = h('div.f4-rack');
-  const rims = h('div.f4-rims');
-  const line = h('div.f4-line');
-  const ghost = h('div.f4-ghost', h('div.f4-disc'));
-  const cols = h('div.f4-cols');
-  const board = h('div.f4-board', discs, rack, rims, line, cols);
+  const status = h('div.f4-status');
+  const top = h('div.f4-top', players, status);
+  const host = h('div.f4-host'); // the board goes in here
+  const keys = h('div.f4-keys'); // keyboard and screen-reader buttons for the 3D board
   const after = h('div.f4-after');
-  const stage = h(
-    'div.f4-stage',
-    ghost,
-    h('div.f4-frame', board, h('div.f4-leg.left'), h('div.f4-leg.right')),
-    h('div.f4-shadow'),
-  );
-  root.append(h('div.f4-wood'), h('div.f4-lamp'), players, status, stage, after);
+  root.append(h('div.f4-wood'), h('div.f4-lamp'), top, host, keys, after);
   ctx.el.append(root);
-
-  for (let c = 0; c < COLS; c++) {
-    const btn = h('button.f4-col', {
-      'aria-label': `Column ${c + 1}`,
-      onclick: () => drop(c),
-      onpointerenter: () => hover(c),
-      onfocus: () => hover(c),
-    });
-    cols.append(btn);
-  }
-  cols.addEventListener('pointerleave', () => hover(null));
 
   let view = null;
   let seats = [];
-  let waiting = false;
-  let hoverCol = null;
+  let hoverCol = null; // the column under the pointer, finger or keyboard focus
+  let sent = null; // the column we just sent, until the next state arrives
+  let board = null;
+  let boardToken = 0; // bumped on every switch, so a slow 3D load can't arrive late
+  let want3d = ctx.prefs.get(PREF_3D) ?? true;
 
   const myTurn = () => view && view.seat != null && view.turn === view.seat && view.winner == null && view.moves < COLS * ROWS;
+  const canPick = () => myTurn() && sent == null;
 
   function hover(col) {
     hoverCol = col;
-    paintGhost();
+    paintPreview();
   }
-  function paintGhost() {
-    const show = myTurn() && !waiting && hoverCol != null && view.board[hoverCol] == null;
-    ghost.classList.toggle('show', !!show);
-    if (show) {
-      ghost.style.setProperty('--c', hoverCol);
-      ghost.firstChild.className = `f4-disc p${view.seat}`;
-    }
+  // the preview disc: over the hovered column on your turn, and held over the column you chose
+  // until the move comes back, so the dropping disc starts right where the preview was
+  function paintPreview() {
+    if (!board || !view) return;
+    if (sent != null) return board.preview(sent, view.seat);
+    const show = canPick() && hoverCol != null && view.board[hoverCol] == null;
+    board.preview(show ? hoverCol : null, view.seat);
   }
 
   function drop(col) {
-    if (!myTurn() || waiting) return;
+    if (!canPick()) return;
     if (view.board[col] != null) return sound.error();
-    waiting = true;
-    ghost.classList.remove('show');
+    sent = col;
+    paintPreview();
     ctx.client.act({ type: 'drop', col });
   }
 
+  // ---------- choosing the board ----------
+  async function useBoard(three) {
+    const token = ++boardToken;
+    board?.destroy();
+    board = null;
+    root.classList.toggle('three', three);
+    root.classList.toggle('loading', three);
+    const handlers = { onHover: hover, onPick: drop, onLand: () => sound.card(), canPick };
+    let next = null;
+    if (three) {
+      try {
+        const { createScene } = await import('./scene.js');
+        next = await createScene(host, handlers);
+      } catch (err) {
+        console.warn('Four in a Row: 3D graphics are not available, using the flat board.', err);
+        if (token === boardToken) ctx.toast('3D graphics aren’t available on this device, so the flat board is showing.');
+        three = false;
+      }
+    }
+    if (token !== boardToken) return next?.destroy(); // switched again (or left) while loading
+    board = next || createFlatBoard(host, handlers);
+    root.classList.toggle('three', three);
+    root.classList.remove('loading');
+    if (view) board.update(view, null); // draw the current position without animating it
+    paintPreview();
+    frame();
+  }
+
+  // tell the 3D board how much of the screen the player list and buttons cover
+  function frame() {
+    if (!board?.frame) return;
+    const box = root.getBoundingClientRect();
+    board.frame({ top: top.getBoundingClientRect().bottom - box.top, bottom: box.bottom - after.getBoundingClientRect().top });
+  }
+  const ro = new ResizeObserver(frame);
+  [root, top, after].forEach((x) => ro.observe(x));
+
+  for (let c = 0; c < COLS; c++) {
+    keys.append(
+      h('button', {
+        'aria-label': `Drop in column ${c + 1}`,
+        onclick: () => drop(c),
+        onfocus: () => hover(c),
+        onblur: () => hover(null),
+      }),
+    );
+  }
+
+  // ---------- drawing a state ----------
   function render(msg) {
     const prev = view;
     view = msg.view;
     seats = msg.seats || seats;
-    waiting = false;
+    sent = null;
+    board?.update(view, prev);
     const mine = view.seat;
-    const fresh = !prev || view.moves < prev.moves;
-    discs.replaceChildren(
-      ...view.board.flatMap((v, i) => {
-        if (v == null) return [];
-        const c = i % COLS;
-        const r = Math.floor(i / COLS);
-        const d = h(`div.f4-disc.p${v}`, { style: { '--c': c, '--r': r, '--spin': `${((c * 37 + r * 53) % 360)}deg` } });
-        if (!fresh && view.last && view.last.col === c && view.last.row === r && prev.moves < view.moves) d.classList.add('drop');
-        if (view.line?.some(([x, y]) => x === c && y === r)) d.classList.add('win');
-        return [d];
-      }),
-    );
-    if (prev && view.moves > prev.moves) {
-      setTimeout(() => sound.card(), 160 + (view.last?.row ?? 0) * 45);
-    }
-    drawLine();
     const over = view.winner != null || view.moves === COLS * ROWS;
     const name = (s) => (s === mine ? 'You' : seats[s]?.name || ['Red', 'Gold'][s]);
     players.replaceChildren(
@@ -117,29 +142,8 @@ export function mount(ctx) {
           )
         : null,
     );
-    paintGhost();
+    paintPreview();
     if (myTurn() && prev?.turn !== mine) sound.turn();
-  }
-
-  // a glowing bar through the winning four
-  function drawLine() {
-    const cells = view?.line;
-    if (!cells || cells.length < 2) {
-      line.classList.remove('show');
-      return;
-    }
-    const sorted = [...cells].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-    const [x1, y1] = sorted[0];
-    const [x2, y2] = sorted[sorted.length - 1];
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    line.style.setProperty('--x', x1 + 0.5);
-    line.style.setProperty('--y', y1 + 0.5);
-    line.style.setProperty('--len', Math.hypot(dx, dy));
-    line.style.setProperty('--angle', `${Math.atan2(dy, dx)}rad`);
-    line.classList.remove('show');
-    void line.offsetWidth;
-    line.classList.add('show');
   }
 
   // voice chat: light up whoever is talking
@@ -156,11 +160,28 @@ export function mount(ctx) {
     paintVoice();
   });
   if (ctx.client.lastState) render(ctx.client.lastState);
+  useBoard(want3d);
+
   return {
     destroy() {
       off();
       offVoice.forEach((f) => f());
+      ro.disconnect();
+      boardToken++;
+      board?.destroy();
       root.remove();
     },
+    // shown in the table's Settings sheet
+    settings: () => [
+      {
+        label: '3D board',
+        value: want3d,
+        set: (v) => {
+          want3d = v;
+          ctx.prefs.set(PREF_3D, v);
+          useBoard(v);
+        },
+      },
+    ],
   };
 }

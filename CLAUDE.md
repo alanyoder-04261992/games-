@@ -17,6 +17,11 @@ Games plug in as folders under `public/games/` — read `docs/ADDING_A_GAME.md` 
 - Write r187 code: `THREE.Timer` (not `THREE.Clock`), `PCFShadowMap`/`VSMShadowMap` (not the
   removed `PCFSoftShadowMap`), `colorSpace` (not `encoding`). The console should show no
   `THREE.` warnings when a game runs.
+- New 3D games use **WebGPURenderer**: `three.webgpu.min.js` + `three.tsl.min.js` from the
+  shared folder (made by `npm run update-three`; same core as `three.module.min.js`). Custom
+  shading is TSL on node materials; no `ShaderMaterial`, `onBeforeCompile` or WebGL
+  post-processing in a WebGPU game. Pick the backend yourself (`forceWebGL: !adapter`) so the
+  WebGL 2 fallback logs no warning. `games/four-in-a-row/scene.js` is the example.
 - **Upgrading three.js is done for all games at once:** `npm run update-three -- <version>`,
   bump `REQUIRED_REVISION` in `tests/three.test.mjs`, fix every 3D game's warnings, run
   `npm test`, then open each 3D game and check the console.

@@ -6,8 +6,9 @@
 // Every 3D game imports three.js from this one shared folder (never from a CDN), so all
 // games always run on the same release and work offline. What this does:
 //   1. downloads the requested `three` package from npm
-//   2. minifies build/three.core.js and build/three.module.js into three.core.min.js and
-//      three.module.min.js (three no longer ships minified builds)
+//   2. minifies build/three.core.js, three.module.js (WebGL), three.webgpu.js (WebGPU with a
+//      WebGL2 fallback) and three.tsl.js (node shading) into *.min.js files (three no longer
+//      ships minified builds)
 //   3. copies the add-ons the games use (public/vendor/three/addons.json, plus any
 //      `vendor/three/addons/...` import found in public/games) and everything they import,
 //      rewriting `from 'three'` to a relative path so they load without an import map
@@ -52,10 +53,16 @@ async function minify(src, out, rewrite = (s) => s) {
   return result.code.length;
 }
 const coreSize = await minify(path.join(pkg, 'build', 'three.core.js'), path.join(vendor, 'three.core.min.js'));
-const moduleSize = await minify(path.join(pkg, 'build', 'three.module.js'), path.join(vendor, 'three.module.min.js'), (s) => {
-  if (!s.includes("'./three.core.js'")) throw new Error('three.module.js no longer imports ./three.core.js — check the new build layout');
-  return s.replaceAll("'./three.core.js'", "'./three.core.min.js'");
-});
+// every build imports its siblings by name; point those imports at the minified copies
+const toMin = (name, needs) => (s) => {
+  for (const dep of needs) if (!s.includes(`'./${dep}.js'`)) throw new Error(`${name} no longer imports ./${dep}.js — check the new build layout`);
+  return s.replace(/'\.\/(three\.(?:core|tsl|webgpu))\.js'/g, "'./$1.min.js'");
+};
+const moduleSize = await minify(path.join(pkg, 'build', 'three.module.js'), path.join(vendor, 'three.module.min.js'), toMin('three.module.js', ['three.core']));
+// WebGPU renderer (falls back to WebGL2 by itself) and TSL, three's node shading language.
+// They share three.core.min.js with three.module.min.js, so add-ons and games can mix them.
+const webgpuSize = await minify(path.join(pkg, 'build', 'three.webgpu.js'), path.join(vendor, 'three.webgpu.min.js'), toMin('three.webgpu.js', ['three.core', 'three.tsl']));
+const tslSize = await minify(path.join(pkg, 'build', 'three.tsl.js'), path.join(vendor, 'three.tsl.min.js'), toMin('three.tsl.js', ['three.core']));
 
 // ---------- 3. add-ons ----------
 const wanted = new Set(fs.existsSync(manifestFile) ? JSON.parse(fs.readFileSync(manifestFile, 'utf8')).addons : []);
@@ -90,12 +97,14 @@ while (queue.length) {
 // ---------- 4. version + license ----------
 fs.copyFileSync(path.join(pkg, 'LICENSE'), path.join(vendor, 'LICENSE'));
 fs.writeFileSync(manifestFile, JSON.stringify({ note: 'Add-ons the games use; tools/update-three.mjs copies these and everything they import.', addons: [...wanted].sort() }, null, 2) + '\n');
-fs.writeFileSync(versionFile, JSON.stringify({ version, revision, files: ['three.module.min.js', 'three.core.min.js', ...[...copied].sort().map((f) => `addons/${f}`)] }, null, 2) + '\n');
+fs.writeFileSync(versionFile, JSON.stringify({ version, revision, files: ['three.module.min.js', 'three.core.min.js', 'three.webgpu.min.js', 'three.tsl.min.js', ...[...copied].sort().map((f) => `addons/${f}`)] }, null, 2) + '\n');
 fs.rmSync(tmp, { recursive: true, force: true });
 
 console.log(`three.js r${revision} → public/vendor/three/`);
 console.log(`  three.core.min.js   ${(coreSize / 1024).toFixed(0)} KB`);
 console.log(`  three.module.min.js ${(moduleSize / 1024).toFixed(0)} KB`);
+console.log(`  three.webgpu.min.js ${(webgpuSize / 1024).toFixed(0)} KB`);
+console.log(`  three.tsl.min.js    ${(tslSize / 1024).toFixed(0)} KB`);
 console.log(`  ${copied.size} add-on files: ${[...copied].sort().join(', ')}`);
 
 function* walk(dir) {

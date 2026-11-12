@@ -122,6 +122,7 @@ function evaluate(board, who) {
 
 export default {
   id: 'four-in-a-row',
+  version: 2, // 2: the 3D board (scene.js), with the flat board kept as a setting
   name: 'Four in a Row',
   tagline: 'Drop discs, line up four. Quick games for two.',
   description: 'Take turns dropping discs into the grid. First to line up four across, down or diagonally wins. Play a friend online or test the computer.',
