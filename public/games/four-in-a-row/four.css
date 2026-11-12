@@ -124,3 +124,4 @@
   .f4 { --cell: min(11.6vw, 8vh); }
   .f4-player { padding: 5px 10px 5px 5px; }
 }
+.f4-player.speaking .avatar { box-shadow: 0 0 0 2px #0b1424, 0 0 0 5px #4ade80, 0 0 18px 3px rgba(74, 222, 128, 0.75); }

@@ -23,6 +23,19 @@ home page, **Step-by-step guide** in the lobby, the **?** button at the table, o
   **Rejoin table**.
 - **Late arrivals** can join mid-game: the host seats them from **Settings → Players**.
 
+## Voice chat
+- Tap the **microphone** at the top of the table (or **Join voice** in the lobby) and allow
+  the microphone. Everyone in voice hears everyone — players and watchers, as many as are at
+  the table.
+- The mic is **always on**. Tap the green mic to mute, the red one to talk again. Whoever is
+  talking lights up green.
+- **The host can mute anyone for everybody:** people button → **Mute for all**. That person
+  can't unmute until the host taps **Allow to talk**. Their audio also stops playing on
+  everyone else's device, so it holds even if their app misbehaves.
+- **Silence** mutes one person just for you.
+- Audio goes directly between devices and is never recorded. With many people in voice
+  (8 or more) each device carries a connection per person, so a weak phone may struggle.
+
 ## Good to know
 - The host's device runs the game. Keep its screen on — if the host's phone locks, the
   table pauses. A tablet or computer on a charger makes the best host.
@@ -36,6 +49,8 @@ home page, **Step-by-step guide** in the lobby, the **?** button at the table, o
 | "No table found" | Codes never use I, O, 0 or 1. Make sure the host still has the table open. |
 | Stuck on "Connecting…" | Switch between Wi-Fi and cellular. Some work, school and hotel networks block direct connections. |
 | A player shows "Reconnecting…" | Their device slept or lost signal. A computer covers; they reopen the link to take over. |
+| Nobody hears me (voice) | Make sure the mic is green. If the host muted you, ask them to allow you. If the browser blocked the mic, allow it in site settings and tap Join voice again. |
+| I can't hear anyone (voice) | Turn the volume up and the silent switch off; on iPhone tap the screen once. |
 | Everything froze | The host's device went to sleep — have the host unlock and reopen the Game Center. |
 
 ## Put it on your home screen

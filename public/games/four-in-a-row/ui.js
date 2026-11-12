@@ -142,11 +142,24 @@ export function mount(ctx) {
     line.classList.add('show');
   }
 
-  const off = ctx.client.on('state', render);
+  // voice chat: light up whoever is talking
+  function paintVoice() {
+    if (!ctx.voice) return;
+    players.querySelectorAll('.f4-player').forEach((el, s) => {
+      const id = seats[s]?.playerId;
+      el.classList.toggle('speaking', !!(id && ctx.voice.speaking.has(id)));
+    });
+  }
+  const offVoice = ctx.voice ? [ctx.voice.on('speaking', paintVoice), ctx.voice.on('change', paintVoice)] : [];
+  const off = ctx.client.on('state', (msg) => {
+    render(msg);
+    paintVoice();
+  });
   if (ctx.client.lastState) render(ctx.client.lastState);
   return {
     destroy() {
       off();
+      offVoice.forEach((f) => f());
       root.remove();
     },
   };
