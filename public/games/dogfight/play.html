@@ -2780,6 +2780,7 @@ function simulate(dt) {
 }
 function frame(now) {
   requestAnimationFrame(frame);
+  if (window.__freeze) return; // QA: hold the picture still for a staged capture
   let rdt = Math.min(0.1, (now - last) / 1000); last = now; G.frame++;
   // online the world keeps going while you look at a menu
   const live = G.state === 'play' || (NET.on && G.player && (G.state === 'paused' || G.state === 'debrief' || G.state === 'paused-menu'));
@@ -2842,7 +2843,8 @@ function updateFov(rdt) {
 
 // QA hook: run the simulation headless, e.g. window.__sim(60)
 window.__sim = (seconds, dt = 1 / 60) => { const n = Math.round(seconds / dt); for (let i = 0; i < n && G.state === 'play'; i++) { simulate(dt); smokeFX.update(dt); fireFX.update(dt); } const p = G.player; return p && { state: G.state, phase: G.mission && G.mission.phase, wave: G.mission && G.mission.wave, alive: p.alive, onGround: p.onGround, alt: +p.pos.y.toFixed(1), speedKmh: +(p.V * 3.6).toFixed(0), gear: p.gear, kills: G.stats.kills, shots: G.stats.shots, hits: G.stats.hits, enemies: enemies().length, fuel: +p.fuel.toFixed(0), time: +G.time.toFixed(1) }; };
-window.__game = { get post() { return !!composer; }, G, settings, startMission, SPECS, NET, netSend, finishNet, MSL, LOCK, launchMissile, dropFlares, DIFF };
+window.__game = { get post() { return !!composer; }, get fx() { return { smokeFX, fireFX }; }, camera, B, world: { coastX, groundH, TOWN, AF }, set hud(v) { hud.hidden = !v; },
+  renderNow(dt = 0) { smokeFX.update(dt); fireFX.update(dt); for (const p of G.planes) if (!p.gone) p.visuals(0); sky.position.copy(camera.position); updateTracers(); if (composer) composer.render(); else renderer.render(scene, camera); return canvas.toDataURL('image/png'); }, G, settings, startMission, SPECS, NET, netSend, finishNet, MSL, LOCK, launchMissile, dropFlares, DIFF };
 
 (async function boot() {
   resizeHUD();
