@@ -1,5 +1,6 @@
 // Four in a Row — a small, complete example of a Game Center game.
 // Read this file alongside docs/ADDING_A_GAME.md: it shows every piece a game needs.
+import { FOUR_TILE as TILE } from './tile.js';
 const COLS = 7;
 const ROWS = 6;
 
@@ -117,17 +118,6 @@ function evaluate(board, who) {
 // ---------------------------------------------------------------------
 // 3. Tile art and manifest
 // ---------------------------------------------------------------------
-const TILE = `<svg viewBox="0 0 200 140" aria-hidden="true">
-  <defs><linearGradient id="f4-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1e3a8a"/><stop offset="1" stop-color="#0b1a45"/></linearGradient>
-  <radialGradient id="f4-r" cx=".35" cy=".3"><stop offset="0" stop-color="#ff9a8a"/><stop offset="1" stop-color="#c0392b"/></radialGradient>
-  <radialGradient id="f4-y" cx=".35" cy=".3"><stop offset="0" stop-color="#ffe9a3"/><stop offset="1" stop-color="#e0a100"/></radialGradient></defs>
-  <rect width="200" height="140" fill="url(#f4-bg)"/>
-  <rect x="35" y="22" width="130" height="108" rx="10" fill="#2f5fd0" stroke="#7aa2ff" stroke-width="2"/>
-  ${[0, 1, 2, 3, 4].map((r) => [0, 1, 2, 3, 4, 5].map((c) => {
-    const fill = (r === 4 && c < 4) ? 'url(#f4-r)' : (r === 3 && (c === 1 || c === 2)) || (r === 4 && c === 4) || (r === 2 && c === 2) ? 'url(#f4-y)' : r === 3 && c === 3 ? 'url(#f4-r)' : '#0b1a45';
-    return `<circle cx="${50 + c * 20}" cy="${38 + r * 20}" r="8" fill="${fill}"/>`;
-  }).join('')).join('')}
-</svg>`;
 
 export default {
   id: 'four-in-a-row',
