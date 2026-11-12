@@ -1,9 +1,9 @@
 // Hexstead artwork shared by the 2D hand/HUD and the 3D scene: player colors and original
 // resource and almanac icons (inline SVG, 64×64).
 
-export const SEAT_COLORS = ['#c8372d', '#2f6fd6', '#efe6d2', '#e8892b'];
-export const SEAT_NAMES = ['Red', 'Blue', 'Ivory', 'Orange'];
-export const SEAT_INK = ['#fff', '#fff', '#2a241c', '#2a1606'];
+export const SEAT_COLORS = ['#c8372d', '#2f6fd6', '#efe6d2', '#e8892b', '#3d9a46', '#7a4fc6', '#1b9aa5', '#7a4e2c'];
+export const SEAT_NAMES = ['Red', 'Blue', 'Ivory', 'Orange', 'Green', 'Purple', 'Teal', 'Brown'];
+export const SEAT_INK = ['#fff', '#fff', '#2a241c', '#2a1606', '#fff', '#fff', '#fff', '#fff'];
 
 export const RES_COLORS = {
   timber: ['#3f7d3a', '#1f4a22'],

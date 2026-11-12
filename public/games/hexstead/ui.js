@@ -6,7 +6,7 @@ import { sound } from '../../core/sound.js';
 import {
   RES, RES_LABEL, COST, CARDS, TERRAIN, canPay, total, ratio, homesteadSpots, roadSpots, townSpots, banditHexes, banditTargets, playable, actors,
 } from './engine.js';
-import { VERTS, HEXES } from './geometry.js';
+import { board } from './geometry.js';
 import { SEAT_COLORS, SEAT_NAMES, SEAT_INK, RES_ICON, RES_COLORS, CARD_ICON, PIECE_ICON, DICE_ICON } from './art.js';
 
 const PLAYABLE_CARDS = ['sheriff', 'trailblazer', 'harvest', 'market', 'landmark'];
@@ -67,6 +67,9 @@ export function mount(ctx) {
   const me = () => view?.seat;
   const mine = () => (me() != null ? view.players[me()] : null);
   const myTurn = () => view && me() != null && actors(view).includes(me());
+  const seatList = () => view.players.map((_, q) => q);
+  // may I build right now? (my turn after rolling, or my slot in barn raising)
+  const building = () => view && me() != null && ((view.phase === 'main' && view.current === me()) || (view.phase === 'raise' && view.raiseQueue?.[0] === me()));
   const name = (q) => (q === me() ? 'You' : seats[q]?.name || SEAT_NAMES[q]);
   const nameEl = (q) => h('b.hx-name', { style: { '--c': SEAT_COLORS[q] } }, name(q));
   const resIcon = (r, cls = '') => h('span.hx-ricon' + cls, { html: RES_ICON[r], title: RES_LABEL[r] });
@@ -107,7 +110,7 @@ export function mount(ctx) {
       if (victims.length <= 1) return act({ type: 'bandit', hex: id, victim: victims[0] ?? null });
       return openSheet({ type: 'victim', hex: id, victims });
     }
-    if (view.phase === 'main' && mode) {
+    if ((view.phase === 'main' || view.phase === 'raise') && mode) {
       const m = mode;
       mode = null;
       if (m === 'road') act({ type: 'road', e: id });
@@ -123,11 +126,12 @@ export function mount(ctx) {
       case 'setup':
         return view.setupVert == null
           ? { kind: 'vertex', ids: homesteadSpots(view, p, true), seat: p, piece: 'homestead' }
-          : { kind: 'edge', ids: VERTS[view.setupVert].edges.filter((e) => view.roads[e] == null), seat: p, piece: 'road' };
+          : { kind: 'edge', ids: board(view.size).VERTS[view.setupVert].edges.filter((e) => view.roads[e] == null), seat: p, piece: 'road' };
       case 'roads':
         return { kind: 'edge', ids: roadSpots(view, p), seat: p, piece: 'road' };
       case 'bandit':
         return { kind: 'hex', ids: banditHexes(view, p) };
+      case 'raise':
       case 'main':
         if (mode === 'road') return { kind: 'edge', ids: roadSpots(view, p), seat: p, piece: 'road' };
         if (mode === 'homestead') return { kind: 'vertex', ids: homesteadSpots(view, p), seat: p, piece: 'homestead' };
@@ -148,7 +152,7 @@ export function mount(ctx) {
     seats = msg.seats || seats;
     pending = false;
     const ev = msg.event;
-    if (view.phase !== 'main') mode = null;
+    if (!building()) mode = null;
     if (mode && !canBuild(mode)) mode = null;
 
     if (scene) {
@@ -214,8 +218,11 @@ export function mount(ctx) {
   // players
   // ---------------------------------------------------------------------
   function drawPlayers() {
+    root.classList.toggle('many', view.players.length > 4);
+    root.classList.toggle('lots', view.players.length > 6);
+    requestAnimationFrame(() => root.style.setProperty('--top', `${players.offsetTop + players.offsetHeight + 10}px`));
     players.replaceChildren(
-      ...[0, 1, 2, 3].map((q) => {
+      ...seatList().map((q) => {
         const pl = view.players[q];
         const isTurn = view.current === q && view.phase !== 'over';
         const acting = actors(view).includes(q) && !isTurn;
@@ -235,7 +242,7 @@ export function mount(ctx) {
             'div.hx-badges',
             view.trailHolder === q ? h('span.hx-badge', 'Longest Trail') : null,
             view.posseHolder === q ? h('span.hx-badge', 'Big Posse') : null,
-            acting ? h('span.hx-badge.wait', view.phase === 'discard' ? 'Discarding' : 'Deciding') : null,
+            acting ? h('span.hx-badge.wait', view.phase === 'discard' ? 'Discarding' : view.phase === 'raise' ? 'Building' : 'Deciding') : null,
           ),
         );
       }),
@@ -267,6 +274,12 @@ export function mount(ctx) {
         title = cur === p ? (mode ? `Pick a spot for your ${mode === 'road' ? 'trail' : mode === 'town' ? 'barn' : 'homestead'}` : 'Build, trade, or end your turn') : `${name(cur)} is building…`;
         if (view.dice) sub = `Rolled ${view.dice[0] + view.dice[1]}`;
         break;
+      case 'raise': {
+        const who = view.raiseQueue?.[0];
+        title = who === p ? (mode ? `Barn raising — pick a spot for your ${mode === 'road' ? 'trail' : mode === 'town' ? 'barn' : 'homestead'}` : 'Barn raising — build before the next turn') : `${name(who)} is barn raising…`;
+        sub = who === p ? 'Build or buy an almanac card now, or tap Done. No trading between turns.' : `${name((cur + 1) % view.players.length)} plays next`;
+        break;
+      }
       case 'discard': {
         const owe = view.discard?.[p] || 0;
         title = owe ? `Seven! Discard ${owe} cards` : 'Seven! Players with more than 7 cards discard half';
@@ -403,7 +416,7 @@ export function mount(ctx) {
   function canBuild(kind) {
     const p = me();
     const pl = mine();
-    if (!pl || view.phase !== 'main' || view.current !== p) return false;
+    if (!pl || !building()) return false;
     if (kind === 'card') return view.deck > 0 && canPay(pl.res, COST.card);
     const piece = kind === 'road' ? 'road' : kind;
     if (pl.pieces[piece] <= 0 || !canPay(pl.res, COST[kind])) return false;
@@ -422,9 +435,19 @@ export function mount(ctx) {
       );
       return;
     }
-    if (p == null || view.current !== p || !['roll', 'main'].includes(view.phase)) {
-      const waiting = ['setup', 'roll', 'main'].includes(view.phase) ? (view.current === p ? 'Your turn' : `${name(view.current)}'s turn`) : '';
-      actionsBar.replaceChildren(waiting ? h('div.hx-wait', h('span.hx-dot', { style: { '--c': SEAT_COLORS[view.current] } }), waiting) : null);
+    const raisingMe = view.phase === 'raise' && building();
+    if (!raisingMe && (p == null || view.current !== p || !['roll', 'main'].includes(view.phase))) {
+      const raiser = view.raiseQueue?.[0];
+      const waiting =
+        view.phase === 'raise'
+          ? `${name(raiser)} is building`
+          : ['setup', 'roll', 'main'].includes(view.phase)
+            ? view.current === p
+              ? 'Your turn'
+              : `${name(view.current)}'s turn`
+            : '';
+      const who = view.phase === 'raise' ? raiser : view.current;
+      actionsBar.replaceChildren(waiting ? h('div.hx-wait', h('span.hx-dot', { style: { '--c': SEAT_COLORS[who] } }), waiting) : null);
       return;
     }
     if (view.phase === 'roll') {
@@ -459,11 +482,13 @@ export function mount(ctx) {
     };
     actionsBar.replaceChildren(
       h('div.hx-builds', buildBtn('road', 'Trail'), buildBtn('homestead', 'Homestead'), buildBtn('town', 'Barn'), buildBtn('card', 'Almanac')),
-      h(
-        'div.hx-turn-btns',
-        h('button.btn.ghost', { onclick: () => openSheet({ type: 'trade', tab: 'bank', give: {}, get: {}, bankGive: null, bankGet: null }) }, 'Trade'),
-        h('button.btn.gold', { onclick: () => ((mode = null), act({ type: 'end' })) }, 'End turn'),
-      ),
+      raisingMe
+        ? h('div.hx-turn-btns', h('button.btn.gold', { onclick: () => ((mode = null), act({ type: 'pass' })) }, 'Done'))
+        : h(
+            'div.hx-turn-btns',
+            h('button.btn.ghost', { onclick: () => openSheet({ type: 'trade', tab: 'bank', give: {}, get: {}, bankGive: null, bankGet: null }) }, 'Trade'),
+            h('button.btn.gold', { onclick: () => ((mode = null), act({ type: 'end' })) }, 'End turn'),
+          ),
     );
   }
 
@@ -594,7 +619,7 @@ export function mount(ctx) {
         break;
       }
       case 'scores': {
-        const order = [0, 1, 2, 3].sort((a, b) => (view.players[b].points ?? 0) - (view.players[a].points ?? 0));
+        const order = seatList().sort((a, b) => (view.players[b].points ?? 0) - (view.players[a].points ?? 0));
         body = [
           h('h3', 'Final scores'),
           h(

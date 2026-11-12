@@ -2,8 +2,10 @@
 // cards, everyone's card counts and the board. Decisions are heuristic: value corners by how
 // often their numbers roll and which resources they add, pick a building goal, trade toward
 // it, and point the bandit at whoever is ahead.
-import { HEXES, VERTS, EDGES, PIPS, HARBOR_SLOTS, otherEnd } from './geometry.js';
+import { board, PIPS } from './geometry.js';
 import { RES, COST, TERRAIN, canPay, total, canHomestead, canRoad, ratio } from './engine.js';
+
+const G = (v) => board(v.size || 'base');
 
 export const LEVELS = {
   easy: { label: 'Easy', noise: 0.6, trade: false, random: 0.35 },
@@ -21,7 +23,7 @@ function production(v, p) {
   const prod = Object.fromEntries(RES.map((r) => [r, 0]));
   v.verts.forEach((b, vi) => {
     if (b?.o !== p) return;
-    for (const hi of VERTS[vi].hexes) {
+    for (const hi of G(v).VERTS[vi].hexes) {
       const r = TERRAIN[v.hexes[hi].t].res;
       if (r && hi !== v.bandit) prod[r] += (PIPS[v.hexes[hi].n] || 0) * (b.k === 'town' ? 2 : 1);
     }
@@ -32,7 +34,7 @@ function production(v, p) {
 function cornerValue(v, p, vi, prod, lvl) {
   let score = 0;
   const seen = new Set();
-  for (const hi of VERTS[vi].hexes) {
+  for (const hi of G(v).VERTS[vi].hexes) {
     const r = TERRAIN[v.hexes[hi].t].res;
     if (!r) continue;
     const pips = PIPS[v.hexes[hi].n] || 0;
@@ -46,7 +48,7 @@ function cornerValue(v, p, vi, prod, lvl) {
   score += seen.size * 0.8;
   // harbors
   for (const h of v.harbors) {
-    const slot = HARBOR_SLOT_VERTS[h.slot];
+    const slot = G(v).HARBOR_SLOTS[h.slot].verts;
     if (!slot.includes(vi)) continue;
     if (h.type === 'any') score += 1.2;
     else score += (prod?.[h.type] || 0) >= 5 ? 3 : 0.8;
@@ -54,9 +56,8 @@ function cornerValue(v, p, vi, prod, lvl) {
   if (lvl.noise) score *= 1 + (Math.random() - 0.5) * lvl.noise;
   return score;
 }
-const HARBOR_SLOT_VERTS = HARBOR_SLOTS.map((s) => s.verts);
 
-const openCorner = (v, vi) => v.verts[vi] == null && VERTS[vi].adj.every((a) => v.verts[a] == null);
+const openCorner = (v, vi) => v.verts[vi] == null && G(v).VERTS[vi].adj.every((a) => v.verts[a] == null);
 
 // how good are the open corners reachable from this vertex within `depth` trail steps
 function reachValue(v, p, from, prod, lvl, depth = 2) {
@@ -69,8 +70,8 @@ function reachValue(v, p, from, prod, lvl, depth = 2) {
       if (openCorner(v, x)) best = Math.max(best, cornerValue(v, p, x, prod, lvl) * (1 - d * 0.22));
       const b = v.verts[x];
       if (b && b.o !== p) continue;
-      for (const e of VERTS[x].edges) {
-        const y = otherEnd(e, x);
+      for (const e of G(v).VERTS[x].edges) {
+        const y = G(v).otherEnd(e, x);
         if (seen.has(y) || (v.roads[e] != null && v.roads[e] !== p)) continue;
         seen.add(y);
         next.push(y);
@@ -85,7 +86,7 @@ function bestRoad(v, p, moves, prod, lvl) {
   let best = null;
   let bestScore = -Infinity;
   for (const m of moves) {
-    const ed = EDGES[m.e];
+    const ed = G(v).EDGES[m.e];
     let score = 0;
     for (const end of [ed.a, ed.b]) score = Math.max(score, reachValue(v, p, end, prod, lvl, 1));
     // a little extra for growing the longest trail
@@ -113,7 +114,7 @@ function goal(v, p) {
   const me = v.players[p];
   const res = me.res;
   const towns = v.verts.some((b) => b?.o === p && b.k === 'homestead') && me.pieces.town > 0;
-  const spots = me.pieces.homestead > 0 ? VERTS.map((_, i) => i).filter((i) => canHomestead(v, p, i)) : [];
+  const spots = me.pieces.homestead > 0 ? G(v).VERTS.map((_, i) => i).filter((i) => canHomestead(v, p, i)) : [];
   const options = [];
   if (towns) options.push({ what: 'town', cost: COST.town, value: 3.2 });
   if (spots.length) options.push({ what: 'homestead', cost: COST.homestead, value: 3.4 });
@@ -185,12 +186,14 @@ export function chooseAction(v, legal, level = 'normal') {
     }
     case 'main':
       return mainTurn(v, p, legal, lvl, prod, me);
+    case 'raise':
+      return raiseTurn(v, p, legal, lvl, prod);
   }
   return legal[0];
 }
 
 function banditOnMe(v, p) {
-  return HEXES[v.bandit].verts.some((vi) => v.verts[vi]?.o === p) && v.hexes[v.bandit].t !== 'desert';
+  return G(v).HEXES[v.bandit].verts.some((vi) => v.verts[vi]?.o === p) && v.hexes[v.bandit].t !== 'desert';
 }
 
 function discardPlan(v, p) {
@@ -223,7 +226,7 @@ function banditMove(v, p, legal, lvl) {
     const hx = v.hexes[m.hex];
     const pips = PIPS[hx.n] || 0;
     let score = 0;
-    for (const vi of HEXES[m.hex].verts) {
+    for (const vi of G(v).HEXES[m.hex].verts) {
       const b = v.verts[vi];
       if (!b) continue;
       const amt = b.k === 'town' ? 2 : 1;
@@ -335,6 +338,22 @@ function mainTurn(v, p, legal, lvl, prod, me) {
   return { type: 'end' };
 }
 
+// Building between turns: barns and homesteads always; a trail only when it opens a good
+// corner; an almanac card when that's what we're saving for. Otherwise pass.
+function raiseTurn(v, p, legal, lvl, prod) {
+  const by = (type) => legal.filter((m) => m.type === type);
+  const best = (moves, score) => moves.reduce((a, m) => (score(m) > score(a) ? m : a), moves[0]);
+  if (by('town').length) return best(by('town'), (m) => cornerValue(v, p, m.v, null, { noise: 0 }));
+  if (by('homestead').length) return best(by('homestead'), (m) => cornerValue(v, p, m.v, prod, lvl));
+  const g = goal(v, p);
+  if (by('road').length && (!g || g.what === 'road')) {
+    const { move, score } = bestRoad(v, p, by('road'), prod, lvl);
+    if (move && score > 3) return move;
+  }
+  if (by('buy').length && (!g || g.what === 'card')) return { type: 'buy' };
+  return { type: 'pass' };
+}
+
 function addCost(a, b) {
   const out = { ...a };
   for (const [r, n] of Object.entries(b)) out[r] = (out[r] || 0) + n;
@@ -350,7 +369,7 @@ function playCard(v, p, plays, prod, lvl) {
     if (banditOnMe(v, p) || closeToPosse || Math.random() < 0.25) return sheriff;
   }
   if (has('trailblazer') && me.pieces.road >= 2) {
-    if (EDGES.some((_, e) => canRoad(v, p, e))) return has('trailblazer');
+    if (G(v).EDGES.some((_, e) => canRoad(v, p, e))) return has('trailblazer');
   }
   const g = goal(v, p);
   if (g) {

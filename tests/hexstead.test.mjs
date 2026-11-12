@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as E from '../public/games/hexstead/engine.js';
 import { chooseAction } from '../public/games/hexstead/ai.js';
-import { VERTS, EDGES, HEXES } from '../public/games/hexstead/geometry.js';
+import { VERTS, EDGES, HEXES, board } from '../public/games/hexstead/geometry.js';
 
 // Play a full game with computer players. Returns the final state.
 function play(seed, levels = ['normal', 'normal', 'normal', 'normal'], options = {}) {
+  levels = Array.from({ length: Number(options.players) || 4 }, (_, i) => levels[i % levels.length]);
   let s = E.setup({ seed, options });
   let moves = 0;
   while (!E.isOver(s)) {
@@ -19,7 +20,7 @@ function play(seed, levels = ['normal', 'normal', 'normal', 'normal'], options =
       a = legal[0];
     }
     s = E.apply(s, seat, a);
-    if (++moves > 6000) throw new Error(`game ${seed} did not finish (turn ${s.turnNo})`);
+    if (++moves > 20000) throw new Error(`game ${seed} did not finish (turn ${s.turnNo})`);
   }
   s.moves = moves;
   return s;
@@ -45,7 +46,7 @@ test('hexstead: computer players finish full games and someone wins', () => {
     assert.ok(E.points(s, s.winner) >= s.target);
     assert.ok(!s.botErrors, `seed ${seed}: ${s.botErrors} bot moves were rejected`);
     // resources are conserved: 19 of each between the bank and the players
-    for (const r of E.RES) assert.equal(s.bank[r] + s.players.reduce((n, p) => n + p.res[r], 0), 19, `${r} conserved`);
+    for (const r of E.RES) assert.equal(s.bank[r] + s.players.reduce((n, p) => n + p.res[r], 0), E.SUPPLY[s.size].bank, `${r} conserved`);
     turns += s.turnNo;
   }
   const avg = turns / 30;
@@ -111,4 +112,63 @@ test('hexstead: views hide other hands and the deck', () => {
   assert.equal(typeof v.deck, 'number');
   assert.equal(v.players[0].res, null);
   assert.ok(v.players[1].res);
+});
+
+test('hexstead: bigger islands for 5–8 players', () => {
+  const sizes = { 3: [19, 'base'], 4: [19, 'base'], 5: [30, 'large'], 6: [30, 'large'], 7: [37, 'huge'], 8: [37, 'huge'] };
+  for (const [n, [hexes, size]] of Object.entries(sizes)) {
+    const s = E.setup({ seed: Number(n), options: { players: Number(n) } });
+    assert.equal(s.players.length, Number(n));
+    assert.equal(s.size, size);
+    assert.equal(s.hexes.length, hexes);
+    const g = board(size);
+    assert.equal(s.verts.length, g.VERTS.length);
+    assert.equal(s.harbors.length, g.HARBOR_SLOTS.length);
+    // every non-desert tile has a number, and the busy numbers are never neighbours
+    assert.ok(s.hexes.every((h) => (h.t === 'desert') === (h.n == null)));
+    const hot = (i) => s.hexes[i].n === 6 || s.hexes[i].n === 8;
+    for (let i = 0; i < s.hexes.length; i++) if (hot(i)) for (const j of g.HEXES[i].near) assert.ok(!hot(j), `${n} players: 6/8 side by side`);
+    assert.equal(s.order.length, Number(n) * 2);
+    assert.equal(s.raising, Number(n) >= 5);
+  }
+});
+
+test('hexstead: 5–8 player games with barn raising finish', () => {
+  for (const n of [5, 6, 7, 8]) {
+    for (let seed = 1; seed <= 6; seed++) {
+      const s = play(seed * 13 + n, ['normal', 'hard', 'easy'], { players: n, raising: seed % 3 !== 0 });
+      assert.ok(s.winner != null, `${n} players seed ${seed} has a winner`);
+      assert.ok(!s.botErrors, `${n} players seed ${seed}: ${s.botErrors} bot moves were rejected`);
+      for (const r of E.RES) assert.equal(s.bank[r] + s.players.reduce((k, p) => k + p.res[r], 0), E.SUPPLY[s.size].bank);
+    }
+  }
+});
+
+test('hexstead: barn raising lets the others build in order, then the next turn starts', () => {
+  let s = E.setup({ seed: 77, options: { players: 6 } });
+  // finish the opening placements
+  while (s.phase === 'setup') {
+    const seat = E.actors(s)[0];
+    s = E.apply(s, seat, E.legal(s, seat)[0]);
+  }
+  const cur = s.current;
+  s = E.apply(s, cur, { type: 'roll' });
+  while (s.phase !== 'main') {
+    const seat = E.actors(s)[0];
+    s = E.apply(s, seat, E.legal(s, seat)[0]);
+  }
+  // give two other players enough for an almanac card
+  const a = (cur + 2) % 6, b = (cur + 4) % 6;
+  for (const q of s.players) for (const r of E.RES) q.res[r] = 0;
+  for (const q of [a, b]) Object.assign(s.players[q].res, { wool: 1, grain: 1, stone: 1 });
+  s = E.apply(s, cur, { type: 'end' });
+  assert.equal(s.phase, 'raise');
+  assert.deepEqual(E.actors(s), [a], 'players who cannot build are skipped');
+  assert.throws(() => E.apply(s, a, { type: 'bank', give: 'wool', get: 'stone' }), /roll|trade/i);
+  s = E.apply(s, a, { type: 'buy' });
+  assert.deepEqual(E.actors(s), [b], 'moves on once you cannot afford more');
+  assert.equal(E.CARD_TYPES.reduce((k, c) => k + s.players[a].cards[c], 0), 1, 'cards bought between turns are ready next turn');
+  s = E.apply(s, b, { type: 'pass' });
+  assert.equal(s.phase, 'roll');
+  assert.equal(s.current, (cur + 1) % 6);
 });

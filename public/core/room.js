@@ -78,7 +78,7 @@ export class HostRoom extends Emitter {
       this.lastEvent = null;
     } else {
       this.seats = [];
-      for (let i = 0; i < game.seats; i++)
+      for (let i = 0; i < seatCount(game, this.options); i++)
         this.seats.push(i === 0 ? { kind: 'human', playerId: 'host' } : online ? { kind: 'open' } : this.#newBot(i));
       this.state = null;
       this.seq = 0;
@@ -288,7 +288,20 @@ export class HostRoom extends Emitter {
   setOption(key, value) {
     if (this.started) return;
     this.options[key] = value;
+    this.#resizeSeats();
     this.#broadcastLobby();
+  }
+
+  // Games whose player count is a table option (game.seatCount) grow or shrink the table here.
+  #resizeSeats() {
+    const want = seatCount(this.game, this.options);
+    while (this.seats.length < want) this.seats.push(this.online ? { kind: 'open' } : this.#newBot(this.seats.length));
+    while (this.seats.length > want) {
+      // drop an empty or computer seat from the end first; a person left without a seat watches
+      let i = this.seats.findLastIndex((s) => s.kind !== 'human');
+      if (i < 0) i = this.seats.length - 1;
+      this.seats.splice(i, 1);
+    }
   }
 
   setSetting(key, value) {
@@ -553,6 +566,11 @@ export class HostRoom extends Emitter {
     this.#sendAll({ t: 'closed' });
     setTimeout(() => this.peer?.destroy(), 200);
   }
+}
+
+function seatCount(game, options) {
+  const n = game.seatCount ? Number(game.seatCount(options)) : game.seats;
+  return Number.isInteger(n) && n > 0 ? n : game.seats;
 }
 
 function defaultOptions(game) {
