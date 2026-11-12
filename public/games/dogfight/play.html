@@ -2922,7 +2922,7 @@ window.__game = { get post() { return !!renderPipeline; }, get fx() { return { s
 
 (async function boot() {
   resizeHUD();
-  try { await renderer.init(); window.__renderer = renderer; /* TEMP QA */ await buildWorld(); }
+  try { await renderer.init(); await buildWorld(); }
   catch (e) { console.error(e); progress('Could not build the world: ' + e.message, 1); return; }
   progress('Ready', 1);
   await setupPost();

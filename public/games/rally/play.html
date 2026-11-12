@@ -215,7 +215,7 @@ table.res i{display:inline-block;width:10px;height:10px;border-radius:2px;margin
 // Three.js r187 drawing with WebGPU (WebGPURenderer falls back to WebGL2 by itself), through
 // the import map above so the add-ons share one copy of it. Shaders are written in TSL.
 import * as THREE from 'three/webgpu';
-import { Fn, uniform, texture, pmremTexture, diffuseColor, normalWorld, uv, vec2, vec3, vec4, float, mix, smoothstep, pow, exp, dot, normalize, reflect, cos, positionWorld, positionGeometry, normalGeometry, cameraPosition, positionView, screenDPR, instancedDynamicBufferAttribute, pass, sample, rtt, unpackRGBToNormal } from 'three/tsl';
+import { Fn, uniform, texture, pmremTexture, diffuseColor, normalWorld, uv, vec2, vec3, vec4, float, mix, smoothstep, pow, exp, dot, normalize, reflect, cos, positionWorld, positionGeometry, normalGeometry, cameraPosition, positionView, screenDPR, instancedDynamicBufferAttribute, pass, mrt, normalView, rtt } from 'three/tsl';
 import { SkyMesh } from 'three/addons/objects/SkyMesh.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -1581,10 +1581,11 @@ async function setupPost() {
     const [{ ao }, { denoise }, { bloom }] = await Promise.all(['GTAONode', 'DenoiseNode', 'BloomNode'].map(n => import(`three/addons/tsl/display/${n}.js`)));
     if (postFX) return;
     const pipeline = new THREE.RenderPipeline(renderer);
-    // opaque geometry only, single-sampled, drawn with a plain normal material (as cheap as the old AO's normal pass)
-    const pre = pass(scene, camera, { samples: 0 }); pre.transparent = false; pre.overrideMaterial = new THREE.MeshNormalNodeMaterial();
-    const preColor = pre.getTextureNode(), depth = pre.getTextureNode('depth');
-    const normal = sample(c => unpackRGBToNormal(preColor.sample(c)));
+    // opaque geometry only, single-sampled, with one plain material standing in for all of them
+    // (as cheap as the old AO's normal pass); it writes view-space normals as they are
+    const pre = pass(scene, camera, { samples: 0 }); pre.transparent = false; pre.overrideMaterial = new THREE.MeshBasicNodeMaterial();
+    pre.setMRT(mrt({ output: normalView }));
+    const normal = pre.getTextureNode(), depth = pre.getTextureNode('depth');
     // ground-truth ambient occlusion: soft contact shading under cars, round barns, in the trees
     // at half resolution (soft shading needs no more), then denoised once into its own half-size texture
     const aoNode = ao(depth, normal, camera); aoNode.resolutionScale = 0.5;
@@ -1594,7 +1595,9 @@ async function setupPost() {
     const aoSoft = rtt(aoDen, null, null, { resolutionScale: 0.5, depthBuffer: false });
     const scenePass = pass(scene, camera);
     const shaded = scenePass.getTextureNode().rgb.mul(mix(float(1), aoSoft.r, 0.85));
-    const glow = bloom(shaded, 0.2, 0.35, 1.45);
+    // the WebGL bloom this replaces, at strength 0.2, added about twice what BloomNode does at the same
+    // setting (measured on the same frames), so 0.45 here gives the same glow
+    const glow = bloom(shaded, 0.45, 0.35, 1.45);
     pipeline.outputNode = vec4(shaded.add(glow.rgb), 1);
     postFX = { pipeline, ao: aoNode, nodes: [pre, aoNode, aoDen, aoSoft, scenePass, glow] };
   } catch (e) { console.warn('post-processing unavailable', e); postFX = null; }
