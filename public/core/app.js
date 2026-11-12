@@ -4,6 +4,7 @@ import { $, h, store, toast, avatar, share, escapeHtml, ROBOT_SVG } from './util
 import { sound } from './sound.js';
 import { HostRoom, GuestClient, SPEEDS } from './room.js';
 import { GAME_MODULES } from '../games/index.js';
+import { onlineGuide } from './guide.js';
 
 const app = document.getElementById('app');
 const GAMES = new Map();
@@ -56,6 +57,11 @@ function route() {
     return go('#/');
   }
   if (page === 'lobby') return current ? showLobby() : go('#/');
+  if (page === 'help') {
+    leaveCurrent(false);
+    showHome();
+    return showGuide();
+  }
   if (page === 'game' && GAMES.has(arg)) return showSetup(GAMES.get(arg));
   leaveCurrent(false);
   showHome();
@@ -219,7 +225,7 @@ function showHome() {
           },
           h('label', 'Join a friend’s table'),
           h('div.gc-join-row', code, h('button.btn.gold', { type: 'submit' }, 'Join')),
-          h('small', 'Ask the host for the 5-letter code, or open their invite link.'),
+          h('small', 'Ask the host for the 5-letter code, or open their invite link. ', h('button.gc-link', { type: 'button', onclick: () => showGuide() }, 'How does online play work?')),
         ),
       ),
       saves.length || (guest && Date.now() - guest.at < 6 * 3600e3)
@@ -250,7 +256,7 @@ function showHome() {
           )
         : null,
       h('section.gc-games', h('h2', 'Games'), h('div.gc-grid', tiles)),
-      h('footer.gc-foot', h('span', 'Online play is peer-to-peer: the host’s device runs the table. Keep the host’s screen open.'), h('button.btn.text', { onclick: () => ((sound.enabled = !sound.enabled), showHome()) }, sound.enabled ? 'Sound on' : 'Sound off')),
+      h('footer.gc-foot', h('span', 'Online play is peer-to-peer: the host’s device runs the table. Keep the host’s screen open. ', h('button.gc-link', { onclick: () => showGuide() }, 'How to play online')), h('button.btn.text', { onclick: () => ((sound.enabled = !sound.enabled), showHome()) }, sound.enabled ? 'Sound on' : 'Sound off')),
     ),
   );
 }
@@ -261,6 +267,32 @@ function ago(ts) {
   if (s < 3600) return `${Math.round(s / 60)} min ago`;
   if (s < 86400) return `${Math.round(s / 3600)} h ago`;
   return `${Math.round(s / 86400)} days ago`;
+}
+
+function showGuide() {
+  const rook = GAMES.get('rook') || [...GAMES.values()][0];
+  const inGame = !!current;
+  const sheet = modal(
+    h(
+      'div.gc-doc',
+      onlineGuide({
+        onHost: inGame || !rook ? null : () => (sheet.close(), needName(() => hostOnline(rook))),
+        onJoin: inGame
+          ? null
+          : () => {
+              sheet.close();
+              const input = $('.gc-join .gc-input');
+              input?.focus();
+              input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            },
+      }),
+      h(
+        'div.gc-actions',
+        h('button.btn.ghost', { onclick: () => navigator.clipboard?.writeText(`${location.origin}${location.pathname}#/help`).then(() => toast('Guide link copied')) }, 'Copy link to this guide'),
+      ),
+    ),
+    { cls: 'wide' },
+  );
 }
 
 function showAddGame() {
@@ -508,7 +540,7 @@ function showLobby() {
             h('button.btn.gold', { onclick: () => share({ title: `Play ${game.name}`, text: `Join my ${game.name} table — code ${lobby.code}`, url }) }, h('span', { html: ICON.share }), 'Invite'),
             h('button.btn.ghost', { onclick: () => navigator.clipboard?.writeText(url).then(() => toast('Invite link copied')) }, 'Copy link'),
           ),
-          h('p.gc-hint', 'Friends open the link (or enter the code on the home page). Empty seats get computer players when you start.'),
+          h('p.gc-hint', 'Friends open the link (or enter the code on the home page). Empty seats get computer players when you start. ', h('button.gc-link', { onclick: () => showGuide() }, 'Step-by-step guide')),
         ),
         h(
           'section.gc-seats',
@@ -653,7 +685,7 @@ async function showTable() {
         : null,
       h('button.gc-icon-btn', { title: 'Sound', onclick: (e) => ((sound.enabled = !sound.enabled), (e.currentTarget.firstChild.innerHTML = sound.enabled ? ICON.sound : ICON.mute)) }, h('span', { html: sound.enabled ? ICON.sound : ICON.mute })),
       h('button.gc-icon-btn', { title: 'Settings', onclick: () => settingsSheet() }, h('span', { html: ICON.gear })),
-      h('button.gc-icon-btn', { title: 'How to play', onclick: () => rulesSheet(game) }, h('span', { html: ICON.help })),
+      h('button.gc-icon-btn', { title: 'How to play', onclick: () => rulesSheet(game, online) }, h('span', { html: ICON.help })),
     ),
   );
   const offline = h('div.gc-offline-banner');
@@ -702,7 +734,7 @@ function inviteSheet(game, code) {
       'div.gc-form',
       h('h2', 'Invite to this table'),
       h('div.gc-code', code),
-      h('p.gc-hint', 'People who join during a game can be seated in place of a computer player from Settings.'),
+      h('p.gc-hint', 'People who join during a game can be seated in place of a computer player from Settings. ', h('button.gc-link', { onclick: () => showGuide() }, 'Online play help')),
       h(
         'div.gc-actions',
         h('button.btn.gold', { onclick: () => share({ title: `Play ${game.name}`, text: `Join my ${game.name} table — code ${code}`, url }) }, 'Share invite'),
@@ -787,7 +819,7 @@ function seatManager(room, redraw) {
   );
 }
 
-async function rulesSheet(game) {
+async function rulesSheet(game, online = false) {
   let html = '<p>No rules page yet.</p>';
   try {
     const res = await fetch(new URL(`../games/${game.id}/rules.html`, import.meta.url));
@@ -795,7 +827,14 @@ async function rulesSheet(game) {
   } catch {
     /* offline */
   }
-  modal(h('div.gc-doc.rules', { html }), { cls: 'wide' });
+  const sheet = modal(
+    h(
+      'div',
+      h('div.gc-doc.rules', { html }),
+      h('div.gc-actions', h('button.btn.ghost', { onclick: () => (sheet.close(), showGuide()) }, online ? 'Online play help' : 'How to play online with friends')),
+    ),
+    { cls: 'wide' },
+  );
 }
 
 const ICON = {
