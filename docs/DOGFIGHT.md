@@ -2,20 +2,48 @@
 
 A browser air-combat game. You fly a 1940s propeller fighter over a 20 × 20 km stretch of coast. Take off from the airfield, beat three waves of raiders that come in from the sea, then land back on the runway.
 
-The whole game is one file, `index.html`. It needs no build step and no assets. Three.js loads from the jsDelivr CDN, and the terrain, aircraft, textures and sound are all generated in code when the page loads.
+The game is part of the Game Center. It is one file, `public/games/dogfight/play.html`, which needs no build step and no assets. Three.js loads from the jsDelivr CDN, and the terrain, aircraft, textures and sound are all generated in code when the page loads.
 
-It works on phones as well as desktops.
+It works on phones as well as desktops, alone or with up to four pilots online.
 
 ## Running it
 
-Open `index.html` through any static web server, for example:
-
 ```sh
-cd dogfight && python3 -m http.server 8000
-# then open http://localhost:8000
+npm start        # Game Center at http://localhost:8080, Coastal Dogfight is a tile on the home page
 ```
 
-GitHub Pages works too. Opening the file directly with `file://` also works in most browsers.
+`/games/dogfight/play.html` also opens on its own as a single-player game.
+
+## Single player options
+
+The game's menu has:
+
+- **Enemies per wave**: Standard (2, then 3, then more), or a fixed 1, 2, 3, 4, 6, 8 or 12.
+- **Waves**: 1, 2, 3, 5 or 8. Skill rises through the sortie, and the last wave brings an ace.
+- **Phone mode**: Auto turns the touch controls on for phones. On forces them, which is useful on a tablet or a touch laptop. Off hides them in favour of the keyboard and mouse. The same switch is in the pause menu.
+
+## Multiplayer
+
+In the Game Center, choose **Play online** (or **Host an online table**). Friends join with the 5-letter code or the invite link, using the same lobby, chat and seats as the other games. The table options are:
+
+| Option | Choices |
+|---|---|
+| Mode | **Co-op vs raiders**: everyone against the waves. **Free-for-all**: every pilot for themselves. |
+| Raiders per wave | Standard, or 1–12 |
+| Waves | 1, 2, 3, 5 or 8 |
+| Kills to win (free-for-all) | 3, 5 or 10 |
+| Computer wingmen (co-op) | Off, or fill the empty seats with computer pilots |
+
+Computer pilots always fly the empty seats in a free-for-all. Their skill follows the table's computer player setting: Rookie, Veteran or Ace. A pilot who is shot down is back in the air after 6 seconds. In co-op the round ends when the host lands after the last wave; in a free-for-all it ends when someone reaches the kill target. The host can also end the round from the pause menu. The debrief shows the scoreboard, and the host starts a new round for everyone.
+
+### How the network works
+
+- **Each device flies its own aircraft.** It sends the aircraft's position, attitude, throttle, gear, firing and damage state 15 times a second over the room's real-time channel (`{ t: 'rt' }` in `core/room.js`). Other devices draw it with dead reckoning plus smoothing.
+- **The host flies the raiders and the computer pilots.** It also runs the wave timer and holds the scoreboard, sending both every half second.
+- **Hits are decided by the shooter.** Every device draws everyone's tracers, but only rounds fired by your own device count. A hit on an aircraft another device flies becomes a `hit` message to that device, which applies the damage through the normal damage model.
+- **Shoot-downs are announced by the victim's device.** It sends a `down` event naming the aircraft that last hit it, so everyone gets the same kill credit and messages.
+- **The bridge to the Game Center.** `ui.js` shows `play.html?embed=1` in a frame and passes messages through `postMessage`. Ending a round is a normal Game Center action (`{ type: 'finish', results }`), so the table, rematches and saving behave like the other games.
+- **Pausing doesn't stop the round.** The menu doesn't pause an online round: your aircraft holds level flight while it is open.
 
 ## What's in it
 
@@ -139,6 +167,6 @@ It is clamped so that α stays under 0.9 α_s and n under 8.5 g.
 
 ## QA autopilot
 
-Open `index.html#autopilot` and an AI test pilot flies the full sortie by itself. It takes off on the runway heading, raises the gear, climbs and fights each wave. It logs a `[QA] debrief …` line to the console when the sortie ends.
+Open `/games/dogfight/play.html?autopilot` and an AI test pilot flies the full sortie by itself. It takes off on the runway heading, raises the gear, climbs and fights each wave. It logs a `[QA] debrief …` line to the console when the sortie ends.
 
 `window.__sim(seconds)` runs the simulation headless without rendering, and returns the player's state, phase, wave, kills, shots and hits. It makes it quick to check take-off and combat in an automated browser.
