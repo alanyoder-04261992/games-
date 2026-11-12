@@ -44,20 +44,11 @@ export class Table3D {
     this.positions = [];
     this.bursts = [];
 
-    // WebGPU where the browser has it, WebGL 2 everywhere else (asked for up front when there is no
-    // navigator.gpu at all, so three.js doesn't warn about falling back; it still falls back by
-    // itself if a WebGPU adapter turns out to be unavailable).
-    const r = (this.renderer = new THREE.WebGPURenderer({ antialias: true, powerPreference: 'high-performance', forceWebGL: !navigator.gpu }));
-    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality === 'high' ? 2 : 1.25));
-    // Tone mapping (ACES, exposure 1.05) and the sRGB encode happen in each material (see #output),
-    // not in a full-screen pass afterwards, so the renderer itself writes straight to the canvas.
-    r.outputColorSpace = THREE.LinearSRGBColorSpace;
-    r.toneMapping = THREE.NoToneMapping;
-    r.toneMappingExposure = 1.05;
-    r.shadowMap.enabled = true;
-    r.shadowMap.type = THREE.PCFShadowMap;
-    container.append(r.domElement);
-    r.domElement.className = 'eg-canvas';
+    // the renderer is made in #start, once we know whether this browser can give us a WebGPU adapter
+    this.renderer = null;
+    const canvas = (this.canvas = document.createElement('canvas'));
+    canvas.className = 'eg-canvas';
+    container.append(canvas);
 
     const scene = (this.scene = new THREE.Scene());
     // The clear color is written to the canvas as is (no output pass), so give it already encoded.
@@ -68,7 +59,7 @@ export class Table3D {
 
     const cam = (this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 200));
     scene.add(cam);
-    this.controls = new OrbitControls(cam, r.domElement);
+    this.controls = new OrbitControls(cam, canvas);
     Object.assign(this.controls, {
       enableDamping: true,
       dampingFactor: 0.08,
@@ -102,7 +93,20 @@ export class Table3D {
   }
 
   async #start() {
-    const r = this.renderer;
+    // WebGPU where the browser has a working adapter, WebGL 2 everywhere else. Asking for WebGL up
+    // front (rather than letting three.js fall back) keeps the console free of its fallback warning.
+    const adapter = navigator.gpu ? await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }).catch(() => null) : null;
+    if (!this.running) return;
+    const r = (this.renderer = new THREE.WebGPURenderer({ canvas: this.canvas, antialias: true, powerPreference: 'high-performance', forceWebGL: !adapter }));
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.quality === 'high' ? 2 : 1.25));
+    // Tone mapping (ACES, exposure 1.05) and the sRGB encode happen in each material (see #output),
+    // not in a full-screen pass afterwards, so the renderer itself writes straight to the canvas.
+    r.outputColorSpace = THREE.LinearSRGBColorSpace;
+    r.toneMapping = THREE.NoToneMapping;
+    r.toneMappingExposure = 1.05;
+    r.shadowMap.enabled = true;
+    r.shadowMap.type = THREE.PCFShadowMap;
+    this.resize();
     await r.init();
     if (!this.running) return;
     const pm = new THREE.PMREMGenerator(r);
@@ -952,7 +956,7 @@ export class Table3D {
     // render the scene a little higher on screen so the action bar never hides the table edge
     this.camera.setViewOffset(w, h, 0, Math.round(h * 0.07), w, h);
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(w, h, false);
+    this.renderer?.setSize(w, h, false);
     if (was !== this.camera.aspect && this.controls) {
       const off = this.camera.position.clone().sub(this.controls.target);
       if (Math.abs(was - this.camera.aspect) > 0.3) off.setLength(this.#defaultDistance());
@@ -961,17 +965,19 @@ export class Table3D {
   }
   setQuality(q) {
     this.quality = q;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q === 'high' ? 2 : 1.25));
-    this.renderer.shadowMap.enabled = true;
+    if (this.renderer) {
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q === 'high' ? 2 : 1.25));
+      this.renderer.shadowMap.enabled = true;
+    }
     this.resize();
   }
   dispose() {
     this.running = false;
-    if (this.renderer.initialized) this.renderer.setAnimationLoop(null);
+    if (this.renderer?.initialized) this.renderer.setAnimationLoop(null);
     this.ro.disconnect();
     this.controls.dispose();
     this.scene.environment?.dispose();
-    this.renderer.dispose();
-    this.renderer.domElement.remove();
+    this.renderer?.dispose();
+    this.canvas.remove();
   }
 }
