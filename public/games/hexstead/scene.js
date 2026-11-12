@@ -6,7 +6,7 @@ import * as THREE from '../../vendor/three/three.module.min.js';
 import { OrbitControls } from '../../vendor/three/OrbitControls.js';
 import { RoomEnvironment } from '../../vendor/three/RoomEnvironment.js';
 import { RoundedBoxGeometry } from '../../vendor/three/RoundedBoxGeometry.js';
-import { HEXES, VERTS, EDGES, HARBOR_SLOTS, PIPS } from './geometry.js';
+import { board as islandGeometry, PIPS } from './geometry.js';
 import { SEAT_COLORS, RES_ICON, RES_COLORS, svgUrl } from './art.js';
 
 const BASE = 0.12; // top of the sandy island
@@ -631,6 +631,9 @@ function buildBoat(rand) {
 // the scene
 // ---------------------------------------------------------------------
 export function createScene(container, { onPick, onHover } = {}) {
+  // the island being shown; bigger islands (5–8 players) swap these in setBoard()
+  let { HEXES, VERTS, EDGES, HARBOR_SLOTS } = islandGeometry('base');
+  let scale = 1; // island size relative to the standard island
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -764,6 +767,9 @@ export function createScene(container, { onPick, onHover } = {}) {
     const key = JSON.stringify(view.hexes) + JSON.stringify(view.harbors);
     if (key === boardKey) return;
     boardKey = key;
+    const g = islandGeometry(view.size || 'base');
+    ({ HEXES, VERTS, EDGES, HARBOR_SLOTS } = g);
+    fitIsland(g);
     board.clear();
     tiles = [];
     tokens = [];
@@ -1061,7 +1067,8 @@ export function createScene(container, { onPick, onHover } = {}) {
   };
   const dice = [makeDie(false), makeDie(true)];
   const FACE_NORMAL = { 1: [1, 0, 0], 6: [-1, 0, 0], 2: [0, 1, 0], 5: [0, -1, 0], 3: [0, 0, 1], 4: [0, 0, -1] };
-  const DICE_REST = [new THREE.Vector3(3.55, BASE + 0.15, 3.0), new THREE.Vector3(3.95, BASE + 0.15, 2.55)];
+  const DICE_HOME = [new THREE.Vector3(3.55, BASE + 0.15, 3.0), new THREE.Vector3(3.95, BASE + 0.15, 2.55)];
+  const DICE_REST = DICE_HOME.map((v) => v.clone());
   function restQuat(value, yaw) {
     const n = new THREE.Vector3(...FACE_NORMAL[value]);
     const q = new THREE.Quaternion().setFromUnitVectors(n, UP);
@@ -1092,6 +1099,34 @@ export function createScene(container, { onPick, onHover } = {}) {
         },
       });
     });
+  }
+
+  // ---------- island size ----------
+  // Stretch the beach, lagoon and foam to the island's shape, move the dice to its edge, and
+  // widen the shadows and camera for the bigger islands.
+  function fitIsland(g) {
+    const rx = (g.extent.x + 0.4) / 4.72;
+    const rz = (g.extent.z + 0.72) / 4.72;
+    for (const m of [island, lagoon, foam]) m.scale.set(rx, 1, rz);
+    DICE_HOME.forEach((v, i) => DICE_REST[i].set(v.x * rx, v.y, v.z * rz));
+    dice.forEach((d, i) => d.position.copy(DICE_REST[i]));
+    const next = Math.max(rx, rz);
+    const cam = sun.shadow.camera;
+    Object.assign(cam, { left: -7.5 * next, right: 7.5 * next, top: 7.5 * next, bottom: -7.5 * next, far: 30 * next });
+    cam.updateProjectionMatrix();
+    sun.position.set(-6, 12, 6).multiplyScalar(Math.max(1, next));
+    sun.shadow.mapSize.set(next > 1.1 ? 3072 : 2048, next > 1.1 ? 3072 : 2048);
+    sun.shadow.map?.dispose();
+    sun.shadow.map = null;
+    controls.maxDistance = 24 * next;
+    scene.fog.near = 22 * next;
+    scene.fog.far = 52 * next;
+    if (next !== scale) {
+      scale = next;
+      anims = anims.filter((a) => !a.camera);
+      intro = true;
+      fitCamera(true);
+    }
   }
 
   // ---------- harvest effects ----------
@@ -1167,7 +1202,7 @@ export function createScene(container, { onPick, onHover } = {}) {
     camera.aspect = aspect;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h, false);
-    const dist = aspect >= 1.2 ? 14.2 : Math.min(28, 14.2 * (1.25 / Math.max(aspect, 0.45)) ** 0.9);
+    const dist = scale * (aspect >= 1.2 ? 14.2 : Math.min(28, 14.2 * (1.25 / Math.max(aspect, 0.45)) ** 0.9));
     const polar = aspect >= 1 ? 0.78 : 0.62;
     const pos = new THREE.Vector3().setFromSphericalCoords(dist, polar, 0).add(controls.target);
     if (animate) {

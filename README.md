@@ -13,7 +13,8 @@ Plain HTML, CSS and JavaScript modules — no build step, hosts anywhere static 
   wool, grain and stone, lay trails, raise homesteads and upgrade them to barns, trade with the
   table or the harbors, play almanac cards, and keep the bandit off your fields. Every tile,
   tree, sheep, house, barn, boat and die is modelled in code — no image or model files.
-  Computer players at three levels, 1–4 players online.
+  Computer players at three levels, up to 8 players: 5–6 play on a 30-tile Big island and
+  7–8 on a 37-tile Grand island, with "barn raising" so everyone can build between turns.
 - **Four in a Row** — a small, complete example of how a game plugs in.
 - **Coastal Dogfight** — a real-time 3D flight game: 1940s fighters over a 20 km coastline.
   Up to four pilots team up against waves of raiders (you pick how many per wave and how

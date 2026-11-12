@@ -32,6 +32,7 @@ export default {
   tagline: 'One line for the home page tile.',
   description: 'A paragraph for the setup page.',
   seats: 2,                      // how many seats at the table
+  // seatCount: (options) => options.players,  // optional: let a table option set the seat count
   seatLabels: ['Red', 'Blue'],   // optional
   teams: [[0, 2], [1, 3]],       // optional, for partnership games
   joinOrder: [1],                // optional: which seat the first friend gets

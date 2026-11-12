@@ -3,7 +3,7 @@
 // Settle a hex island: place homesteads on corners, connect them with trails, roll dice to
 // harvest timber, brick, wool, grain and stone, trade, upgrade homesteads to barns, and draw
 // almanac cards. First to the target score on their own turn wins.
-import { HEXES, VERTS, EDGES, HARBOR_SLOTS, otherEnd } from './geometry.js';
+import { board, sizeFor } from './geometry.js';
 
 export const RES = ['timber', 'brick', 'wool', 'grain', 'stone'];
 export const RES_LABEL = { timber: 'Timber', brick: 'Brick', wool: 'Wool', grain: 'Grain', stone: 'Stone' };
@@ -23,24 +23,43 @@ export const COST = {
 };
 export const PIECES = { road: 15, homestead: 5, town: 4 };
 export const CARDS = {
-  sheriff: { label: 'Sheriff', text: 'Move the bandit and take a card from someone on that hex. Three or more Sheriffs earn the Big Posse (2 points).', count: 14 },
-  trailblazer: { label: 'Trailblazer', text: 'Build two trails for free.', count: 2 },
-  harvest: { label: 'Bumper Crop', text: 'Take any two resources from the bank.', count: 2 },
-  market: { label: 'Corner the Market', text: 'Name a resource. Everyone hands you all of theirs.', count: 2 },
-  landmark: { label: 'Landmark', text: 'Worth 1 point. Kept hidden until the game ends.', count: 5 },
+  sheriff: { label: 'Sheriff', text: 'Move the bandit and take a card from someone on that hex. Three or more Sheriffs earn the Big Posse (2 points).' },
+  trailblazer: { label: 'Trailblazer', text: 'Build two trails for free.' },
+  harvest: { label: 'Bumper Crop', text: 'Take any two resources from the bank.' },
+  market: { label: 'Corner the Market', text: 'Name a resource. Everyone hands you all of theirs.' },
+  landmark: { label: 'Landmark', text: 'Worth 1 point. Kept hidden until the game ends.' },
 };
 export const CARD_TYPES = Object.keys(CARDS);
-const BANK_START = 19;
-const NUMBERS = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12];
-const TERRAIN_BAG = [
-  ...Array(4).fill('forest'),
-  ...Array(4).fill('pasture'),
-  ...Array(4).fill('fields'),
-  ...Array(3).fill('clay'),
-  ...Array(3).fill('quarry'),
-  'desert',
-];
-const HARBOR_BAG = ['any', 'any', 'any', 'any', ...RES];
+// What goes in the box for each island. Bigger islands (5–8 players) get more tiles, number
+// tokens, harbors, cards in the bank and almanac cards.
+const nums = (counts) => Object.entries(counts).flatMap(([n, k]) => Array(k).fill(Number(n)));
+export const SUPPLY = {
+  base: {
+    terrain: { forest: 4, pasture: 4, fields: 4, clay: 3, quarry: 3, desert: 1 },
+    numbers: nums({ 2: 1, 3: 2, 4: 2, 5: 2, 6: 2, 8: 2, 9: 2, 10: 2, 11: 2, 12: 1 }),
+    harbors: ['any', 'any', 'any', 'any', ...RES],
+    bank: 19,
+    deck: { sheriff: 14, trailblazer: 2, harvest: 2, market: 2, landmark: 5 },
+  },
+  large: {
+    terrain: { forest: 6, pasture: 6, fields: 6, clay: 5, quarry: 5, desert: 2 },
+    numbers: nums({ 2: 2, 3: 3, 4: 3, 5: 3, 6: 3, 8: 3, 9: 3, 10: 3, 11: 3, 12: 2 }),
+    harbors: ['any', 'any', 'any', 'any', 'any', ...RES, 'wool'],
+    bank: 24,
+    deck: { sheriff: 20, trailblazer: 3, harvest: 3, market: 3, landmark: 5 },
+  },
+  huge: {
+    terrain: { forest: 7, pasture: 7, fields: 7, clay: 6, quarry: 7, desert: 3 },
+    numbers: nums({ 2: 2, 3: 4, 4: 4, 5: 4, 6: 3, 8: 3, 9: 4, 10: 4, 11: 4, 12: 2 }),
+    harbors: ['any', 'any', 'any', 'any', 'any', 'any', ...RES, 'grain', 'stone'],
+    bank: 30,
+    deck: { sheriff: 24, trailblazer: 4, harvest: 4, market: 4, landmark: 6 },
+  },
+};
+const G = (s) => board(s.size || 'base');
+const seatsOf = (s) => s.players.map((_, i) => i);
+export const MIN_PLAYERS = 3;
+export const MAX_PLAYERS = 8;
 
 // ---------------------------------------------------------------------
 // helpers
@@ -82,23 +101,30 @@ function log(s, entry) {
 // setup
 // ---------------------------------------------------------------------
 export function setup({ seed = 1, options = {} } = {}) {
+  const n = Math.min(MAX_PLAYERS, Math.max(MIN_PLAYERS, Number(options.players) || 4));
+  const size = sizeFor(n);
+  const supply = SUPPLY[size];
   const s = {
     rng: seed >>> 0 || 1,
+    size,
+    // with 5 or more players, everyone may build between turns ("barn raising")
+    raising: n >= 5 && options.raising !== false,
+    raiseQueue: null,
     target: Number(options.target) || 10,
     friendly: !!options.friendly,
     hexes: [],
     bandit: 0,
     harbors: [],
-    verts: Array(VERTS.length).fill(null), // { o: seat, k: 'homestead' | 'town' }
-    roads: Array(EDGES.length).fill(null), // seat
-    players: [0, 1, 2, 3].map(() => ({
+    verts: Array(board(size).VERTS.length).fill(null), // { o: seat, k: 'homestead' | 'town' }
+    roads: Array(board(size).EDGES.length).fill(null), // seat
+    players: Array.from({ length: n }, () => ({
       res: emptyRes(),
       cards: emptyCards(),
       fresh: emptyCards(), // bought this turn, not playable yet
       sheriffs: 0,
       pieces: { ...PIECES },
     })),
-    bank: Object.fromEntries(RES.map((r) => [r, BANK_START])),
+    bank: Object.fromEntries(RES.map((r) => [r, supply.bank])),
     deck: [],
     phase: 'setup',
     order: [],
@@ -117,16 +143,16 @@ export function setup({ seed = 1, options = {} } = {}) {
     bankTrades: 0,
     trailHolder: null,
     posseHolder: null,
-    trailLen: [0, 0, 0, 0],
+    trailLen: Array(n).fill(0),
     gains: null,
     log: [],
     winner: null,
   };
   buildBoard(s);
-  for (const t of CARD_TYPES) for (let i = 0; i < CARDS[t].count; i++) s.deck.push(t);
+  for (const t of CARD_TYPES) for (let i = 0; i < supply.deck[t]; i++) s.deck.push(t);
   shuffle(s, s.deck);
-  const first = Math.floor(rand(s) * 4);
-  const fwd = [0, 1, 2, 3].map((i) => (first + i) % 4);
+  const first = Math.floor(rand(s) * n);
+  const fwd = seatsOf(s).map((i) => (first + i) % n);
   s.order = [...fwd, ...fwd.slice().reverse()];
   s.current = s.order[0];
   log(s, { k: 'start', p: first });
@@ -134,20 +160,39 @@ export function setup({ seed = 1, options = {} } = {}) {
 }
 
 function buildBoard(s) {
-  // terrain, then number tokens with no two "red" numbers (6 and 8) side by side
-  for (let tries = 0; tries < 400; tries++) {
-    const terr = shuffle(s, TERRAIN_BAG.slice());
-    const nums = shuffle(s, NUMBERS.slice());
-    let n = 0;
-    const hexes = terr.map((t) => ({ t, n: t === 'desert' ? null : nums[n++] }));
-    const hot = (i) => hexes[i].n === 6 || hexes[i].n === 8;
-    const bad = HEXES.some((hx, i) => hot(i) && hx.near.some((j) => hot(j) || hexes[j].n === hexes[i].n));
-    s.hexes = hexes;
-    if (!bad) break;
+  const supply = SUPPLY[s.size];
+  const { HEXES } = G(s);
+  const bag = Object.entries(supply.terrain).flatMap(([t, k]) => Array(k).fill(t));
+  let best = null;
+  let bestBad = Infinity;
+  for (let tries = 0; tries < 300 && bestBad > 0; tries++) {
+    const terr = shuffle(s, bag.slice());
+    const land = terr.map((t, i) => (t === 'desert' ? -1 : i)).filter((i) => i >= 0);
+    // the busy numbers (6 and 8) first, never side by side
+    const hotNums = supply.numbers.filter((x) => x === 6 || x === 8);
+    const rest = shuffle(s, supply.numbers.filter((x) => x !== 6 && x !== 8));
+    const n = Array(terr.length).fill(null);
+    const order = shuffle(s, land.slice());
+    let k = 0;
+    for (const i of order) {
+      if (k >= hotNums.length) break;
+      if (HEXES[i].near.some((j) => n[j] === 6 || n[j] === 8)) continue;
+      n[i] = hotNums[k++];
+    }
+    if (k < hotNums.length) continue;
+    for (const i of land) if (n[i] == null) n[i] = rest.pop();
+    // fewer matching neighbours is better
+    let bad = 0;
+    HEXES.forEach((hx, i) => hx.near.forEach((j) => n[i] != null && n[i] === n[j] && bad++));
+    if (bad < bestBad) {
+      bestBad = bad;
+      best = terr.map((t, i) => ({ t, n: n[i] }));
+    }
   }
+  s.hexes = best;
   s.bandit = s.hexes.findIndex((h) => h.t === 'desert');
-  const types = shuffle(s, HARBOR_BAG.slice());
-  s.harbors = HARBOR_SLOTS.map((slot, i) => ({ slot: i, type: types[i] }));
+  const types = shuffle(s, supply.harbors.slice());
+  s.harbors = G(s).HARBOR_SLOTS.map((slot, i) => ({ slot: i, type: types[i] }));
 }
 
 // ---------------------------------------------------------------------
@@ -155,35 +200,35 @@ function buildBoard(s) {
 // ---------------------------------------------------------------------
 export function harborsOf(s, p) {
   const set = new Set();
-  for (const h of s.harbors) for (const v of HARBOR_SLOTS[h.slot].verts) if (s.verts[v]?.o === p) set.add(h.type);
+  for (const h of s.harbors) for (const v of G(s).HARBOR_SLOTS[h.slot].verts) if (s.verts[v]?.o === p) set.add(h.type);
   return set;
 }
 export function ratio(s, p, r) {
   const hb = harborsOf(s, p);
   return hb.has(r) ? 2 : hb.has('any') ? 3 : 4;
 }
-const freeCorner = (s, v) => s.verts[v] == null && VERTS[v].adj.every((a) => s.verts[a] == null);
+const freeCorner = (s, v) => s.verts[v] == null && G(s).VERTS[v].adj.every((a) => s.verts[a] == null);
 
 export function canHomestead(s, p, v, isSetup = false) {
   if (!freeCorner(s, v)) return false;
   if (isSetup) return true;
-  return VERTS[v].edges.some((e) => s.roads[e] === p);
+  return G(s).VERTS[v].edges.some((e) => s.roads[e] === p);
 }
 export function canRoad(s, p, e, fromVert = null) {
   if (s.roads[e] != null) return false;
-  const ed = EDGES[e];
+  const ed = G(s).EDGES[e];
   if (fromVert != null) return ed.a === fromVert || ed.b === fromVert;
   for (const v of [ed.a, ed.b]) {
     const b = s.verts[v];
     if (b && b.o === p) return true;
     if (b && b.o !== p) continue; // can't build through someone else's homestead
-    if (VERTS[v].edges.some((x) => x !== e && s.roads[x] === p)) return true;
+    if (G(s).VERTS[v].edges.some((x) => x !== e && s.roads[x] === p)) return true;
   }
   return false;
 }
-export const roadSpots = (s, p) => EDGES.map((_, e) => e).filter((e) => canRoad(s, p, e));
-export const homesteadSpots = (s, p, isSetup = false) => VERTS.map((_, v) => v).filter((v) => canHomestead(s, p, v, isSetup));
-export const townSpots = (s, p) => VERTS.map((_, v) => v).filter((v) => s.verts[v]?.o === p && s.verts[v].k === 'homestead');
+export const roadSpots = (s, p) => G(s).EDGES.map((_, e) => e).filter((e) => canRoad(s, p, e));
+export const homesteadSpots = (s, p, isSetup = false) => G(s).VERTS.map((_, v) => v).filter((v) => canHomestead(s, p, v, isSetup));
+export const townSpots = (s, p) => G(s).VERTS.map((_, v) => v).filter((v) => s.verts[v]?.o === p && s.verts[v].k === 'homestead');
 
 export function longestTrail(s, p) {
   let best = 0;
@@ -192,14 +237,14 @@ export function longestTrail(s, p) {
     if (len > best) best = len;
     const b = s.verts[v];
     if (len > 0 && b && b.o !== p) return;
-    for (const e of VERTS[v].edges) {
+    for (const e of G(s).VERTS[v].edges) {
       if (s.roads[e] !== p || used.has(e)) continue;
       used.add(e);
-      walk(otherEnd(e, v), len + 1);
+      walk(G(s).otherEnd(e, v), len + 1);
       used.delete(e);
     }
   };
-  for (let v = 0; v < VERTS.length; v++) if (VERTS[v].edges.some((e) => s.roads[e] === p)) walk(v, 0);
+  for (let v = 0; v < G(s).VERTS.length; v++) if (G(s).VERTS[v].edges.some((e) => s.roads[e] === p)) walk(v, 0);
   return best;
 }
 
@@ -213,7 +258,7 @@ export function publicPoints(s, p) {
 export const points = (s, p) => publicPoints(s, p) + s.players[p].cards.landmark + s.players[p].fresh.landmark;
 
 function updateTrail(s) {
-  s.trailLen = [0, 1, 2, 3].map((p) => longestTrail(s, p));
+  s.trailLen = seatsOf(s).map((p) => longestTrail(s, p));
   const lens = s.trailLen;
   const holder = s.trailHolder;
   const max = Math.max(...lens);
@@ -234,17 +279,18 @@ function updateTrail(s) {
 // ---------------------------------------------------------------------
 export function actors(s) {
   if (s.phase === 'over') return [];
-  if (s.phase === 'discard') return [0, 1, 2, 3].filter((p) => s.discard[p] > 0);
+  if (s.phase === 'discard') return seatsOf(s).filter((p) => s.discard[p] > 0);
   if (s.phase === 'trade') {
     if (s.trade.stage === 'choose') return [s.trade.from];
-    return [0, 1, 2, 3].filter((p) => p !== s.trade.from && s.trade.resp[p] == null);
+    return seatsOf(s).filter((p) => p !== s.trade.from && s.trade.resp[p] == null);
   }
+  if (s.phase === 'raise') return [s.raiseQueue[0]];
   return [s.current];
 }
 
 export function banditTargets(s, p, hex) {
   const set = new Set();
-  for (const v of HEXES[hex].verts) {
+  for (const v of G(s).HEXES[hex].verts) {
     const b = s.verts[v];
     if (b && b.o !== p && total(s.players[b.o].res) > 0) set.add(b.o);
   }
@@ -252,16 +298,16 @@ export function banditTargets(s, p, hex) {
 }
 export function banditHexes(s, p) {
   const out = [];
-  for (let i = 0; i < HEXES.length; i++) {
+  for (let i = 0; i < G(s).HEXES.length; i++) {
     if (i === s.bandit) continue;
     if (s.friendly) {
       // the friendly bandit leaves players with 2 points or fewer alone
-      const owners = new Set(HEXES[i].verts.map((v) => s.verts[v]?.o).filter((o) => o != null && o !== p));
+      const owners = new Set(G(s).HEXES[i].verts.map((v) => s.verts[v]?.o).filter((o) => o != null && o !== p));
       if ([...owners].some((o) => publicPoints(s, o) <= 2)) continue;
     }
     out.push(i);
   }
-  return out.length ? out : HEXES.map((_, i) => i).filter((i) => i !== s.bandit);
+  return out.length ? out : G(s).HEXES.map((_, i) => i).filter((i) => i !== s.bandit);
 }
 
 export function playable(s, p, card) {
@@ -280,7 +326,7 @@ export function legal(s, p) {
   switch (s.phase) {
     case 'setup':
       if (s.setupVert == null) for (const v of homesteadSpots(s, p, true)) out.push({ type: 'homestead', v });
-      else for (const e of VERTS[s.setupVert].edges) if (s.roads[e] == null) out.push({ type: 'road', e });
+      else for (const e of G(s).VERTS[s.setupVert].edges) if (s.roads[e] == null) out.push({ type: 'road', e });
       break;
     case 'roll':
       out.push({ type: 'roll' });
@@ -311,12 +357,14 @@ export function legal(s, p) {
         if (canPay(pl.res, s.trade.get)) out.push({ type: 'respond', yes: true });
       }
       break;
+    case 'raise':
     case 'main': {
-      out.push({ type: 'end' });
+      out.push({ type: s.phase === 'raise' ? 'pass' : 'end' });
       if (pl.pieces.road > 0 && canPay(pl.res, COST.road)) for (const e of roadSpots(s, p)) out.push({ type: 'road', e });
       if (pl.pieces.homestead > 0 && canPay(pl.res, COST.homestead)) for (const v of homesteadSpots(s, p)) out.push({ type: 'homestead', v });
       if (pl.pieces.town > 0 && canPay(pl.res, COST.town)) for (const v of townSpots(s, p)) out.push({ type: 'town', v });
       if (s.deck.length && canPay(pl.res, COST.card)) out.push({ type: 'buy' });
+      if (s.phase === 'raise') break; // building only: no trades or cards between turns
       for (const give of RES) {
         const n = ratio(s, p, give);
         if (pl.res[give] < n) continue;
@@ -364,7 +412,7 @@ function cleanRes(obj) {
   if (!obj || typeof obj !== 'object') return out;
   for (const r of RES) {
     const n = obj[r] == null ? 0 : Number(obj[r]);
-    if (!Number.isInteger(n) || n < 0 || n > 19) fail('Bad amount');
+    if (!Number.isInteger(n) || n < 0 || n > 99) fail('Bad amount');
     out[r] = n;
   }
   return out;
@@ -388,7 +436,7 @@ export function apply(prev, p, a) {
     // ---------- building ----------
     case 'homestead': {
       const v = a.v;
-      if (!Number.isInteger(v) || !VERTS[v]) fail('No such corner');
+      if (!Number.isInteger(v) || !G(s).VERTS[v]) fail('No such corner');
       if (ph === 'setup') {
         if (s.setupVert != null) fail('Place a trail next to your homestead');
         if (!canHomestead(s, p, v, true)) fail('Too close to another homestead');
@@ -398,7 +446,7 @@ export function apply(prev, p, a) {
         log(s, { k: 'build', p, what: 'homestead', v });
         if (s.step >= 4) {
           const got = emptyRes();
-          for (const hi of VERTS[v].hexes) {
+          for (const hi of G(s).VERTS[v].hexes) {
             const r = TERRAIN[s.hexes[hi].t].res;
             if (r && s.bank[r] > 0) {
               got[r]++;
@@ -413,7 +461,7 @@ export function apply(prev, p, a) {
         }
         break;
       }
-      if (ph !== 'main') fail('You cannot build right now');
+      if (ph !== 'main' && ph !== 'raise') fail('You cannot build right now');
       if (pl.pieces.homestead <= 0) fail('No homesteads left — upgrade one to a barn');
       if (!canPay(pl.res, COST.homestead)) fail('Not enough resources');
       if (!canHomestead(s, p, v)) fail('A homestead needs your trail and a corner with no neighbours');
@@ -425,7 +473,7 @@ export function apply(prev, p, a) {
       break;
     }
     case 'town': {
-      if (ph !== 'main') fail('You cannot build right now');
+      if (ph !== 'main' && ph !== 'raise') fail('You cannot build right now');
       const v = a.v;
       if (s.verts[v]?.o !== p || s.verts[v].k !== 'homestead') fail('Upgrade one of your homesteads');
       if (pl.pieces.town <= 0) fail('No barns left');
@@ -439,7 +487,7 @@ export function apply(prev, p, a) {
     }
     case 'road': {
       const e = a.e;
-      if (!Number.isInteger(e) || !EDGES[e]) fail('No such edge');
+      if (!Number.isInteger(e) || !G(s).EDGES[e]) fail('No such edge');
       if (ph === 'setup') {
         if (s.setupVert == null) fail('Place a homestead first');
         if (!canRoad(s, p, e, s.setupVert)) fail('The trail must touch the homestead you just placed');
@@ -457,10 +505,10 @@ export function apply(prev, p, a) {
         } else s.current = s.order[s.step];
         break;
       }
-      if (ph !== 'main' && ph !== 'roads') fail('You cannot build right now');
+      if (ph !== 'main' && ph !== 'roads' && ph !== 'raise') fail('You cannot build right now');
       if (pl.pieces.road <= 0) fail('No trails left');
       if (!canRoad(s, p, e)) fail('A trail must connect to your trails or homesteads');
-      if (ph === 'main') {
+      if (ph === 'main' || ph === 'raise') {
         if (!canPay(pl.res, COST.road)) fail('Not enough resources');
         pay(s, p, COST.road);
       }
@@ -474,18 +522,24 @@ export function apply(prev, p, a) {
       }
       break;
     }
+    case 'pass':
+      if (ph !== 'raise') fail('Nothing to pass');
+      s.raiseQueue.shift();
+      nextRaiser(s);
+      break;
     case 'skip':
       if (ph !== 'roads') fail('Nothing to skip');
       s.phase = 'main';
       s.freeRoads = 0;
       break;
     case 'buy': {
-      if (ph !== 'main') fail('You cannot buy right now');
+      if (ph !== 'main' && ph !== 'raise') fail('You cannot buy right now');
       if (!s.deck.length) fail('The almanac deck is empty');
       if (!canPay(pl.res, COST.card)) fail('Not enough resources');
       pay(s, p, COST.card);
       const card = s.deck.pop();
-      pl.fresh[card]++;
+      if (ph === 'raise') pl.cards[card]++;
+      else pl.fresh[card]++;
       log(s, { k: 'buy', p, card });
       break;
     }
@@ -500,7 +554,7 @@ export function apply(prev, p, a) {
       const sum = d1 + d2;
       log(s, { k: 'roll', p, dice: [d1, d2] });
       if (sum === 7) {
-        const owe = [0, 1, 2, 3].map((q) => {
+        const owe = seatsOf(s).map((q) => {
           const n = total(s.players[q].res);
           return n > 7 ? Math.floor(n / 2) : 0;
         });
@@ -570,7 +624,7 @@ export function apply(prev, p, a) {
       } else if (card === 'market') {
         if (!RES.includes(a.res)) fail('Pick a resource');
         let n = 0;
-        for (let q = 0; q < 4; q++) {
+        for (const q of seatsOf(s)) {
           if (q === p) continue;
           n += s.players[q].res[a.res];
           s.players[q].res[a.res] = 0;
@@ -622,7 +676,7 @@ export function apply(prev, p, a) {
       if (!canPay(pl.res, give)) fail('You do not have those cards');
       s.offers++;
       const resp = {};
-      for (let q = 0; q < 4; q++) if (q !== p) resp[q] = canPay(s.players[q].res, get) ? null : false;
+      for (const q of seatsOf(s)) if (q !== p) resp[q] = canPay(s.players[q].res, get) ? null : false;
       s.trade = { from: p, give: pick(give), get: pick(get), resp, stage: 'respond' };
       log(s, { k: 'offer', p, give: s.trade.give, get: s.trade.get });
       s.phase = 'trade';
@@ -672,14 +726,22 @@ export function apply(prev, p, a) {
       s.rolled = false;
       s.offers = 0;
       s.bankTrades = 0;
-      s.current = (s.current + 1) % 4;
-      s.turnNo++;
-      s.phase = 'roll';
-      log(s, { k: 'turn', p: s.current });
+      if (s.raising) {
+        // barn raising: everyone else, in turn order, may build before the next turn starts
+        const n = s.players.length;
+        s.raiseQueue = Array.from({ length: n - 1 }, (_, i) => (s.current + 1 + i) % n);
+        s.phase = 'raise';
+        nextRaiser(s);
+      } else nextTurn(s);
       break;
     }
     default:
       fail('Unknown move');
+  }
+
+  if (ph === 'raise' && s.phase === 'raise' && a.type !== 'pass' && s.raiseQueue[0] === p && !canBuildAnything(s, p)) {
+    s.raiseQueue.shift();
+    nextRaiser(s);
   }
 
   // you win the moment you reach the target on your own turn
@@ -690,6 +752,30 @@ export function apply(prev, p, a) {
     log(s, { k: 'win', p: s.current });
   }
   return s;
+}
+
+function nextTurn(s) {
+  s.raiseQueue = null;
+  s.current = (s.current + 1) % s.players.length;
+  s.turnNo++;
+  s.phase = 'roll';
+  log(s, { k: 'turn', p: s.current });
+}
+
+// skip players who can't afford anything; when nobody is left, the next turn starts
+function nextRaiser(s) {
+  while (s.raiseQueue.length && !canBuildAnything(s, s.raiseQueue[0])) s.raiseQueue.shift();
+  if (!s.raiseQueue.length) nextTurn(s);
+}
+
+export function canBuildAnything(s, p) {
+  const pl = s.players[p];
+  return (
+    (pl.pieces.town > 0 && canPay(pl.res, COST.town) && townSpots(s, p).length > 0) ||
+    (pl.pieces.homestead > 0 && canPay(pl.res, COST.homestead) && homesteadSpots(s, p).length > 0) ||
+    (pl.pieces.road > 0 && canPay(pl.res, COST.road) && roadSpots(s, p).length > 0) ||
+    (s.deck.length > 0 && canPay(pl.res, COST.card))
+  );
 }
 
 function settleTrade(s) {
@@ -704,8 +790,8 @@ function settleTrade(s) {
 }
 
 function produce(s, sum) {
-  const want = [0, 1, 2, 3].map(() => emptyRes());
-  HEXES.forEach((hx, i) => {
+  const want = seatsOf(s).map(() => emptyRes());
+  G(s).HEXES.forEach((hx, i) => {
     if (s.hexes[i].n !== sum || i === s.bandit) return;
     const r = TERRAIN[s.hexes[i].t].res;
     for (const v of hx.verts) {
@@ -720,7 +806,7 @@ function produce(s, sum) {
     const takers = want.filter((w) => w[r] > 0).length;
     // the bank can't cover everyone: if several players want it, nobody gets it
     if (need > s.bank[r] && takers > 1) continue;
-    for (let q = 0; q < 4; q++) {
+    for (const q of seatsOf(s)) {
       const n = Math.min(want[q][r], s.bank[r]);
       if (!n) continue;
       s.bank[r] -= n;
