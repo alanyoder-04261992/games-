@@ -1,7 +1,7 @@
 /* three.js r187 add-on: examples/jsm/postprocessing/RenderPass.js */
 import {
 	Color
-} from '../../three.module.min.js';
+} from '../../three.core.min.js';
 import { Pass } from './Pass.js';
 
 /**

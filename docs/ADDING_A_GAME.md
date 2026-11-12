@@ -28,6 +28,7 @@ public/games/my-game/
 ```js
 export default {
   id: 'my-game',                 // folder name, used in saves and URLs
+  version: '1.0',                // shown on the home tile; bump it every time you improve the game
   name: 'My Game',
   tagline: 'One line for the home page tile.',
   description: 'A paragraph for the setup page.',
@@ -113,33 +114,54 @@ an action like `{ type: 'finish', results }` can end the round so rematches work
 See `public/games/dogfight/` for a full example. It runs the game in a frame and bridges
 these messages with `postMessage`.
 
-## 3D games: the shared three.js (r187)
+## 3D games: the shared three.js (r187) and WebGPU
 
 Every 3D game in the Game Center runs on the **same three.js — r187**, kept in
-`public/vendor/three/`. Don't load three.js from a CDN or keep your own copy: one shared
-version means every game works offline, loads it once, and gets upgraded together.
+`public/vendor/three/`, and draws with **WebGPU** through `THREE.WebGPURenderer`. On a
+device or browser without WebGPU, that renderer switches to WebGL2 by itself, so everyone
+can still play. Don't load three.js from a CDN or keep your own copy: one shared version
+means every game works offline, loads it once, and gets upgraded together.
 
 ```js
 // in public/games/my-game/scene.js
-import * as THREE from '../../vendor/three/three.module.min.js';
+import * as THREE from '../../vendor/three/three.webgpu.min.js';
+import { pass, uniform, color, time } from '../../vendor/three/three.tsl.min.js';
 import { OrbitControls } from '../../vendor/three/addons/controls/OrbitControls.js';
+import { bloom } from '../../vendor/three/addons/tsl/display/BloomNode.js';
 // add-ons keep the same path they have in three's examples/jsm folder
+
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+await renderer.init();                       // or start drawing with renderer.setAnimationLoop
+const pipeline = new THREE.RenderPipeline(renderer);   // optional glow
+const scenePass = pass(scene, camera);
+pipeline.outputNode = scenePass.add(bloom(scenePass, 0.6, 0.4, 0.85));
+renderer.setAnimationLoop(() => pipeline.render());    // or renderer.render(scene, camera)
 ```
 
+- **Shaders and effects are written in TSL** (three's node language), never GLSL:
+  node materials such as `MeshStandardNodeMaterial` with `colorNode`/`positionNode` instead of
+  `ShaderMaterial` or `onBeforeCompile`; `THREE.RenderPipeline` with `pass()`, `bloom()` and
+  `ao()` instead of `EffectComposer`; `WaterMesh`/`SkyMesh` instead of `Water`/`Sky`;
+  `THREE.RenderTarget` instead of `WebGLRenderTarget`.
 - **Need another add-on?** Add its path (e.g. `loaders/GLTFLoader.js`) to
   `public/vendor/three/addons.json` and run `npm run update-three`. The script copies it and
   everything it imports, and rewrites its imports to the shared build.
 - **Game in its own page (`<iframe>`)?** Give that page an import map pointing at the shared
   copy, like `public/games/dogfight/play.html`:
-  `{"imports":{"three":"../../vendor/three/three.module.min.js","three/addons/":"../../vendor/three/addons/"}}`
+  `{"imports":{"three":"../../vendor/three/three.webgpu.min.js","three/webgpu":"../../vendor/three/three.webgpu.min.js","three/tsl":"../../vendor/three/three.tsl.min.js","three/addons/":"../../vendor/three/addons/"}}`
 - **Write current API:** `THREE.Timer` instead of `THREE.Clock`; `PCFShadowMap` (or
   `VSMShadowMap`) because `PCFSoftShadowMap` was removed; `texture.colorSpace` instead of
-  `encoding`. A running game should log no `THREE.` warnings.
+  `encoding`; `RenderPipeline`, not the deprecated `PostProcessing`. A running game should log
+  no `THREE.` warnings.
+- **Test both ways:** with WebGPU, and with it switched off so the WebGL2 fallback runs. In
+  Chromium/Playwright, WebGPU works even without a GPU via
+  `--enable-unsafe-webgpu --enable-features=Vulkan --use-angle=swiftshader --use-webgpu-adapter=swiftshader`;
+  `--disable-features=WebGPU` forces the fallback.
 - **Upgrading three.js** happens for every game at once: `npm run update-three -- <version>`,
   bump `REQUIRED_REVISION` in `tests/three.test.mjs`, fix each 3D game's console warnings, and
   run `npm test`.
-- `tests/three.test.mjs` fails if any game imports three.js from anywhere else or uses an
-  add-on that isn't vendored.
+- `tests/three.test.mjs` fails if any game imports three.js from anywhere else, uses an
+  add-on that isn't vendored, or still uses WebGL-only code.
 
 ## 4. Register it
 

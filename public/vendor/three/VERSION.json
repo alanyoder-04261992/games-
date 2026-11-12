@@ -2,14 +2,18 @@
   "version": "0.187.0",
   "revision": "187",
   "files": [
-    "three.module.min.js",
     "three.core.min.js",
+    "three.webgpu.min.js",
+    "three.tsl.min.js",
+    "three.module.min.js",
     "addons/controls/OrbitControls.js",
     "addons/environments/RoomEnvironment.js",
     "addons/geometries/RoundedBoxGeometry.js",
     "addons/math/SimplexNoise.js",
     "addons/objects/Sky.js",
+    "addons/objects/SkyMesh.js",
     "addons/objects/Water.js",
+    "addons/objects/WaterMesh.js",
     "addons/postprocessing/EffectComposer.js",
     "addons/postprocessing/GTAOPass.js",
     "addons/postprocessing/MaskPass.js",
@@ -23,6 +27,9 @@
     "addons/shaders/LuminosityHighPassShader.js",
     "addons/shaders/OutputShader.js",
     "addons/shaders/PoissonDenoiseShader.js",
+    "addons/tsl/display/BloomNode.js",
+    "addons/tsl/display/DenoiseNode.js",
+    "addons/tsl/display/GTAONode.js",
     "addons/utils/BufferGeometryUtils.js"
   ]
 }

@@ -1,7 +1,8 @@
 // Escape the Grind — the 3D table. A walnut table under a warm lamp, the round board with its
 // two loops of raised tiles, glossy pawns, rolling dice, flying cards, gold-coin stacks and a
 // tray for each player with miniature buildings for everything they own.
-import * as THREE from '../../vendor/three/three.module.min.js';
+import * as THREE from '../../vendor/three/three.webgpu.min.js';
+import { context, renderOutput } from '../../vendor/three/three.tsl.min.js';
 import { RoomEnvironment } from '../../vendor/three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from '../../vendor/three/addons/geometries/RoundedBoxGeometry.js';
 import { OrbitControls } from '../../vendor/three/addons/controls/OrbitControls.js';
@@ -43,10 +44,13 @@ export class Table3D {
     this.positions = [];
     this.bursts = [];
 
-    const r = (this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' }));
+    // WebGPU where the browser has it; three.js falls back to WebGL 2 by itself everywhere else.
+    const r = (this.renderer = new THREE.WebGPURenderer({ antialias: true, powerPreference: 'high-performance' }));
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality === 'high' ? 2 : 1.25));
-    r.outputColorSpace = THREE.SRGBColorSpace;
-    r.toneMapping = THREE.ACESFilmicToneMapping;
+    // Tone mapping (ACES, exposure 1.05) and the sRGB encode happen in each material (see #output),
+    // not in a full-screen pass afterwards, so the renderer itself writes straight to the canvas.
+    r.outputColorSpace = THREE.LinearSRGBColorSpace;
+    r.toneMapping = THREE.NoToneMapping;
     r.toneMappingExposure = 1.05;
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFShadowMap;
@@ -54,19 +58,9 @@ export class Table3D {
     r.domElement.className = 'eg-canvas';
 
     const scene = (this.scene = new THREE.Scene());
-    scene.background = new THREE.Color('#0b0806');
+    // the clear color is written to the canvas as is (no output pass), so give it already encoded
+    scene.background = new THREE.Color().setRGB(0x0b / 255, 0x08 / 255, 0x06 / 255, THREE.LinearSRGBColorSpace);
     scene.fog = new THREE.Fog('#0b0806', 34, 70);
-    const pm = new THREE.PMREMGenerator(r);
-    // three r183 moved RoomEnvironment down to y = -3.5, which brightens its reflections (a grey sheen
-    // across the walnut table, duller gold). Keep the room where it was so the table looks the same.
-    const room = new RoomEnvironment();
-    room.position.y = 0;
-    scene.environment = pm.fromScene(room, 0.04).texture;
-    // 0.46 (0.42 before three r186, which made indirect diffuse a little darker): keeps the table,
-    // felt and shadowed areas as bright as before.
-    scene.environmentIntensity = 0.46;
-    room.dispose();
-    pm.dispose();
 
     const cam = (this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 200));
     scene.add(cam);
@@ -98,17 +92,56 @@ export class Table3D {
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(container);
     this.running = true;
-    const loop = () => {
+    // The game can place pieces, start tweens and show cards straight away; frames start once the
+    // GPU device is ready. `ready` rejects if neither WebGPU nor WebGL 2 could start.
+    this.ready = this.#start();
+  }
+
+  async #start() {
+    const r = this.renderer;
+    await r.init();
+    if (!this.running) return;
+    const pm = new THREE.PMREMGenerator(r);
+    // three r183 moved RoomEnvironment down to y = -3.5, which brightens its reflections (a grey sheen
+    // across the walnut table, duller gold). Keep the room where it was so the table looks the same.
+    const room = new RoomEnvironment();
+    room.position.y = 0;
+    this.scene.environment = pm.fromScene(room, 0.04).texture;
+    // 0.46 (0.42 before three r186, which made indirect diffuse a little darker): keeps the table,
+    // felt and shadowed areas as bright as before.
+    this.scene.environmentIntensity = 0.46;
+    room.dispose();
+    pm.dispose();
+    this.#output();
+    this.last = performance.now();
+    r.setAnimationLoop(() => {
       if (!this.running) return;
-      this.raf = requestAnimationFrame(loop);
       const now = performance.now();
       const dt = Math.min(0.05, (now - this.last) / 1000);
       this.last = now;
       if (document.hidden) return;
       this.#frame(dt);
       this.#adapt(dt);
-    };
-    loop();
+    });
+  }
+
+  // WebGPURenderer tone-maps the whole frame in one pass at the end, which would also darken the
+  // things marked toneMapped: false (the card print held up to the camera, the pawn glow rings).
+  // Instead every material maps and encodes its own color as it draws, exactly as the WebGL
+  // renderer did, so those stay true to color and transparent pieces blend the same way.
+  // Installed after the environment map is made: that has to stay linear HDR.
+  #output() {
+    const r = this.renderer;
+    r.contextNode = context({
+      ...r.contextNode.getFlowContextData(),
+      getOutput: (color, builder) => {
+        if (builder.renderer.getRenderTarget() !== null) return color; // shadow maps and the like
+        const mat = builder.material;
+        const out = renderOutput(color, mat?.toneMapped === false ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping, THREE.SRGBColorSpace);
+        out.premultipliedAlpha = !!mat?.premultipliedAlpha;
+        return out;
+      },
+    });
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -927,9 +960,10 @@ export class Table3D {
   }
   dispose() {
     this.running = false;
-    cancelAnimationFrame(this.raf);
+    if (this.renderer.initialized) this.renderer.setAnimationLoop(null);
     this.ro.disconnect();
     this.controls.dispose();
+    this.scene.environment?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }

@@ -6,7 +6,7 @@ import {
 	ShaderMaterial,
 	UniformsUtils,
 	Vector3
-} from '../../three.module.min.js';
+} from '../../three.core.min.js';
 
 /**
  * Represents a skydome for scene backgrounds. Based on [A Practical Analytic Model for Daylight](https://www.researchgate.net/publication/220720443_A_Practical_Analytic_Model_for_Daylight)

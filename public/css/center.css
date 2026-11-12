@@ -384,3 +384,52 @@ code { background: var(--panel-2); padding: 0.1em 0.4em; border-radius: 6px; fon
   .gc-room-chip { padding: 4px 8px; font-size: 12px; }
 }
 .gd-note { color: var(--muted); font-size: 13.5px; margin: 10px 0 0; }
+
+/* ---- version pill on each tile (top-right corner of the art) and on the options page ---- */
+.gc-ver {
+  position: absolute; top: 7px; right: 8px; z-index: 2;
+  font: 600 10px/1 var(--font); letter-spacing: 0.02em; font-variant-numeric: tabular-nums;
+  padding: 3px 6px; border-radius: 999px;
+  color: rgba(238, 242, 248, 0.92); background: rgba(8, 14, 26, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+.gc-ver.inline { position: static; display: inline-block; vertical-align: middle; margin-left: 10px; font-size: 11px; color: var(--muted); background: var(--panel); }
+
+/* ---- "update ready" bar ---- */
+.gc-update {
+  position: fixed; left: 50%; bottom: calc(16px + var(--safe-bottom)); z-index: 1000;
+  display: flex; align-items: stretch; max-width: min(560px, calc(100vw - 24px));
+  border-radius: 999px; overflow: hidden;
+  background: rgba(15, 29, 51, 0.96); border: 1px solid rgba(240, 195, 90, 0.55);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+  transform: translate(-50%, 140%); transition: transform 0.35s cubic-bezier(.2, .8, .2, 1);
+}
+.gc-update.open { transform: translate(-50%, 0); }
+.gc-update button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+.gc-update-main { display: flex; align-items: center; gap: 10px; padding: 11px 6px 11px 16px; min-width: 0; text-align: left; color: var(--text); }
+.gc-update-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 0 rgba(240, 195, 90, 0.6); animation: gc-ping 1.8s infinite; }
+.gc-update-text { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.gc-update-go { flex: none; font-size: 13px; font-weight: 700; color: var(--gold-ink); background: linear-gradient(180deg, var(--gold), var(--gold-2)); padding: 6px 11px; border-radius: 999px; }
+.gc-update-x { padding: 0 14px 0 8px; font-size: 20px; color: var(--muted); }
+@keyframes gc-ping { 70% { box-shadow: 0 0 0 9px rgba(240, 195, 90, 0); } 100% { box-shadow: 0 0 0 0 rgba(240, 195, 90, 0); } }
+@media (max-width: 480px) { .gc-update-text { white-space: normal; font-size: 13px; line-height: 1.25; } }
+
+/* ---- pull to refresh ---- */
+html { overscroll-behavior-y: contain; } /* our pull replaces the browser's, so it never fires twice */
+.gc-pull {
+  position: fixed; top: calc(var(--safe-top) + 6px); left: 50%; z-index: 1001; opacity: 0;
+  transform: translate(-50%, -56px); pointer-events: none;
+}
+.gc-pull.back { transition: transform 0.25s ease, opacity 0.25s ease; }
+.gc-pull-ring {
+  width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+  color: var(--muted); background: rgba(15, 29, 51, 0.96); border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.gc-pull.ready .gc-pull-ring { color: var(--gold-ink); background: linear-gradient(180deg, var(--gold), var(--gold-2)); border-color: transparent; }
+.gc-pull.spin .gc-pull-ring { animation: gc-spin 0.7s linear infinite; }
+@keyframes gc-spin { to { transform: rotate(360deg); } }
+body.gc-reloading { opacity: 0.6; transition: opacity 0.2s; }
+@media (prefers-reduced-motion: reduce) { .gc-update, .gc-pull.back { transition: none; } .gc-update-dot, .gc-pull.spin .gc-pull-ring { animation: none; } }

@@ -2,7 +2,7 @@
 // beveled terrain tiles with painted tops, pine forests, sheep pastures, wheat fields, clay pits
 // with brick stacks, snowy quarry peaks, harbors with piers and sailboats, painted wooden
 // homesteads, barns with silos, trails, a bandit in a wide-brim hat, and dice that tumble.
-import * as THREE from '../../vendor/three/three.module.min.js';
+import * as THREE from '../../vendor/three/three.webgpu.min.js';
 import { OrbitControls } from '../../vendor/three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from '../../vendor/three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from '../../vendor/three/addons/geometries/RoundedBoxGeometry.js';
@@ -634,26 +634,23 @@ export function createScene(container, { onPick, onHover } = {}) {
   // the island being shown; bigger islands (5–8 players) swap these in setBoard()
   let { HEXES, VERTS, EDGES, HARBOR_SLOTS } = islandGeometry('base');
   let scale = 1; // island size relative to the standard island
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  // WebGPU where the browser has it; three falls back to WebGL 2 by itself when it doesn't
+  const renderer = new THREE.WebGPURenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
-  // three r182+ dropped PCFSoftShadowMap; PCFShadowMap is the soft one now (see sun.shadow.radius)
+  // PCFShadowMap is the soft one (see sun.shadow.radius)
   renderer.shadowMap.type = THREE.PCFShadowMap;
   container.append(renderer.domElement);
   renderer.domElement.className = 'hx-gl';
+  window.__renderer = renderer; // TEMP-HOOK
 
   const scene = new THREE.Scene();
   scene.background = skyTexture();
   scene.fog = new THREE.Fog('#d9e6ec', 22, 52);
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  // three r183 lowered the room by 3.5 (brighter, shifted highlights); keep the room where it was
-  const room = new RoomEnvironment();
-  room.position.y = 0;
-  scene.environment = pmrem.fromScene(room, 0.04).texture;
-  room.dispose();
+  let pmrem = null;
   // r181–r186 PBR made diffuse surfaces a little darker; 0.55 (was 0.5) matches the old look
   scene.environmentIntensity = 0.55;
 
@@ -1122,9 +1119,8 @@ export function createScene(container, { onPick, onHover } = {}) {
     Object.assign(cam, { left: -7.5 * next, right: 7.5 * next, top: 7.5 * next, bottom: -7.5 * next, far: 30 * next });
     cam.updateProjectionMatrix();
     sun.position.set(-6, 12, 6).multiplyScalar(Math.max(1, next));
+    // the WebGPU shadow node resizes its map to mapSize on the next frame
     sun.shadow.mapSize.set(next > 1.1 ? 3072 : 2048, next > 1.1 ? 3072 : 2048);
-    sun.shadow.map?.dispose();
-    sun.shadow.map = null;
     controls.maxDistance = 24 * next;
     scene.fog.near = 22 * next;
     scene.fog.far = 52 * next;
@@ -1237,7 +1233,6 @@ export function createScene(container, { onPick, onHover } = {}) {
   // ---------- loop ----------
   let raf = 0;
   const timer = new THREE.Timer();
-  timer.reset(); // count from the first frame, as THREE.Clock did
   function frame() {
     if (destroyed) return;
     raf = requestAnimationFrame(frame);
@@ -1272,9 +1267,23 @@ export function createScene(container, { onPick, onHover } = {}) {
     controls.update();
     renderer.render(scene, camera);
   }
-  frame();
+
+  // WebGPURenderer starts asynchronously (adapter, device, or the WebGL 2 fallback). The API
+  // below works straight away; drawing starts once the renderer is ready.
+  const ready = renderer.init().then(() => {
+    if (destroyed) return;
+    pmrem = new THREE.PMREMGenerator(renderer);
+    // three r183 lowered the room by 3.5 (brighter, shifted highlights); keep the room where it was
+    const room = new RoomEnvironment();
+    room.position.y = 0;
+    scene.environment = pmrem.fromScene(room, 0.04).texture;
+    room.dispose();
+    timer.reset(); // count from the first frame, as THREE.Clock did
+    frame();
+  });
 
   return {
+    ready,
     setBoard,
     sync,
     setTargets,
@@ -1291,9 +1300,9 @@ export function createScene(container, { onPick, onHover } = {}) {
       controls.update();
     },
     setQuality(high) {
+      // materials pick up the shadow switch by themselves (it is part of their cache key)
       renderer.shadowMap.enabled = high;
       renderer.setPixelRatio(high ? Math.min(window.devicePixelRatio || 1, 2) : 1);
-      scene.traverse((m) => m.material && (m.material.needsUpdate = true));
       const w = container.clientWidth, h = container.clientHeight;
       renderer.setSize(w, h, false);
     },
@@ -1306,8 +1315,9 @@ export function createScene(container, { onPick, onHover } = {}) {
       el.removeEventListener('pointermove', onMove);
       controls.dispose();
       timer.dispose();
+      scene.environment?.dispose();
+      pmrem?.dispose();
       renderer.dispose();
-      pmrem.dispose();
       el.remove();
     },
   };

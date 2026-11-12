@@ -5,7 +5,7 @@ import {
 	RepeatWrapping,
 	Vector2,
 	Vector3,
-} from '../../three.module.min.js';
+} from '../../three.core.min.js';
 
 /**
  * @module GTAOShader

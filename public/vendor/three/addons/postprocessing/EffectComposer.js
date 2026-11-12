@@ -5,7 +5,7 @@ import {
 	Timer,
 	Vector2,
 	WebGLRenderTarget
-} from '../../three.module.min.js';
+} from '../../three.core.min.js';
 import { CopyShader } from '../shaders/CopyShader.js';
 import { ShaderPass } from './ShaderPass.js';
 import { ClearMaskPass, MaskPass } from './MaskPass.js';
