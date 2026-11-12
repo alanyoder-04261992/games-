@@ -18,6 +18,7 @@
   },
   "homepage": "https://github.com/alanyoder-04261992/games-#readme",
   "devDependencies": {
+    "express": "^4.22.3",
     "peer": "^1.0.2",
     "peerjs": "^1.5.5"
   },
