@@ -38,14 +38,18 @@ export function mount(ctx) {
   let hoverCell = null;
   let pending = false;
 
+  let gone = false; // unmounted before the 3D sea finished starting
   import('./scene.js')
-    .then(({ createScene }) => {
+    .then(async ({ createScene }) => {
       try {
-        scene = createScene(stage, { onCell, onHover, quality: ctx.prefs.get('bs.quality') ?? 'high' });
+        const s = await createScene(stage, { onCell, onHover, quality: ctx.prefs.get('bs.quality') ?? 'high' });
+        if (gone) return s.destroy();
+        scene = s;
         if (view) sync(true);
       } catch (e) {
+        if (gone) return;
         console.error(e);
-        stage.append(h('div.bs-nogl', h('strong', '3D graphics are not available on this device.'), h('p', 'Broadside needs WebGL. Try another browser or turn on hardware acceleration.')));
+        stage.append(h('div.bs-nogl', h('strong', '3D graphics are not available on this device.'), h('p', 'Broadside needs WebGPU or WebGL 2. Try another browser or turn on hardware acceleration.')));
       }
     })
     .catch((e) => stage.append(h('div.bs-nogl', h('strong', 'The 3D sea could not load.'), h('p', String(e.message || e)))));
@@ -472,6 +476,7 @@ export function mount(ctx) {
 
   return {
     destroy() {
+      gone = true;
       off.forEach((f) => f());
       window.removeEventListener('keydown', onKey);
       scene?.destroy();

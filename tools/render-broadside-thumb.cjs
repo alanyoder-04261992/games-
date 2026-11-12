@@ -23,7 +23,7 @@ const BASE = process.env.BASE || 'http://localhost:8080';
   await page.evaluate(async (base) => {
     await document.fonts.load('800 60px Inter').catch(() => {});
     const { createScene } = await import(`${base}/games/broadside/scene.js`);
-    const scene = createScene(document.getElementById('s'));
+    const scene = await createScene(document.getElementById('s'));
     scene.setSize(10);
     const ships = [
       { id: 'flagship', x: 1, y: 5, dir: 'h' },

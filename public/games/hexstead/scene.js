@@ -2,7 +2,8 @@
 // beveled terrain tiles with painted tops, pine forests, sheep pastures, wheat fields, clay pits
 // with brick stacks, snowy quarry peaks, harbors with piers and sailboats, painted wooden
 // homesteads, barns with silos, trails, a bandit in a wide-brim hat, and dice that tumble.
-import * as THREE from '../../vendor/three/three.module.min.js';
+import * as THREE from '../../vendor/three/three.webgpu.min.js';
+import { context, renderOutput, vec3, vec4, mix, texture, screenUV, uniform, rangeFogFactor } from '../../vendor/three/three.tsl.min.js';
 import { OrbitControls } from '../../vendor/three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from '../../vendor/three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from '../../vendor/three/addons/geometries/RoundedBoxGeometry.js';
@@ -58,6 +59,30 @@ const ease = {
   },
 };
 const std = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0, ...extra });
+
+// ---------------------------------------------------------------------
+// tone mapping
+// ---------------------------------------------------------------------
+// Each material tone-maps (ACES) and sRGB-encodes its own colour as it draws, as under WebGL (see
+// the output setup in createScene). The sky is drawn by three's background mesh, which can't be
+// marked toneMapped: false, so untoneNode() runs the ACES curve backwards on it first: the sky
+// gradient then reaches the screen in its own colours, as it did before.
+const EXPOSURE = 1.05;
+const rowsOf = (m) => {
+  const e = m.transpose().elements;
+  return [e.slice(0, 3), e.slice(3, 6), e.slice(6, 9)];
+};
+// three's ACESOutputMat and ACESInputMat, inverted
+const ACES_OUT_INV = rowsOf(new THREE.Matrix3().set(1.60475, -0.53108, -0.07367, -0.10208, 1.10813, -0.00605, -0.00327, -0.07276, 1.07602).invert());
+const ACES_IN_INV = rowsOf(new THREE.Matrix3().set(0.59719, 0.35458, 0.04823, 0.076, 0.90834, 0.01566, 0.0284, 0.13383, 0.83777).invert());
+function untoneNode(rgb) {
+  const m = (rows, v) => vec3(...rows.map((r) => vec3(...r).dot(v)));
+  const y = m(ACES_OUT_INV, rgb).clamp(0, 1);
+  // inverse of the RRT/ODT fit (v² + 0.0245786v − 0.000090537) / (0.983729v² + 0.432951v + 0.238081)
+  const a = y.mul(0.983729).sub(1), b = y.mul(0.432951).sub(0.0245786), c = y.mul(0.238081).add(0.000090537);
+  const v = b.mul(-1).sub(b.mul(b).sub(a.mul(c).mul(4)).sqrt()).div(a.mul(2));
+  return m(ACES_IN_INV, v).mul(0.6 / EXPOSURE).max(0);
+}
 
 // tileable noise built from integer-frequency waves
 function waveNoise(seed, w, h) {
@@ -299,11 +324,12 @@ function harborSign(type) {
 function iconTexture(svg, ring) {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
+  // make the 2D context now: WebGPU can't upload a canvas that has none yet
+  const g = c.getContext('2d');
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   const img = new Image();
   img.onload = () => {
-    const g = c.getContext('2d');
     if (ring) {
       g.fillStyle = ring;
       g.beginPath();
@@ -634,31 +660,28 @@ export function createScene(container, { onPick, onHover } = {}) {
   // the island being shown; bigger islands (5–8 players) swap these in setBoard()
   let { HEXES, VERTS, EDGES, HARBOR_SLOTS } = islandGeometry('base');
   let scale = 1; // island size relative to the standard island
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
-  renderer.shadowMap.enabled = true;
-  // three r182+ dropped PCFSoftShadowMap; PCFShadowMap is the soft one now (see sun.shadow.radius)
-  renderer.shadowMap.type = THREE.PCFShadowMap;
-  container.append(renderer.domElement);
-  renderer.domElement.className = 'hx-gl';
+  // The canvas goes in now; the WebGPURenderer that draws on it is made once we know whether
+  // the browser has WebGPU (see start() below).
+  const el = document.createElement('canvas');
+  el.className = 'hx-gl';
+  container.append(el);
+  let renderer = null;
+  let highQuality = true;
 
   const scene = new THREE.Scene();
-  scene.background = skyTexture();
-  scene.fog = new THREE.Fog('#d9e6ec', 22, 52);
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  // three r183 lowered the room by 3.5 (brighter, shifted highlights); keep the room where it was
-  const room = new RoomEnvironment();
-  room.position.y = 0;
-  scene.environment = pmrem.fromScene(room, 0.04).texture;
-  room.dispose();
+  // the sky gradient fills the screen behind everything, untouched by tone mapping as before
+  const sky = skyTexture();
+  scene.backgroundNode = vec4(untoneNode(texture(sky, screenUV.flipY()).rgb), 1);
+  // Fog is mixed in after tone mapping, toward '#d9e6ec' as it appears on screen, as under WebGL
+  // (see the output setup below), so it isn't a scene.fog: three would mix that in before.
+  const fogNear = uniform(22), fogFar = uniform(52);
+  const fogColor = vec3(0xd9 / 255, 0xe6 / 255, 0xec / 255);
+  let pmrem = null;
   // r181–r186 PBR made diffuse surfaces a little darker; 0.55 (was 0.5) matches the old look
   scene.environmentIntensity = 0.55;
 
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 120);
-  const controls = new OrbitControls(camera, renderer.domElement);
+  const controls = new OrbitControls(camera, el);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
   controls.enablePan = true;
@@ -736,6 +759,8 @@ export function createScene(container, { onPick, onHover } = {}) {
   const pieces = new THREE.Group();
   scene.add(pieces);
   const markers = new THREE.Group();
+  // after the see-through sea rings, which would tint the far markers
+  markers.renderOrder = 1;
   scene.add(markers);
   const fx = new THREE.Group();
   scene.add(fx);
@@ -1021,7 +1046,7 @@ export function createScene(container, { onPick, onHover } = {}) {
   const ndc = new THREE.Vector2();
   function hitAt(ev) {
     if (!targets) return null;
-    const rect = renderer.domElement.getBoundingClientRect();
+    const rect = el.getBoundingClientRect();
     ndc.set(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
     const hits = ray.intersectObjects(markers.children.filter((m) => m.userData.vis), false);
@@ -1033,7 +1058,6 @@ export function createScene(container, { onPick, onHover } = {}) {
     return null;
   }
   let down = null;
-  const el = renderer.domElement;
   const onDown = (ev) => (down = { x: ev.clientX, y: ev.clientY, t: performance.now() });
   const onUp = (ev) => {
     if (!down) return;
@@ -1122,12 +1146,11 @@ export function createScene(container, { onPick, onHover } = {}) {
     Object.assign(cam, { left: -7.5 * next, right: 7.5 * next, top: 7.5 * next, bottom: -7.5 * next, far: 30 * next });
     cam.updateProjectionMatrix();
     sun.position.set(-6, 12, 6).multiplyScalar(Math.max(1, next));
+    // the WebGPU shadow node resizes its map to mapSize on the next frame
     sun.shadow.mapSize.set(next > 1.1 ? 3072 : 2048, next > 1.1 ? 3072 : 2048);
-    sun.shadow.map?.dispose();
-    sun.shadow.map = null;
     controls.maxDistance = 24 * next;
-    scene.fog.near = 22 * next;
-    scene.fog.far = 52 * next;
+    fogNear.value = 22 * next;
+    fogFar.value = 52 * next;
     if (next !== scale) {
       scale = next;
       anims = anims.filter((a) => !a.camera);
@@ -1208,7 +1231,7 @@ export function createScene(container, { onPick, onHover } = {}) {
     const aspect = w / h;
     camera.aspect = aspect;
     camera.updateProjectionMatrix();
-    renderer.setSize(w, h, false);
+    renderer?.setSize(w, h, false);
     const dist = scale * (aspect >= 1.2 ? 14.2 : Math.min(28, 14.2 * (1.25 / Math.max(aspect, 0.45)) ** 0.9));
     const polar = aspect >= 1 ? 0.78 : 0.62;
     const pos = new THREE.Vector3().setFromSphericalCoords(dist, polar, 0).add(controls.target);
@@ -1229,7 +1252,7 @@ export function createScene(container, { onPick, onHover } = {}) {
     const w = container.clientWidth, h = container.clientHeight;
     camera.aspect = w / Math.max(1, h);
     camera.updateProjectionMatrix();
-    renderer.setSize(w, h, false);
+    renderer?.setSize(w, h, false);
   });
   ro.observe(container);
   fitCamera(true);
@@ -1237,7 +1260,6 @@ export function createScene(container, { onPick, onHover } = {}) {
   // ---------- loop ----------
   let raf = 0;
   const timer = new THREE.Timer();
-  timer.reset(); // count from the first frame, as THREE.Clock did
   function frame() {
     if (destroyed) return;
     raf = requestAnimationFrame(frame);
@@ -1272,9 +1294,61 @@ export function createScene(container, { onPick, onHover } = {}) {
     controls.update();
     renderer.render(scene, camera);
   }
-  frame();
+
+  function applyQuality() {
+    if (!renderer) return;
+    // materials pick up the shadow switch by themselves (it is part of their cache key)
+    renderer.shadowMap.enabled = highQuality;
+    renderer.setPixelRatio(highQuality ? Math.min(window.devicePixelRatio || 1, 2) : 1);
+    renderer.setSize(container.clientWidth, container.clientHeight, false);
+  }
+
+  // The renderer starts asynchronously. WebGPU when the browser offers an adapter, otherwise
+  // WebGPURenderer's WebGL 2 backend, asked for up front (so three doesn't warn about falling
+  // back). The API below works straight away; drawing starts once the renderer is ready.
+  async function start() {
+    const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' }).catch(() => null);
+    if (destroyed) return;
+    renderer = new THREE.WebGPURenderer({ canvas: el, antialias: true, powerPreference: 'high-performance', forceWebGL: !adapter });
+    // Tone mapping (ACES, exposure 1.05) and the sRGB encode happen in each material (see below),
+    // not in a full-screen pass afterwards, so the renderer draws (and antialiases) straight to the
+    // canvas with no half-float buffer in between.
+    renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+    renderer.toneMapping = THREE.NoToneMapping;
+    renderer.toneMappingExposure = EXPOSURE;
+    // PCFShadowMap is the soft one (see sun.shadow.radius)
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+    applyQuality();
+    await renderer.init();
+    if (destroyed) return;
+    pmrem = new THREE.PMREMGenerator(renderer);
+    // three r183 lowered the room by 3.5 (brighter, shifted highlights); keep the room where it was
+    const room = new RoomEnvironment();
+    room.position.y = 0;
+    scene.environment = pmrem.fromScene(room, 0.04).texture;
+    room.dispose();
+    // Every material maps and encodes its own colour as it draws, exactly as the WebGL renderer did,
+    // so toneMapped: false (the yellow markers) still works and see-through things blend the same
+    // way. The fog goes on last, in screen colours, again as under WebGL. Installed after the
+    // environment map is made: that has to stay linear HDR.
+    renderer.contextNode = context({
+      ...renderer.contextNode.getFlowContextData(),
+      getOutput: (color, builder) => {
+        if (builder.renderer.getRenderTarget() !== null) return color; // shadow maps
+        const mat = builder.material;
+        const out = renderOutput(color, mat?.toneMapped === false ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping, THREE.SRGBColorSpace);
+        out.premultipliedAlpha = !!mat?.premultipliedAlpha;
+        if (mat?.fog === false) return out;
+        return vec4(mix(out.rgb, fogColor, rangeFogFactor(fogNear, fogFar)), out.a);
+      },
+    });
+    timer.reset(); // count from the first frame, as THREE.Clock did
+    frame();
+  }
+  const ready = start();
 
   return {
+    ready,
     setBoard,
     sync,
     setTargets,
@@ -1291,11 +1365,8 @@ export function createScene(container, { onPick, onHover } = {}) {
       controls.update();
     },
     setQuality(high) {
-      renderer.shadowMap.enabled = high;
-      renderer.setPixelRatio(high ? Math.min(window.devicePixelRatio || 1, 2) : 1);
-      scene.traverse((m) => m.material && (m.material.needsUpdate = true));
-      const w = container.clientWidth, h = container.clientHeight;
-      renderer.setSize(w, h, false);
+      highQuality = high;
+      applyQuality();
     },
     destroy() {
       destroyed = true;
@@ -1306,8 +1377,10 @@ export function createScene(container, { onPick, onHover } = {}) {
       el.removeEventListener('pointermove', onMove);
       controls.dispose();
       timer.dispose();
-      renderer.dispose();
-      pmrem.dispose();
+      scene.environment?.dispose();
+      sky.dispose();
+      pmrem?.dispose();
+      renderer?.dispose();
       el.remove();
     },
   };

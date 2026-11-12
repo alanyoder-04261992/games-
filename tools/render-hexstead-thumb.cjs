@@ -36,11 +36,12 @@ const BASE = process.env.BASE || 'http://localhost:8080';
       }
       const view = E.view(s, 0);
       const scene = createScene(document.getElementById('s'));
+      await scene.ready;
       scene.setBoard(view);
       scene.sync(view, { animate: false });
       scene.setCamera({ distance: 8.6, polar: 0.98, azimuth: 0.32, target: [0.15, 0, 0.55] });
       scene.rollDice([6, 2]);
-      window.__ready = new Promise((r) => setTimeout(r, 2600));
+      window.__ready = new Promise((r) => setTimeout(r, 2600)); // after ready: let the dice settle
     },
     { base: BASE, seed: SEED, actions: ACTIONS },
   );

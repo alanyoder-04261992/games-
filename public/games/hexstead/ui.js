@@ -41,8 +41,14 @@ export function mount(ctx) {
   let quality = ctx.prefs.get('hx.quality') ?? 'high';
   const autoDecline = () => ctx.prefs.get('hx.autoDecline') ?? false;
 
+  let gone = false;
+  const noGL = (e) => {
+    console.error(e);
+    stage3d.append(h('div.hx-nogl', h('strong', '3D graphics are not available on this device.'), h('p', 'Hexstead needs WebGPU or WebGL 2. Try another browser or turn on hardware acceleration.')));
+  };
   import('./scene.js')
     .then(({ createScene }) => {
+      if (gone) return;
       try {
         scene = createScene(stage3d, { onPick: pick });
         if (quality === 'low') scene.setQuality(false);
@@ -52,9 +58,17 @@ export function mount(ctx) {
           updateTargets();
         }
       } catch (e) {
-        console.error(e);
-        stage3d.append(h('div.hx-nogl', h('strong', '3D graphics are not available on this device.'), h('p', 'Hexstead needs WebGL. Try another browser or turn on hardware acceleration.')));
+        noGL(e);
+        return;
       }
+      // the renderer starts asynchronously; if neither WebGPU nor WebGL 2 comes up, say so
+      const s = scene;
+      s.ready.catch((e) => {
+        if (gone || scene !== s) return;
+        s.destroy();
+        scene = null;
+        noGL(e);
+      });
     })
     .catch((e) => {
       console.error(e);
@@ -746,6 +760,7 @@ export function mount(ctx) {
 
   return {
     destroy() {
+      gone = true;
       off.forEach((f) => f());
       scene?.destroy();
       scene = null;
