@@ -215,7 +215,7 @@ table.res i{display:inline-block;width:10px;height:10px;border-radius:2px;margin
 // Three.js r187 drawing with WebGPU (WebGPURenderer falls back to WebGL2 by itself), through
 // the import map above so the add-ons share one copy of it. Shaders are written in TSL.
 import * as THREE from 'three/webgpu';
-import { Fn, uniform, texture, uv, vec2, vec3, vec4, float, mix, smoothstep, pow, exp, dot, normalize, reflect, cos, positionWorld, positionGeometry, normalGeometry, cameraPosition, positionView, screenDPR, instancedDynamicBufferAttribute, pass, sample, unpackRGBToNormal } from 'three/tsl';
+import { Fn, uniform, texture, uv, vec2, vec3, vec4, float, mix, smoothstep, pow, exp, dot, normalize, reflect, cos, positionWorld, positionGeometry, normalGeometry, cameraPosition, positionView, screenDPR, instancedDynamicBufferAttribute, pass, sample, rtt, unpackRGBToNormal } from 'three/tsl';
 import { SkyMesh } from 'three/addons/objects/SkyMesh.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -268,8 +268,10 @@ const BOOTQ = QUALITY[settings.quality] || QUALITY.medium;
 //  Renderer, sky, light
 // =====================================================================
 const canvas = $('gl');
-// WebGPU where the browser has it, WebGL2 otherwise (the renderer picks; nothing else changes)
-const renderer = new THREE.WebGPURenderer({ canvas, antialias: BOOTQ.aa, powerPreference: 'high-performance' });
+// WebGPU where the browser has it, WebGL2 otherwise (nothing else changes). Asking for an
+// adapter first is the same test the renderer makes; choosing WebGL2 up front saves its warning.
+const hasWebGPU = await (async () => { try { return !!(navigator.gpu && await navigator.gpu.requestAdapter()); } catch (e) { return false; } })();
+const renderer = new THREE.WebGPURenderer({ canvas, antialias: BOOTQ.aa, powerPreference: 'high-performance', forceWebGL: !hasWebGPU });
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, BOOTQ.pr));
 renderer.setSize(innerWidth, innerHeight, false);
 renderer.shadowMap.enabled = BOOTQ.shadows; renderer.shadowMap.type = THREE.PCFShadowMap; // r186+: PCF is the soft filter
@@ -1580,15 +1582,17 @@ async function setupPost() {
     const preColor = pre.getTextureNode(), depth = pre.getTextureNode('depth');
     const normal = sample(c => unpackRGBToNormal(preColor.sample(c)));
     // ground-truth ambient occlusion: soft contact shading under cars, round barns, in the trees
-    const aoNode = ao(depth, normal, camera);
+    // at half resolution (soft shading needs no more), then denoised once into its own half-size texture
+    const aoNode = ao(depth, normal, camera); aoNode.resolutionScale = 0.5;
     aoNode.radius.value = 1.6; aoNode.thickness.value = 1.5; aoNode.scale.value = 1.1; aoNode.samples.value = 16;
-    const aoSoft = denoise(aoNode.getTextureNode(), depth, normal, camera);
-    aoSoft.lumaPhi.value = 10; aoSoft.depthPhi.value = 2; aoSoft.normalPhi.value = 3; aoSoft.radius.value = 6;
+    const aoDen = denoise(aoNode.getTextureNode(), depth, normal, camera);
+    aoDen.lumaPhi.value = 10; aoDen.depthPhi.value = 2; aoDen.normalPhi.value = 3; aoDen.radius.value = 6;
+    const aoSoft = rtt(aoDen, null, null, { resolutionScale: 0.5, depthBuffer: false });
     const scenePass = pass(scene, camera);
     const shaded = scenePass.getTextureNode().rgb.mul(mix(float(1), aoSoft.r, 0.85));
     const glow = bloom(shaded, 0.2, 0.35, 1.45);
     pipeline.outputNode = vec4(shaded.add(glow.rgb), 1);
-    postFX = { pipeline, ao: aoNode, nodes: [pre, aoNode, aoSoft, scenePass, glow] };
+    postFX = { pipeline, ao: aoNode, nodes: [pre, aoNode, aoDen, aoSoft, scenePass, glow] };
   } catch (e) { console.warn('post-processing unavailable', e); postFX = null; }
 }
 function disposePost() { if (!postFX) return; for (const n of postFX.nodes) n.dispose(); postFX.pipeline.dispose(); postFX = null; }

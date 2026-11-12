@@ -3,7 +3,7 @@
 // with brick stacks, snowy quarry peaks, harbors with piers and sailboats, painted wooden
 // homesteads, barns with silos, trails, a bandit in a wide-brim hat, and dice that tumble.
 import * as THREE from '../../vendor/three/three.webgpu.min.js';
-import { vec3, vec4, texture, screenUV } from '../../vendor/three/three.tsl.min.js';
+import { Fn, vec3, vec4, float, mix, texture, screenUV, uniform, output, rangeFogFactor, acesFilmicToneMapping, sRGBTransferOETF, sRGBTransferEOTF } from '../../vendor/three/three.tsl.min.js';
 import { OrbitControls } from '../../vendor/three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from '../../vendor/three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from '../../vendor/three/addons/geometries/RoundedBoxGeometry.js';
@@ -688,8 +688,16 @@ export function createScene(container, { onPick, onHover } = {}) {
   // the sky gradient fills the screen behind everything, untouched by tone mapping as before
   const sky = skyTexture();
   scene.backgroundNode = vec4(untoneNode(texture(sky, screenUV.flipY()).rgb), 1);
-  // fog is mixed in before tone mapping now; untone it so the far sea still fades to '#d9e6ec'
-  scene.fog = new THREE.Fog(untone('#d9e6ec'), 22, 52);
+  // Fog. WebGLRenderer mixed it in after tone mapping, in screen colours; WebGPURenderer would mix
+  // it in before (so the far sea turned pale sooner and greyer). This fog node does it the old way:
+  // tone-map the surface, mix with '#d9e6ec' in sRGB, then untone() the result.
+  const fogNear = uniform(22), fogFar = uniform(52);
+  scene.fogNode = Fn(() => {
+    const f = rangeFogFactor(fogNear, fogFar);
+    const shown = sRGBTransferOETF(acesFilmicToneMapping(output.rgb, float(EXPOSURE)));
+    const fogged = untoneNode(sRGBTransferEOTF(mix(shown, vec3(0xd9 / 255, 0xe6 / 255, 0xec / 255), f)));
+    return vec4(f.greaterThan(0).select(fogged, output.rgb), output.a);
+  })();
   let pmrem = null;
   // r181–r186 PBR made diffuse surfaces a little darker; 0.55 (was 0.5) matches the old look
   scene.environmentIntensity = 0.55;
@@ -1168,8 +1176,8 @@ export function createScene(container, { onPick, onHover } = {}) {
     // the WebGPU shadow node resizes its map to mapSize on the next frame
     sun.shadow.mapSize.set(next > 1.1 ? 3072 : 2048, next > 1.1 ? 3072 : 2048);
     controls.maxDistance = 24 * next;
-    scene.fog.near = 22 * next;
-    scene.fog.far = 52 * next;
+    fogNear.value = 22 * next;
+    fogFar.value = 52 * next;
     if (next !== scale) {
       scale = next;
       anims = anims.filter((a) => !a.camera);
