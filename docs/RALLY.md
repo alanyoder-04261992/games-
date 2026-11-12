@@ -32,7 +32,9 @@ Each circuit is a closed spline. The road heights follow the land, smoothed into
 
 Each car is a two-axle model with slip-angle tyres. Weight shifts under braking and acceleration, every tyre has a friction circle (a braking or spinning tyre has less grip left for cornering), and drag, rolling resistance and hills all count. The rear tyres grip a little more than the fronts, so the cars understeer gently at the limit instead of spinning, except the Brumby, which has the least margin. Off the tarmac there is less grip and more drag, and trees stop you dead.
 
-**Driving assist** counter-steers slides and eases the throttle when the wheels spin. **Auto accelerate** holds the gas so you only steer and brake. Both are in the settings, and the assist is on by default on phones.
+**Full steering is always the tightest turn the tyres can hold.** The steering lock narrows with speed to the angle for the car's grip plus the front tyres' peak slip, so holding a steering button never asks for an angle the tyres can't use. **Stability control** caps how fast the car can rotate at the rate its grip can sustain, so a sharp turn-in carries straight into a clean, steady arc (about 1.1–1.3 g, depending on the car) instead of overshooting into a slide. It is looser with the assist off, loosest in the V8, and off while the handbrake is held, so drifts still work.
+
+**Driving assist** counter-steers real slides (it ignores the small slip of normal cornering) and eases the throttle when the wheels spin. **Auto accelerate** holds the gas so you only steer and brake. Both are in the settings, and the assist is on by default on phones.
 
 ## Computer drivers
 
@@ -48,6 +50,10 @@ They follow a racing line that cuts to the inside of each corner. They steer by 
 - **High setting:** adds sun shadows (r187's `PCFShadowMap`), ground-truth ambient occlusion (`GTAOPass`) for soft shading under cars and buildings and among the trees, a light bloom on the sun, lights and glints, 4× multisampling, a finer terrain and more trees.
 
 Phones default to Medium. Terrain and tree detail change the next time a circuit loads.
+
+## Phone layout
+
+On a phone the map sits at the top centre and the speedometer at the bottom centre, between the thumbs. On short screens (under 430 px tall, typical in landscape with the browser bars and the Game Center header showing), DRIFT moves beside BRAKE and the buttons and readouts shrink a size. Under 300 px they shrink again and the best-lap line is hidden.
 
 ## Playing online
 
