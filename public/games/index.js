@@ -3,5 +3,6 @@
 // line here. Order here is the order of the tiles on the home page.
 export const GAME_MODULES = [
   () => import('./rook/index.js'),
+  () => import('./escape-grind/index.js'),
   () => import('./four-in-a-row/index.js'),
 ];

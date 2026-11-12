@@ -9,6 +9,13 @@ Plain HTML, CSS and JavaScript modules — no build step, hosts anywhere static 
   original app (45-card deck with the Bird, bids 100–200 plus solo 400/800, first lead names
   trump, 1000 to win). Animated dealing and tricks, original card art, Monte Carlo computer
   players, a coach, auto-play helpers and online play for up to four people.
+- **Escape the Grind** — a 3D personal-finance board game for 1–4 players. Start in a job living
+  paycheck to paycheck, buy rentals, shed lots, storage, businesses and stocks, and break out of
+  the Grind once your passive income beats your expenses. Then buy your Dream on the Freedom Ring
+  to win. Full 3D table (Three.js): walnut table, lamp lighting and soft shadows, rolling dice,
+  glossy pawns, cards that fly up to the camera, coin stacks and miniature buildings for everything
+  you own. Plays with mouse, touch, keyboard or a game controller (A choose, B back, Y statement,
+  X camera, right stick orbit, triggers zoom, Start full screen).
 - **Four in a Row** — a small, complete example of how a game plugs in.
 
 ## Online play
@@ -45,8 +52,11 @@ public/                 ← the website (deploy this folder)
   core/                 shell, rooms & networking, sound, helpers
   games/index.js        list of games
   games/rook/           Rook: engine.js, ai.js, ui.js, cards.js (art), rook.css, rules.html
+  games/escape-grind/   Escape the Grind: engine.js, ai.js, cards.js (decks, jobs), scene.js (3D),
+                        textures.js (painted-in-code textures), ui.js (HUD, controller), escape.css
   games/four-in-a-row/  example game
   vendor/peerjs.min.js
+  vendor/three/         Three.js r187 (MIT) and three of its add-ons, copied from node_modules
 tests/                  node --test
 tools/                  local server, local PeerJS server
 docs/ADDING_A_GAME.md   how to add a game
