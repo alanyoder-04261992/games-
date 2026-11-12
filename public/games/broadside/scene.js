@@ -6,7 +6,7 @@
 // north, your own fleet to the south. "Low" quality drops reflections and bloom.
 // Renders with WebGPURenderer, which falls back to WebGL 2 by itself where WebGPU is missing.
 import * as THREE from '../../vendor/three/three.webgpu.min.js';
-import { pass, uniform, vec2, vec3, float, positionWorld, cameraPosition, normalize, reflect, max, dot, pow, length, mix, reflector } from '../../vendor/three/three.tsl.min.js';
+import { pass, context, renderOutput, rangeFogFactor, vec4, uniform, vec2, vec3, float, positionWorld, cameraPosition, normalize, reflect, max, dot, pow, length, mix, reflector } from '../../vendor/three/three.tsl.min.js';
 import { RoundedBoxGeometry } from '../../vendor/three/addons/geometries/RoundedBoxGeometry.js';
 import { WaterMesh } from '../../vendor/three/addons/objects/WaterMesh.js';
 import { SkyMesh } from '../../vendor/three/addons/objects/SkyMesh.js';
@@ -537,7 +537,8 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
   container.append(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog('#c6d9e5', 50, 190);
+  const fog = new THREE.Fog('#c6d9e5', 50, 190);
+  scene.fog = fog;
 
   // the sun sits behind the viewer's left shoulder: ships lit from the front, deep blue sea ahead
   const sunDir = new THREE.Vector3(-0.55, 0.62, 0.56).normalize();
@@ -1215,7 +1216,36 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
     camera.updateProjectionMatrix();
     renderer.setSize(w, h, false);
   }
-  makePipeline();
+  // Two ways to finish a frame, as under WebGL:
+  // - High: the bloom pipeline renders linear HDR and tone-maps + sRGB-encodes once at the end.
+  // - Low: no pipeline. Every material tone-maps (ACES; toneMapped: false skips it), encodes to
+  //   sRGB and then fogs toward the sRGB fog colour as it draws, the way the WebGL renderer drew
+  //   straight to the screen. With NoToneMapping + linear output on the renderer there is no
+  //   half-float framebuffer and no full-screen output pass: anti-aliasing goes straight to the
+  //   canvas, and see-through layers blend in display space as they used to.
+  // Off-screen renders (shadow maps, the sea's reflection) stay linear in both.
+  const linearContext = renderer.contextNode;
+  const fogSRGB = uniform(fog.color.clone().convertLinearToSRGB());
+  const directContext = context({
+    ...linearContext.getFlowContextData(),
+    getOutput: (color, builder) => {
+      if (builder.renderer.getRenderTarget() !== null) return color;
+      const mat = builder.material;
+      const out = renderOutput(color, mat?.toneMapped === false ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping, THREE.SRGBColorSpace);
+      out.premultipliedAlpha = !!mat?.premultipliedAlpha;
+      if (!mat || mat.fog === false) return out;
+      return vec4(mix(out.rgb, fogSRGB, rangeFogFactor(fog.near, fog.far)), out.a);
+    },
+  });
+  function applyOutputStyle() {
+    // swapping the context node changes every render object's cache key, so materials rebuild once
+    renderer.contextNode = high ? linearContext : directContext;
+    renderer.toneMapping = high ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+    renderer.outputColorSpace = high ? THREE.SRGBColorSpace : THREE.LinearSRGBColorSpace;
+    scene.fog = high ? fog : null; // on Low the fog is added in the materials' output instead
+  }
+  applyOutputStyle();
+  makePipeline(); // after applyOutputStyle: the pipeline takes the renderer's tone mapping when built
   buildBoards(10);
   renderer.setAnimationLoop(frame);
 
@@ -1232,6 +1262,7 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
       renderer.setSize(container.clientWidth, container.clientHeight, false);
       sun.shadow.mapSize.set(high ? 2048 : 1024, high ? 2048 : 1024); // the shadow map resizes itself
       makeWater();
+      applyOutputStyle();
       makePipeline();
     },
     setSize(size) {
