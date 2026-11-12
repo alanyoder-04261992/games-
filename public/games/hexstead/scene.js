@@ -1174,6 +1174,7 @@ export function createScene(container, { onPick, onHover } = {}) {
       const from = new THREE.Vector3().setFromSphericalCoords(dist * 1.5, 0.25, -0.9).add(controls.target);
       camera.position.copy(from);
       anims.push({
+        camera: true,
         t0: performance.now() + 100,
         dur: 2200,
         step(k) {
@@ -1238,6 +1239,14 @@ export function createScene(container, { onPick, onHover } = {}) {
     pulseNumber,
     floatGains,
     resetCamera: () => fitCamera(false),
+    // place the camera by hand (used to render the home-page thumbnail)
+    setCamera({ distance, polar, azimuth = 0, target = [0, 0, 0.9] }) {
+      intro = false;
+      anims = anims.filter((a) => !a.camera);
+      controls.target.set(...target);
+      camera.position.setFromSphericalCoords(distance, polar, azimuth).add(controls.target);
+      controls.update();
+    },
     setQuality(high) {
       renderer.shadowMap.enabled = high;
       renderer.setPixelRatio(high ? Math.min(window.devicePixelRatio || 1, 2) : 1);
