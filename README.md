@@ -15,8 +15,8 @@ Plain HTML, CSS and JavaScript modules — no build step, hosts anywhere static 
   tree, sheep, house, barn, boat and die is modelled in code — no image or model files.
   Computer players at three levels, up to 8 players: 5–6 play on a 30-tile Big island and
   7–8 on a 37-tile Grand island, with "barn raising" so everyone can build between turns.
-- **Broadside** — an original two-admiral naval battle on a 3D sea: hide your fleet, then trade
-  shots. Shells arc in, misses throw up water columns, hits start fires, and sunk ships roll over
+- **Broadside** — an original two-admiral naval battle on a 3D sea (three.js r187: reflective
+  water, a sky with drifting clouds, bloom): hide your fleet, then trade shots. Shells arc in, misses throw up water columns, hits start fires, and sunk ships roll over
   and go down. 8×8, 10×10 or 12×12 seas; one shot a turn, chain fire or barrage; computer
   admirals that hunt down your remaining ships.
 - **Four in a Row** — a small, complete example of how a game plugs in.
@@ -65,7 +65,8 @@ public/                 ← the website (deploy this folder)
   games/four-in-a-row/  example game
   games/dogfight/       Coastal Dogfight: play.html (the game), index.js, ui.js (frame bridge)
   vendor/peerjs.min.js
-  vendor/three/         three.js r169 (MIT) + OrbitControls, RoomEnvironment, RoundedBoxGeometry
+  vendor/three/         three.js r169 (MIT) + OrbitControls, RoomEnvironment, RoundedBoxGeometry (Hexstead)
+  vendor/three-r187/    three.js r187 (MIT), minified, + Water, Sky, bloom post-processing (Broadside)
 tests/                  node --test
 tools/                  local server, local PeerJS server
 docs/ADDING_A_GAME.md   how to add a game

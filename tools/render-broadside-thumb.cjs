@@ -39,7 +39,7 @@ const BASE = process.env.BASE || 'http://localhost:8080';
     const z = scene.boardZ(0);
     // after the first resize (which re-frames the camera), move it in low across the fleet
     await new Promise((r) => setTimeout(r, 400));
-    scene.setCamera([6.5, 4.2, z + 9.5], [0.6, 0, z + 0.4]);
+    scene.setCamera([-6, 6.2, z + 8.6], [0.4, 0, z - 0.3]);
     setTimeout(() => scene.fire({ board: 0, i: cell(2, 5), hit: true, from: 1 }), 1400);
     window.__ready = new Promise((r) => setTimeout(r, 1400 + 950 + 160));
   }, BASE);

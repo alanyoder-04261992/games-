@@ -41,7 +41,7 @@ export function mount(ctx) {
   import('./scene.js')
     .then(({ createScene }) => {
       try {
-        scene = createScene(stage, { onCell, onHover });
+        scene = createScene(stage, { onCell, onHover, quality: ctx.prefs.get('bs.quality') ?? 'high' });
         if (view) sync(true);
       } catch (e) {
         console.error(e);
@@ -478,5 +478,15 @@ export function mount(ctx) {
       scene = null;
       root.remove();
     },
+    settings: () => [
+      {
+        label: 'High quality graphics (sea reflections, glowing fire and lights)',
+        value: (ctx.prefs.get('bs.quality') ?? 'high') === 'high',
+        set: (v) => {
+          ctx.prefs.set('bs.quality', v ? 'high' : 'low');
+          scene?.setQuality(v ? 'high' : 'low');
+        },
+      },
+    ],
   };
 }
