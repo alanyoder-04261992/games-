@@ -26,10 +26,24 @@ import {
   teamOf,
 } from './engine.js';
 
+// Tuning per difficulty.
+//   playSamples / bidSamples / discardSamples: practice deals per decision (0 = rule of thumb only)
+//   makeChance: bid up to what the hand makes this often in practice deals
+//   fair: practice deals for bidding and burying use players who can't see other hands
+//   planV2: pick trump and burials by counting sure winners (top runs) rather than card values
+//   fairNatural: the "natural" tie-break card comes from what this seat can actually see
+//   bidderTrumps: practice deals give another seat that took the bid at least this many trumps
+//   (benchmarked against the original card-game app's bot; see the PR notes)
 export const LEVELS = {
-  easy: { label: 'Easy', playSamples: 0, bidSamples: 50, makeChance: 0.75, noise: 0.25, discardSamples: 0 },
-  normal: { label: 'Normal', playSamples: 36, bidSamples: 140, makeChance: 0.62, noise: 0, discardSamples: 30 },
-  hard: { label: 'Expert', playSamples: 110, bidSamples: 260, makeChance: 0.6, noise: 0, discardSamples: 70 },
+  easy: { label: 'Easy', playSamples: 0, bidSamples: 50, makeChance: 0.75, noise: 0.25, discardSamples: 0, fairNatural: true },
+  normal: {
+    label: 'Normal', playSamples: 36, bidSamples: 110, makeChance: 0.6, noise: 0, discardSamples: 30, discardCandidates: 5,
+    fair: true, planV2: true, fairNatural: true, bidderTrumps: 5,
+  },
+  hard: {
+    label: 'Expert', playSamples: 160, bidSamples: 260, makeChance: 0.56, noise: 0, discardSamples: 55, discardCandidates: 8,
+    fair: true, planV2: true, fairNatural: true, bidderTrumps: 5,
+  },
 };
 
 // ---- small seeded rng so bots are reproducible per decision ----
@@ -147,7 +161,10 @@ function simPlay(sim, seat, card, trumpChoice) {
   }
   const w = currentWinner(sim.plays, sim.trump).seat;
   let p = 0;
-  for (const pl of sim.plays) p += pts(pl.card);
+  for (const pl of sim.plays) {
+    p += pts(pl.card);
+    if (sim.played) sim.played.add(pl.card);
+  }
   sim.points[teamOf(w)] += p;
   sim.plays = [];
   sim.tricksLeft--;
@@ -157,9 +174,10 @@ function simPlay(sim, seat, card, trumpChoice) {
 }
 
 function rollout(sim) {
+  const fair = sim.played && sim.deck;
   while (sim.tricksLeft > 0) {
     const seat = sim.turn;
-    const choice = policy(sim, seat);
+    const choice = fair ? fairPolicy(sim, seat) : policy(sim, seat);
     simPlay(sim, seat, choice.card, choice.trump);
   }
   return sim.points;
@@ -180,6 +198,7 @@ function utility(points, sim, team) {
 function cloneSim(sim) {
   return {
     ...sim,
+    played: sim.played ? new Set(sim.played) : sim.played,
     hands: sim.hands.map((h) => h.slice()),
     plays: sim.plays.slice(),
     points: sim.points.slice(),
@@ -316,6 +335,67 @@ function policy(sim, seat) {
   return { card: sorted[0] };
 }
 
+
+// Rule-of-thumb player that only uses what the seat could know: its own hand and the cards
+// already played. Rollouts with it don't overrate positions the way all-seeing ones do.
+function fairPolicy(sim, seat) {
+  const trump = sim.trump;
+  const hand = sim.hands[seat];
+  const legal = simLegal(sim, seat);
+  if (trump == null) return policy(sim, seat);
+  if (legal.length === 1) return { card: legal[0] };
+  const inTrick = new Set(sim.plays.map((p) => p.card));
+  const mine = new Set(hand);
+  const unseen = [];
+  for (const c of sim.deck) if (!sim.played.has(c) && !mine.has(c) && !inTrick.has(c) && !sim.gone?.has(c)) unseen.push(c);
+  const trumpsOut = unseen.some((c) => isTrump(c, trump));
+  const isBoss = (card) => {
+    const su = simSuit(card, trump);
+    const st = strength(card, trump);
+    for (const u of unseen) if (simSuit(u, trump) === su && strength(u, trump) > st) return false;
+    return true;
+  };
+  const lowest = (cards) => cards.reduce((a, b) => (pts(b) * 100 + strength(b, trump) < pts(a) * 100 + strength(a, trump) ? b : a));
+  const richest = (cards) => cards.reduce((a, b) => (pts(b) * 100 - strength(b, trump) > pts(a) * 100 - strength(a, trump) ? b : a));
+  const onBidTeam = teamOf(seat) === teamOf(sim.bidder);
+
+  if (!sim.plays.length) {
+    const trumps = legal.filter((c) => isTrump(c, trump));
+    if (onBidTeam && trumps.length && trumpsOut) {
+      const top = trumps.reduce((a, b) => (strength(b, trump) > strength(a, trump) ? b : a));
+      if (isBoss(top)) return { card: top };
+      const draws = trumps.filter((c) => pts(c) === 0 && strength(c, trump) > strength(BIRD, trump));
+      if (draws.length) return { card: draws.reduce((a, b) => (strength(b, trump) > strength(a, trump) ? b : a)) };
+    }
+    const bosses = legal.filter((c) => !isTrump(c, trump) && isBoss(c));
+    if (bosses.length) return { card: richest(bosses) };
+    if (onBidTeam && trumps.length >= 3 && trumpsOut) return { card: lowest(trumps) };
+    const side = legal.filter((c) => !isTrump(c, trump));
+    return { card: lowest(side.length ? side : legal) };
+  }
+
+  const led = simSuit(sim.plays[0].card, trump);
+  const best = currentWinner(sim.plays, trump);
+  const size = sim.sittingOut == null ? 4 : 3;
+  const last = sim.plays.length === size - 1;
+  const partnerWinning = teamOf(best.seat) === teamOf(seat);
+  const bestSafe = isBoss(best.card) && (isTrump(best.card, trump) || !trumpsOut);
+  if (partnerWinning) return { card: last || bestSafe ? richest(legal) : lowest(legal) };
+
+  let trickPts = 0;
+  for (const p of sim.plays) trickPts += pts(p.card);
+  const bigTrumpOut = unseen.some((u) => isTrump(u, trump) && pts(u) >= 10);
+  const holdTop = hand.length > 1 && trickPts < 10 && bigTrumpOut;
+  const winners = legal.filter((c) => beats(c, best.card, led, trump) && !(holdTop && isTrump(c, trump) && isBoss(c)));
+  if (winners.length) {
+    if (last) return { card: richest(winners) };
+    const safe = winners.filter((c) => isBoss(c) && (isTrump(c, trump) || !trumpsOut));
+    if (safe.length) return { card: richest(safe) };
+    if (trickPts >= 10) return { card: winners.reduce((a, b) => (strength(b, trump) > strength(a, trump) ? b : a)) };
+  }
+  return { card: lowest(legal) };
+}
+
 function remainingCanBeatLead(sim, seat, card) {
   const led = simSuit(card, sim.trump);
   for (let s = 0; s < 4; s++) {
@@ -352,7 +432,7 @@ function voidsFromTricks(view) {
 }
 
 // Build a sampler that deals the unseen cards to the other seats.
-function makeSampler(view, rnd) {
+function makeSampler(view, rnd, cfg = {}) {
   const deck = fullDeck(view.options);
   const known = new Set([...view.hand, ...playedCards(view), ...view.myDiscards]);
   const unseen = deck.filter((c) => !known.has(c));
@@ -362,15 +442,34 @@ function makeSampler(view, rnd) {
   const others = [0, 1, 2, 3].filter((s) => s !== me && sizes[s] > 0);
   const bidder = view.contract?.bidder;
   const trump = view.trump;
+  // A bidder nearly always holds plenty of trump: make sure samples give them enough.
+  let needed = 0;
+  if (cfg.bidderTrumps && trump && bidder != null && bidder !== me && !voids[bidder].has(trump)) {
+    const want = (view.contract.solo ? 1 : 0) + (handSize(view.options) > 7 ? cfg.bidderTrumps : cfg.bidderTrumps - 1);
+    let played = 0;
+    for (const t of view.tricks) for (const p of t.plays) if (p.seat === bidder && isTrump(p.card, trump)) played++;
+    if (view.trick) for (const p of view.trick.plays) if (p.seat === bidder && isTrump(p.card, trump)) played++;
+    needed = Math.min(Math.max(0, want - played), sizes[bidder]);
+  }
 
   return function sample() {
     for (let attempt = 0; attempt < 30; attempt++) {
-      const pool = shuffle(unseen.slice(), rnd);
+      let pool = shuffle(unseen.slice(), rnd);
       const hands = [[], [], [], []];
       hands[me] = view.hand.slice();
       const room = sizes.slice();
       room[me] = 0;
+      if (needed && attempt < 20) {
+        const rest = [];
+        for (const c of pool) {
+          if (hands[bidder].length < needed && isTrump(c, trump)) hands[bidder].push(c);
+          else rest.push(c);
+        }
+        room[bidder] -= hands[bidder].length;
+        pool = rest;
+      }
       let hiddenRoom = pool.length - others.reduce((a, s) => a + room[s], 0);
+      let hiddenPts = 0;
       let ok = true;
       // place most-constrained cards first: trumps (bidder bias) then the rest
       for (const c of pool) {
@@ -381,7 +480,7 @@ function makeSampler(view, rnd) {
           if (room[s] <= 0) continue;
           if (suit && voids[s].has(suit)) continue;
           let w = room[s];
-          if (trump && s === bidder && isTrump(c, trump)) w *= 2.4;
+          if (trump && s === bidder && isTrump(c, trump)) w *= cfg.bidderBias ?? 2.4;
           cands.push([s, w]);
           total += w;
         }
@@ -401,13 +500,18 @@ function makeSampler(view, rnd) {
             break;
           }
         }
-        if (pick === -1) hiddenRoom--;
-        else {
+        if (pick === -1) {
+          hiddenRoom--;
+          hiddenPts += pts(c);
+        } else {
           hands[pick].push(c);
           room[pick]--;
         }
       }
-      if (ok) return hands;
+      if (ok) {
+        hands.hiddenPts = hiddenPts;
+        return hands;
+      }
     }
     // give up on constraints
     const pool = shuffle(unseen.slice(), rnd);
@@ -426,9 +530,13 @@ function buriedPoints(view) {
   return 12;
 }
 
-function simFromView(view, hands) {
+function simFromView(view, hands, fair) {
   const total = handSize(view.options);
+  let buried = buriedPoints(view);
+  if (!view.myDiscards.length && hands.hiddenPts !== undefined && !view.contract.solo) buried = hands.hiddenPts;
   return {
+    deck: fair ? fullDeck(view.options) : undefined,
+    played: fair ? new Set(playedCards(view).filter((c) => !view.trick.plays.some((p) => p.card === c))) : undefined,
     hands,
     trump: view.trump,
     plays: view.trick.plays.slice(),
@@ -439,7 +547,7 @@ function simFromView(view, hands) {
     bidder: view.contract.bidder,
     amount: view.contract.amount,
     solo: view.contract.solo,
-    buried: buriedPoints(view),
+    buried,
   };
 }
 
@@ -447,12 +555,18 @@ function simFromView(view, hands) {
 // Card play
 // =====================================================================
 function choosePlay(view, legalActions, cfg, rnd) {
-  const sampler = makeSampler(view, rnd);
+  const sampler = makeSampler(view, rnd, cfg);
   const team = teamOf(view.seat);
   // natural move from the rule of thumb, using one sample for hidden hands
   const naturalWorld = sampler();
-  const natSim = simFromView(view, naturalWorld);
-  const nat = policy(natSim, view.seat);
+  let nat;
+  if (cfg.fairNatural && view.trump != null) {
+    const own = [[], [], [], []];
+    own[view.seat] = view.hand.slice();
+    const natSim = simFromView(view, own, true);
+    for (const c of view.myDiscards) natSim.played.add(c);
+    nat = fairPolicy(natSim, view.seat);
+  } else nat = policy(simFromView(view, naturalWorld), view.seat);
   const natKey = nat.card + '|' + (nat.trump || '');
   const keyOf = (a) => a.card + '|' + (a.trump || '');
 
@@ -464,19 +578,27 @@ function choosePlay(view, legalActions, cfg, rnd) {
   // Avoid testing all 4 trump names for a Bird lead: try the two best colors.
   let candidates = legalActions;
   if (view.trump == null) {
-    const ranked = [...COLORS].sort((a, b) => colorScore(view.hand, b) - colorScore(view.hand, a));
+    const deckAll = fullDeck(view.options);
+    const known = new Set([...view.hand, ...view.myDiscards]);
+    const sc = (col) => (cfg.planV2 ? handScore(view.hand, col, known, deckAll) : colorScore(view.hand, col));
+    const ranked = COLORS.filter((col) => view.hand.some((c) => c !== BIRD && colorOf(c) === col)).sort((a, b) => sc(b) - sc(a));
     const keep = new Set(ranked.slice(0, 2));
     candidates = legalActions.filter((a) => a.card !== BIRD || keep.has(a.trump));
   }
 
   const worlds = [];
-  for (let i = 0; i < cfg.playSamples; i++) worlds.push(sampler());
+  // keep the work per decision bounded when there are many candidate cards
+  const samples = Math.max(24, Math.round(cfg.playSamples * Math.min(1, 8 / candidates.length)));
+  for (let i = 0; i < samples; i++) worlds.push(sampler());
   let best = null, bestScore = -Infinity;
   const scores = new Map();
   for (const a of candidates) {
     let total = 0;
     for (const w of worlds) {
-      const sim = simFromView(view, w.map((h) => h.slice()));
+      const hs = w.map((h) => h.slice());
+      hs.hiddenPts = w.hiddenPts;
+      if (!cfg.hiddenPts) delete hs.hiddenPts;
+      const sim = simFromView(view, hs, cfg.fairPlay);
       simPlay(sim, view.seat, a.card, a.trump);
       total += utility(rollout(sim), sim, team);
     }
@@ -523,6 +645,99 @@ function keepValue(card, trump, hand) {
   return v;
 }
 
+
+// ---------------------------------------------------------------------
+// Hand planning without simulation: which cards stand as winners, which to keep.
+// ---------------------------------------------------------------------
+// Cards of a suit (trump includes the Bird) ordered high to low.
+function suitCards(deck, suit, trump) {
+  return deck.filter((c) => simSuit(c, trump) === suit).sort((a, b) => strength(b, trump) - strength(a, trump));
+}
+// How many top cards of the suit are all in `known` (unbeatable by anyone else).
+function topRun(sorted, known) {
+  const run = [];
+  for (const c of sorted) {
+    if (!known.has(c)) break;
+    run.push(c);
+  }
+  return run;
+}
+
+function handScore(keep, trump, known, deck) {
+  const keepSet = new Set(keep);
+  const trumps = keep.filter((c) => isTrump(c, trump));
+  const runTrumps = topRun(suitCards(deck, trump, trump), known).filter((c) => keepSet.has(c)).length;
+  let score = 10 * trumps.length + 8 * runTrumps;
+  for (const col of COLORS) {
+    if (col === trump) continue;
+    const cards = keep.filter((c) => !isTrump(c, trump) && colorOf(c) === col);
+    if (!cards.length) {
+      if (trumps.length >= 3) score += 4;
+      continue;
+    }
+    const run = topRun(suitCards(deck, col, trump), known).filter((c) => keepSet.has(c));
+    score += 7 * run.length - 2;
+    for (const c of cards) if (!run.includes(c)) score -= 0.4 * pts(c);
+  }
+  return score;
+}
+
+function sideOrder(cards, trump, known, deck) {
+  const pri = new Map();
+  for (const col of COLORS) {
+    if (col === trump) continue;
+    const inSuit = cards.filter((c) => colorOf(c) === col);
+    const run = topRun(suitCards(deck, col, trump), known);
+    for (const c of inSuit) pri.set(c, run.includes(c) ? 100 + pts(c) : inSuit.length - pts(c));
+  }
+  return [...cards].sort((a, b) => pri.get(b) - pri.get(a) || strength(a, trump) - strength(b, trump));
+}
+
+function keepFor(cards, trump, known, size, deck) {
+  const trumps = cards.filter((c) => isTrump(c, trump)).sort((a, b) => strength(b, trump) - strength(a, trump));
+  const kept = trumps.slice(0, size);
+  const side = cards.filter((c) => !isTrump(c, trump));
+  return [...kept, ...sideOrder(side, trump, known, deck).slice(0, size - kept.length)];
+}
+
+function quickPlan(cards, size, deck) {
+  const known = new Set(cards);
+  let best = null;
+  for (const trump of COLORS) {
+    if (!cards.some((c) => c !== BIRD && colorOf(c) === trump)) continue;
+    const keep = keepFor(cards, trump, known, size, deck);
+    const score = handScore(keep, trump, known, deck);
+    if (!best || score > best.score) best = { trump, keep, score };
+  }
+  if (!best) best = { trump: COLORS[0], keep: cards.slice(0, size), score: 0 };
+  best.discard = cards.filter((c) => !best.keep.includes(c));
+  return best;
+}
+
+function combos(items, k) {
+  if (k === 0) return [[]];
+  const out = [];
+  for (let i = 0; i <= items.length - k; i++) for (const rest of combos(items.slice(i + 1), k - 1)) out.push([items[i], ...rest]);
+  return out;
+}
+
+function planCandidates(cards, limit, size, deck) {
+  const known = new Set(cards);
+  const out = [];
+  for (const trump of COLORS) {
+    if (!cards.some((c) => c !== BIRD && colorOf(c) === trump)) continue;
+    const trumps = cards.filter((c) => isTrump(c, trump)).sort((a, b) => strength(b, trump) - strength(a, trump));
+    const kept = trumps.slice(0, size);
+    const side = cards.filter((c) => !isTrump(c, trump));
+    for (const extra of combos(side, size - kept.length)) {
+      const keep = [...kept, ...extra];
+      out.push({ trump, keep, discard: cards.filter((c) => !keep.includes(c)), score: handScore(keep, trump, known, deck) });
+    }
+  }
+  out.sort((a, b) => b.score - a.score);
+  return out.slice(0, limit);
+}
+
 function planDiscard(hand, trump, n) {
   const ranked = [...hand].sort((a, b) => keepValue(a, trump, hand) - keepValue(b, trump, hand));
   return ranked.slice(0, n);
@@ -536,8 +751,11 @@ function chooseDiscard(view, cfg, rnd) {
   const n = view.discardCount;
   const hand = view.hand;
   const colors = [...COLORS].sort((a, b) => colorScore(hand, b) - colorScore(hand, a));
-  const plans = [];
-  for (const col of colors.slice(0, cfg.discardSamples ? 3 : 1)) {
+  let plans = [];
+  if (cfg.planV2) {
+    const keepSize = hand.length - n;
+    plans = planCandidates(hand, cfg.discardSamples ? cfg.discardCandidates || 8 : 1, keepSize, fullDeck(view.options));
+  } else for (const col of colors.slice(0, cfg.discardSamples ? 3 : 1)) {
     const d = planDiscard(hand, col, n);
     plans.push({ trump: col, discard: d });
     // a variant that keeps points instead of burying them
@@ -571,6 +789,8 @@ function chooseDiscard(view, cfg, rnd) {
       const hands = w.map((h) => h.slice());
       hands[view.seat] = keep.slice();
       const sim = {
+        deck: cfg.fair ? deck : undefined,
+        played: cfg.fair ? new Set() : undefined,
         hands,
         trump: null,
         plays: [],
@@ -627,10 +847,19 @@ function simulateHand(view, cfg, rnd, { solo = 0 } = {}) {
     } else mineNow.push(...nest);
     if (sittingOut != null) hands[partner] = [];
     const n = mineNow.length - size;
-    const trump = bestTrumpColor(mineNow.filter((c) => c !== BIRD).length ? mineNow : view.hand);
-    const discard = n > 0 ? planDiscard(mineNow, trump, n) : [];
+    let trump, discard;
+    if (cfg.planV2) {
+      const p = quickPlan(mineNow, size, deck);
+      trump = p.trump;
+      discard = p.discard;
+    } else {
+      trump = bestTrumpColor(mineNow.filter((c) => c !== BIRD).length ? mineNow : view.hand);
+      discard = n > 0 ? planDiscard(mineNow, trump, n) : [];
+    }
     hands[me] = mineNow.filter((c) => !discard.includes(c));
     const sim = {
+      deck: cfg.fair ? deck : undefined,
+      played: cfg.fair ? new Set() : undefined,
       hands,
       trump: null,
       plays: [],
