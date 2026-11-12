@@ -4,6 +4,7 @@
 export const GAME_MODULES = [
   () => import('./rook/index.js'),
   () => import('./hexstead/index.js'),
+  () => import('./escape-grind/index.js'),
   () => import('./four-in-a-row/index.js'),
   () => import('./dogfight/index.js'),
 ];
