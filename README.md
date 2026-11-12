@@ -15,6 +15,10 @@ Plain HTML, CSS and JavaScript modules — no build step, hosts anywhere static 
   tree, sheep, house, barn, boat and die is modelled in code — no image or model files.
   Computer players at three levels, up to 8 players: 5–6 play on a 30-tile Big island and
   7–8 on a 37-tile Grand island, with "barn raising" so everyone can build between turns.
+- **Broadside** — an original two-admiral naval battle on a 3D sea: hide your fleet, then trade
+  shots. Shells arc in, misses throw up water columns, hits start fires, and sunk ships roll over
+  and go down. 8×8, 10×10 or 12×12 seas; one shot a turn, chain fire or barrage; computer
+  admirals that hunt down your remaining ships.
 - **Four in a Row** — a small, complete example of how a game plugs in.
 - **Coastal Dogfight** — a real-time 3D flight game: 1940s fighters over a 20 km coastline.
   Up to four pilots team up against waves of raiders (you pick how many per wave and how
