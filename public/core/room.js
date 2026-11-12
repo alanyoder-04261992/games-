@@ -411,6 +411,15 @@ export class HostRoom extends Emitter {
       case 'rematch':
         if (p.isHost && this.game.engine.isOver(this.state)) this.rematch();
         break;
+      case 'rt': {
+        // Real-time channel for action games (see docs/ADDING_A_GAME.md). Relayed to everyone
+        // else at the table as-is: no rules engine, no saving, no seat checks. Games that use
+        // it decide for themselves what each message means.
+        if (!this.started) return;
+        const out = { t: 'rt', from: this.seatOf(playerId), player: playerId, data: msg.data };
+        for (const other of this.players.values()) if (other.id !== playerId && !other.kicked) this.#send(other, out);
+        break;
+      }
     }
   }
 
@@ -563,6 +572,8 @@ class LocalClient extends Emitter {
     this.on('status', (s) => (this.status = s));
   }
   receive(msg) {
+    // real-time messages skip the microtask hop; they are frequent and order-insensitive
+    if (msg.t === 'rt') return dispatch(this, msg);
     // async like a real network, so the UI code path is the same for everyone
     queueMicrotask(() => dispatch(this, msg));
   }
@@ -595,6 +606,9 @@ function dispatch(client, msg) {
       break;
     case 'chat':
       client.emit('chat', msg);
+      break;
+    case 'rt':
+      client.emit('rt', msg);
       break;
     case 'toast':
       client.emit('toast', msg.text);

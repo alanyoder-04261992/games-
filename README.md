@@ -10,6 +10,10 @@ Plain HTML, CSS and JavaScript modules — no build step, hosts anywhere static 
   trump, 1000 to win). Animated dealing and tricks, original card art, Monte Carlo computer
   players, a coach, auto-play helpers and online play for up to four people.
 - **Four in a Row** — a small, complete example of how a game plugs in.
+- **Coastal Dogfight** — a real-time 3D flight game: 1940s fighters over a 20 km coastline.
+  Up to four pilots team up against waves of raiders (you pick how many per wave and how
+  many waves) or fight a free-for-all. Phone touch controls, mouse aim, keyboard and gamepad.
+  Details in [docs/DOGFIGHT.md](docs/DOGFIGHT.md).
 
 ## Online play
 
@@ -48,6 +52,7 @@ public/                 ← the website (deploy this folder)
   games/index.js        list of games
   games/rook/           Rook: engine.js, ai.js, ui.js, cards.js (art), rook.css, rules.html
   games/four-in-a-row/  example game
+  games/dogfight/       Coastal Dogfight: play.html (the game), index.js, ui.js (frame bridge)
   vendor/peerjs.min.js
 tests/                  node --test
 tools/                  local server, local PeerJS server
