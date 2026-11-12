@@ -2,9 +2,9 @@
 // two loops of raised tiles, glossy pawns, rolling dice, flying cards, gold-coin stacks and a
 // tray for each player with miniature buildings for everything they own.
 import * as THREE from '../../vendor/three/three.module.min.js';
-import { RoomEnvironment } from '../../vendor/three/RoomEnvironment.js';
-import { RoundedBoxGeometry } from '../../vendor/three/RoundedBoxGeometry.js';
-import { OrbitControls } from '../../vendor/three/OrbitControls.js';
+import { RoomEnvironment } from '../../vendor/three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from '../../vendor/three/addons/geometries/RoundedBoxGeometry.js';
+import { OrbitControls } from '../../vendor/three/addons/controls/OrbitControls.js';
 import { GRIND, RING, PLAYER_COLORS } from './cards.js';
 import * as T from './textures.js';
 

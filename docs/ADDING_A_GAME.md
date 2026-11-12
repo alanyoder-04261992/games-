@@ -113,6 +113,34 @@ an action like `{ type: 'finish', results }` can end the round so rematches work
 See `public/games/dogfight/` for a full example. It runs the game in a frame and bridges
 these messages with `postMessage`.
 
+## 3D games: the shared three.js (r187)
+
+Every 3D game in the Game Center runs on the **same three.js — r187**, kept in
+`public/vendor/three/`. Don't load three.js from a CDN or keep your own copy: one shared
+version means every game works offline, loads it once, and gets upgraded together.
+
+```js
+// in public/games/my-game/scene.js
+import * as THREE from '../../vendor/three/three.module.min.js';
+import { OrbitControls } from '../../vendor/three/addons/controls/OrbitControls.js';
+// add-ons keep the same path they have in three's examples/jsm folder
+```
+
+- **Need another add-on?** Add its path (e.g. `loaders/GLTFLoader.js`) to
+  `public/vendor/three/addons.json` and run `npm run update-three`. The script copies it and
+  everything it imports, and rewrites its imports to the shared build.
+- **Game in its own page (`<iframe>`)?** Give that page an import map pointing at the shared
+  copy, like `public/games/dogfight/play.html`:
+  `{"imports":{"three":"../../vendor/three/three.module.min.js","three/addons/":"../../vendor/three/addons/"}}`
+- **Write current API:** `THREE.Timer` instead of `THREE.Clock`; `PCFShadowMap` (or
+  `VSMShadowMap`) because `PCFSoftShadowMap` was removed; `texture.colorSpace` instead of
+  `encoding`. A running game should log no `THREE.` warnings.
+- **Upgrading three.js** happens for every game at once: `npm run update-three -- <version>`,
+  bump `REQUIRED_REVISION` in `tests/three.test.mjs`, fix each 3D game's console warnings, and
+  run `npm test`.
+- `tests/three.test.mjs` fails if any game imports three.js from anywhere else or uses an
+  add-on that isn't vendored.
+
 ## 4. Register it
 
 Add one line to `public/games/index.js`:

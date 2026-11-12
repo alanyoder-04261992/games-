@@ -73,7 +73,8 @@ public/                 ← the website (deploy this folder)
   games/four-in-a-row/  example game
   games/dogfight/       Coastal Dogfight: play.html (the game), index.js, ui.js (frame bridge)
   vendor/peerjs.min.js
-  vendor/three/         three.js r169 (MIT) + OrbitControls, RoomEnvironment, RoundedBoxGeometry
+  vendor/three/         three.js r187 (MIT), shared by every 3D game, + the add-ons they use
+                        (update with `npm run update-three`; see docs/ADDING_A_GAME.md)
 tests/                  node --test
 tools/                  local server, local PeerJS server
 docs/ADDING_A_GAME.md   how to add a game

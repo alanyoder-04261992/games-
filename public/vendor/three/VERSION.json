@@ -1,0 +1,21 @@
+{
+  "version": "0.187.0",
+  "revision": "187",
+  "files": [
+    "three.module.min.js",
+    "three.core.min.js",
+    "addons/controls/OrbitControls.js",
+    "addons/environments/RoomEnvironment.js",
+    "addons/geometries/RoundedBoxGeometry.js",
+    "addons/postprocessing/EffectComposer.js",
+    "addons/postprocessing/MaskPass.js",
+    "addons/postprocessing/OutputPass.js",
+    "addons/postprocessing/Pass.js",
+    "addons/postprocessing/RenderPass.js",
+    "addons/postprocessing/ShaderPass.js",
+    "addons/postprocessing/UnrealBloomPass.js",
+    "addons/shaders/CopyShader.js",
+    "addons/shaders/LuminosityHighPassShader.js",
+    "addons/shaders/OutputShader.js"
+  ]
+}

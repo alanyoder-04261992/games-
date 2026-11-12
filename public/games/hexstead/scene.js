@@ -3,9 +3,9 @@
 // with brick stacks, snowy quarry peaks, harbors with piers and sailboats, painted wooden
 // homesteads, barns with silos, trails, a bandit in a wide-brim hat, and dice that tumble.
 import * as THREE from '../../vendor/three/three.module.min.js';
-import { OrbitControls } from '../../vendor/three/OrbitControls.js';
-import { RoomEnvironment } from '../../vendor/three/RoomEnvironment.js';
-import { RoundedBoxGeometry } from '../../vendor/three/RoundedBoxGeometry.js';
+import { OrbitControls } from '../../vendor/three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from '../../vendor/three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from '../../vendor/three/addons/geometries/RoundedBoxGeometry.js';
 import { board as islandGeometry, PIPS } from './geometry.js';
 import { SEAT_COLORS, RES_ICON, RES_COLORS, svgUrl } from './art.js';
 
