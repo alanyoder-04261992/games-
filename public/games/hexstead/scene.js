@@ -654,7 +654,8 @@ export function createScene(container, { onPick, onHover } = {}) {
   room.position.y = 0;
   scene.environment = pmrem.fromScene(room, 0.04).texture;
   room.dispose();
-  scene.environmentIntensity = 0.5;
+  // r181–r186 PBR made diffuse surfaces a little darker; 0.55 (was 0.5) matches the old look
+  scene.environmentIntensity = 0.55;
 
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 120);
   const controls = new OrbitControls(camera, renderer.domElement);
