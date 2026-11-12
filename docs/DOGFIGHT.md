@@ -41,7 +41,7 @@ The game's menu has:
 
 ## Multiplayer
 
-In the Game Center, choose **Play online** (or **Host an online table**). Friends join with the 5-letter code or the invite link, using the same lobby, chat and seats as the other games. The table options are:
+In the Game Center, choose **Multiplayer** on its tile or options page. Friends join with the 5-letter code or the invite link, using the same lobby, chat and seats as the other games. The table options are:
 
 | Option | Choices |
 |---|---|

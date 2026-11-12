@@ -191,8 +191,8 @@ function showHome() {
         h('p', g.tagline),
         h(
           'div.gc-tile-actions',
-          h('button.btn.gold', { onclick: () => needName(() => startSolo(g)) }, 'Play now'),
-          h('button.btn.ghost', { onclick: () => needName(() => hostOnline(g)) }, h('span', { html: ICON.wifi }), 'Play online'),
+          h('button.btn.gold', { onclick: () => needName(() => startSolo(g)), title: 'Play against computer players' }, 'Single player'),
+          h('button.btn.ghost', { onclick: () => needName(() => hostOnline(g)), title: 'Host an online table for friends' }, h('span', { html: ICON.people }), 'Multiplayer'),
           h('a.btn.text', { href: `#/game/${g.id}` }, 'Options'),
         ),
       ),
@@ -374,8 +374,8 @@ function showSetup(game) {
           select('Game speed', () => settings.speed, Object.entries(SPEEDS).map(([value, s]) => ({ value, label: s.label })), (v) => (settings.speed = v)),
           h(
             'div.gc-actions',
-            h('button.btn.gold.big', { onclick: () => needName(() => startSolo(game, options, settings)) }, 'Play vs computer'),
-            h('button.btn.ghost.big', { onclick: () => needName(() => hostOnline(game, options, settings)) }, h('span', { html: ICON.wifi }), 'Host an online table'),
+            h('button.btn.gold.big', { onclick: () => needName(() => startSolo(game, options, settings)) }, 'Single player'),
+            h('button.btn.ghost.big', { onclick: () => needName(() => hostOnline(game, options, settings)) }, h('span', { html: ICON.people }), 'Multiplayer'),
           ),
           save && !save.over ? h('button.btn.text', { onclick: () => resumeHost(game, save) }, `Continue your saved game (${ago(save.savedAt)})`) : null,
         ),
