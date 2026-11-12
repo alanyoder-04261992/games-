@@ -5,6 +5,7 @@
     "environments/RoomEnvironment.js",
     "geometries/RoundedBoxGeometry.js",
     "objects/Sky.js",
+    "objects/Water.js",
     "postprocessing/EffectComposer.js",
     "postprocessing/GTAOPass.js",
     "postprocessing/OutputPass.js",

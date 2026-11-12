@@ -9,6 +9,7 @@
     "addons/geometries/RoundedBoxGeometry.js",
     "addons/math/SimplexNoise.js",
     "addons/objects/Sky.js",
+    "addons/objects/Water.js",
     "addons/postprocessing/EffectComposer.js",
     "addons/postprocessing/GTAOPass.js",
     "addons/postprocessing/MaskPass.js",

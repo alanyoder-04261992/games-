@@ -15,6 +15,10 @@ Plain HTML, CSS and JavaScript modules — no build step, hosts anywhere static 
   tree, sheep, house, barn, boat and die is modelled in code — no image or model files.
   Computer players at three levels, up to 8 players: 5–6 play on a 30-tile Big island and
   7–8 on a 37-tile Grand island, with "barn raising" so everyone can build between turns.
+- **Broadside** — an original two-admiral naval battle on a 3D sea (three.js r187: reflective
+  water, a sky with drifting clouds, bloom): hide your fleet, then trade shots. Shells arc in, misses throw up water columns, hits start fires, and sunk ships roll over
+  and go down. 8×8, 10×10 or 12×12 seas; one shot a turn, chain fire or barrage; computer
+  admirals that hunt down your remaining ships.
 - **Escape the Grind** — a 3D personal-finance board game for 1–4 players. Start in a job living
   paycheck to paycheck, buy rentals, shed lots, storage, businesses and stocks, and break out of
   the Grind once your passive income beats your expenses. Then buy your Dream on the Freedom Ring
@@ -30,6 +34,10 @@ Plain HTML, CSS and JavaScript modules — no build step, hosts anywhere static 
   Up to four pilots team up against waves of raiders (you pick how many per wave and how
   many waves) or fight a free-for-all. Phone touch controls, mouse aim, keyboard and gamepad.
   Details in [docs/DOGFIGHT.md](docs/DOGFIGHT.md).
+- **Ridgeline Rally** — a real-time 3D racing game on Three.js r187: three country circuits
+  (farmland, a lakeside at sunset, a wooded hollow), three cars, up to four drivers online
+  plus computer cars, and a time trial against your own ghost. Phone touch controls, keyboard
+  and gamepad. Details in [docs/RALLY.md](docs/RALLY.md).
 
 ## Online play
 
@@ -70,8 +78,10 @@ public/                 ← the website (deploy this folder)
   games/hexstead/       Hexstead: engine.js, ai.js, geometry.js, scene.js (3D board), ui.js, art.js
   games/escape-grind/   Escape the Grind: engine.js, ai.js, cards.js (decks, jobs), scene.js (3D),
                         textures.js (painted-in-code textures), ui.js (HUD, controller), escape.css
+  games/broadside/      Broadside: engine.js, ai.js, scene.js (3D sea), ui.js, broadside.css, rules.html
   games/four-in-a-row/  example game
   games/dogfight/       Coastal Dogfight: play.html (the game), index.js, ui.js (frame bridge)
+  games/rally/          Ridgeline Rally: play.html (the game), index.js, ui.js
   vendor/peerjs.min.js
   vendor/three/         three.js r187 (MIT), shared by every 3D game, + the add-ons they use
                         (update with `npm run update-three`; see docs/ADDING_A_GAME.md)
