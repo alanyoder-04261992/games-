@@ -7,7 +7,10 @@
     "addons/controls/OrbitControls.js",
     "addons/environments/RoomEnvironment.js",
     "addons/geometries/RoundedBoxGeometry.js",
+    "addons/math/SimplexNoise.js",
+    "addons/objects/Sky.js",
     "addons/postprocessing/EffectComposer.js",
+    "addons/postprocessing/GTAOPass.js",
     "addons/postprocessing/MaskPass.js",
     "addons/postprocessing/OutputPass.js",
     "addons/postprocessing/Pass.js",
@@ -15,7 +18,10 @@
     "addons/postprocessing/ShaderPass.js",
     "addons/postprocessing/UnrealBloomPass.js",
     "addons/shaders/CopyShader.js",
+    "addons/shaders/GTAOShader.js",
     "addons/shaders/LuminosityHighPassShader.js",
-    "addons/shaders/OutputShader.js"
+    "addons/shaders/OutputShader.js",
+    "addons/shaders/PoissonDenoiseShader.js",
+    "addons/utils/BufferGeometryUtils.js"
   ]
 }

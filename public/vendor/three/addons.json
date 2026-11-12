@@ -4,9 +4,12 @@
     "controls/OrbitControls.js",
     "environments/RoomEnvironment.js",
     "geometries/RoundedBoxGeometry.js",
+    "objects/Sky.js",
     "postprocessing/EffectComposer.js",
+    "postprocessing/GTAOPass.js",
     "postprocessing/OutputPass.js",
     "postprocessing/RenderPass.js",
-    "postprocessing/UnrealBloomPass.js"
+    "postprocessing/UnrealBloomPass.js",
+    "utils/BufferGeometryUtils.js"
   ]
 }
