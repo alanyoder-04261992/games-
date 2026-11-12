@@ -1,0 +1,30 @@
+.f4 { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 12px; background: radial-gradient(ellipse at 50% 30%, #1b2f63, #0a1330 70%); --cell: min(11vw, 8.5vh, 74px); }
+.f4-players { display: flex; gap: 14px; }
+.f4-player { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); transition: box-shadow 0.3s, border-color 0.3s; }
+.f4-player small { display: block; color: var(--muted); font-size: 12px; }
+.f4-player.turn { border-color: rgba(240, 195, 90, 0.7); box-shadow: 0 0 22px rgba(240, 195, 90, 0.3); }
+.f4-chip { width: 18px; height: 18px; border-radius: 50%; }
+.f4-player.p0 .f4-chip { background: radial-gradient(circle at 35% 30%, #ff9a8a, #c0392b); }
+.f4-player.p1 .f4-chip { background: radial-gradient(circle at 35% 30%, #ffe9a3, #e0a100); }
+.f4-status { font-family: var(--display); font-size: 24px; font-weight: 800; min-height: 32px; text-align: center; }
+.f4-frame { padding: calc(var(--cell) * 0.18); background: linear-gradient(180deg, #3b6fe0, #2450b8); border-radius: 22px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), inset 0 2px 0 rgba(255, 255, 255, 0.35), inset 0 -4px 0 rgba(0, 0, 0, 0.25); }
+.f4-board { position: relative; width: calc(var(--cell) * 7); height: calc(var(--cell) * 6); }
+.f4-holes { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(7, 1fr); pointer-events: none; z-index: 2;
+  -webkit-mask: radial-gradient(circle at center, transparent calc(var(--cell) * 0.36), #000 calc(var(--cell) * 0.37)) 0 0 / var(--cell) var(--cell);
+  mask: radial-gradient(circle at center, transparent calc(var(--cell) * 0.36), #000 calc(var(--cell) * 0.37)) 0 0 / var(--cell) var(--cell);
+  background: linear-gradient(180deg, #3b6fe0, #2a58c4); }
+.f4-hole { display: none; }
+.f4-discs { position: absolute; inset: 0; z-index: 1; background: #0b1a45; border-radius: 8px; }
+.f4-disc { position: absolute; width: calc(var(--cell) * 0.78); height: calc(var(--cell) * 0.78); left: calc(var(--c) * var(--cell) + var(--cell) * 0.11); top: calc(var(--r) * var(--cell) + var(--cell) * 0.11); border-radius: 50%; box-shadow: inset 0 -4px 6px rgba(0, 0, 0, 0.3), inset 0 3px 4px rgba(255, 255, 255, 0.4); }
+.f4-disc.p0 { background: radial-gradient(circle at 35% 30%, #ff9a8a, #d8402f 55%, #962214); }
+.f4-disc.p1 { background: radial-gradient(circle at 35% 30%, #fff1b8, #f0b400 55%, #a87400); }
+.f4-disc.drop { animation: f4drop calc(0.25s + var(--r) * 0.05s) cubic-bezier(.5, 0, 1, 1); }
+@keyframes f4drop { from { transform: translateY(calc((var(--r) + 1) * var(--cell) * -1)); } }
+.f4-disc.win { animation: f4win 0.9s ease-in-out infinite alternate; }
+@keyframes f4win { to { box-shadow: 0 0 0 4px #fff, 0 0 24px 6px rgba(255, 255, 255, 0.8); } }
+.f4-cols { position: absolute; inset: calc(var(--cell) * -0.6) 0 0; display: grid; grid-template-columns: repeat(7, 1fr); z-index: 3; }
+.f4-col { background: transparent; border: 0; cursor: default; border-radius: 12px; }
+.f4.my-turn .f4-col { cursor: pointer; }
+.f4.my-turn .f4-col:hover { background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.02) 30%); }
+.f4-after { min-height: 48px; }
+.f4-actions { display: flex; gap: 10px; align-items: center; }
