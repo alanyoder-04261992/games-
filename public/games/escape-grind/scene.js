@@ -44,8 +44,10 @@ export class Table3D {
     this.positions = [];
     this.bursts = [];
 
-    // WebGPU where the browser has it; three.js falls back to WebGL 2 by itself everywhere else.
-    const r = (this.renderer = new THREE.WebGPURenderer({ antialias: true, powerPreference: 'high-performance' }));
+    // WebGPU where the browser has it, WebGL 2 everywhere else (asked for up front when there is no
+    // navigator.gpu at all, so three.js doesn't warn about falling back; it still falls back by
+    // itself if a WebGPU adapter turns out to be unavailable).
+    const r = (this.renderer = new THREE.WebGPURenderer({ antialias: true, powerPreference: 'high-performance', forceWebGL: !navigator.gpu }));
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality === 'high' ? 2 : 1.25));
     // Tone mapping (ACES, exposure 1.05) and the sRGB encode happen in each material (see #output),
     // not in a full-screen pass afterwards, so the renderer itself writes straight to the canvas.

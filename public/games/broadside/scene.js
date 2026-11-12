@@ -512,6 +512,7 @@ export function createScene(container, { onCell, onHover, quality = 'high' } = {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.domElement.className = 'bs-gl';
+  window.__renderer = renderer; // TEMP-DEBUG
   container.append(renderer.domElement);
 
   const scene = new THREE.Scene();
@@ -555,8 +556,12 @@ export function createScene(container, { onCell, onHover, quality = 'high' } = {
   scene.add(flashLight);
 
   // ocean: real reflections on High, a cheaper shiny surface on Low
+  // The reflective sea samples its normals at world scale (the texture's repeat must stay 1:
+  // TSL texture nodes honour texture.repeat, the old GLSL Water ignored it). The Low surface
+  // tiles its own copy 18 times.
   const normals = waterNormals();
-  normals.repeat.set(18, 18);
+  const lowNormals = normals.clone();
+  lowNormals.repeat.set(18, 18);
   let water = null;
   function makeWater() {
     if (water) {
@@ -583,7 +588,7 @@ export function createScene(container, { onCell, onHover, quality = 'high' } = {
         camera,
       );
     } else {
-      water = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({ color: '#1b5f86', roughness: 0.1, metalness: 0.05, normalMap: normals, normalScale: new THREE.Vector2(0.4, 0.4), clearcoat: 1, clearcoatRoughness: 0.1 }));
+      water = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({ color: '#1b5f86', roughness: 0.1, metalness: 0.05, normalMap: lowNormals, normalScale: new THREE.Vector2(0.4, 0.4), clearcoat: 1, clearcoatRoughness: 0.1 }));
       water.receiveShadow = true;
     }
     water.rotation.x = -Math.PI / 2;
@@ -1107,7 +1112,7 @@ export function createScene(container, { onCell, onHover, quality = 'high' } = {
     const dt = Math.min(0.05, timer.getDelta());
     const now = performance.now();
     if (high) water.time.value += dt * 0.55;
-    else normals.offset.set(t * 0.01, t * 0.006);
+    else lowNormals.offset.set(t * 0.01, t * 0.006);
     MAT.foam.opacity = 0.45 + Math.sin(t * 1.7) * 0.15;
     for (const B of boards) {
       for (const m of B.buoys) {

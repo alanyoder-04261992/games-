@@ -243,9 +243,15 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
 <div id="portrait" hidden>Turn your phone sideways for a wider view. Tap to hide.</div>
 
 <!-- three.js comes from the Game Center's shared copy (public/vendor/three, see tools/update-three.mjs), never a CDN -->
-<script type="importmap">{"imports":{"three":"../../vendor/three/three.module.min.js","three/addons/":"../../vendor/three/addons/"}}</script>
+<script type="importmap">{"imports":{"three":"../../vendor/three/three.webgpu.min.js","three/webgpu":"../../vendor/three/three.webgpu.min.js","three/tsl":"../../vendor/three/three.tsl.min.js","three/addons/":"../../vendor/three/addons/"}}</script>
 <script type="module">
-import * as THREE from '../../vendor/three/three.module.min.js';
+// WebGPURenderer with node (TSL) materials; it falls back to WebGL 2 by itself where WebGPU is missing.
+import * as THREE from 'three/webgpu';
+import {
+  Fn, If, Discard, uniform, texture, attribute, uv as tslUv, float, vec2, vec3, vec4, normalize, mix, pow, clamp as tslClamp, max, dot, abs, length, exp, cos, sin,
+  smoothstep, reflect, select, vertexStage, positionLocal, positionWorld, cameraPosition, cameraProjectionMatrix, modelViewMatrix, normalGeometry,
+  materialColor, instancedDynamicBufferAttribute, screenDPR, pass,
+} from 'three/tsl';
 
 // =====================================================================
 //  Utilities
@@ -296,7 +302,9 @@ const BOOTQ = QUALITY[settings.quality] || QUALITY.medium;
 //  Renderer, scene, sky
 // =====================================================================
 const canvas = $('gl');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: BOOTQ.aa, powerPreference: 'high-performance' });
+// WebGPU where the browser has it, WebGL 2 otherwise (the renderer picks); boot() awaits renderer.init() before anything renders.
+// alpha: false keeps the canvas opaque, as it was with the WebGL renderer.
+const renderer = new THREE.WebGPURenderer({ canvas, antialias: BOOTQ.aa, powerPreference: 'high-performance', alpha: false });
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, QUALITY[settings.quality].pr));
 renderer.setSize(innerWidth, innerHeight, false);
 renderer.shadowMap.enabled = QUALITY[settings.quality].shadows;
@@ -319,21 +327,25 @@ scene.add(sun, sun.target);
 const flash = new THREE.PointLight(0xffaa55, 0, 380, 0); scene.add(flash);
 const muzzleLight = new THREE.PointLight(0xffb060, 0, 26, 0); scene.add(muzzleLight);
 
-const skyMat = new THREE.ShaderMaterial({
-  uniforms: { uZen: { value: ZENITH }, uHor: { value: HORIZON }, uSun: { value: SUN } },
-  vertexShader: `varying vec3 vDir; void main(){ vDir = position; vec4 p = projectionMatrix*modelViewMatrix*vec4(position,1.); gl_Position = p.xyww; }`,
-  fragmentShader: `uniform vec3 uZen, uHor, uSun; varying vec3 vDir;
-    void main(){ vec3 d = normalize(vDir); float h = d.y;
-      vec3 col = mix(uHor, uZen, pow(clamp(h,0.,1.),0.55));
-      if(h<0.) col = mix(uHor, uHor*0.86, clamp(-h*5.,0.,1.));
-      float s = max(dot(d,uSun),0.);
-      col += vec3(1.,.88,.7)*(pow(s,10.)*0.22 + pow(s,900.)*5.);
-      gl_FragColor = vec4(col,1.);
-      #include <tonemapping_fragment>
-      #include <colorspace_fragment>
-    }`,
-  side: THREE.BackSide, depthWrite: false, fog: false,
-});
+// Sky dome (TSL). The colour stays linear; the renderer's output pass applies ACES and sRGB to everything.
+const skyU = { uZen: uniform(ZENITH), uHor: uniform(HORIZON), uSun: uniform(SUN) };
+function makeSkyMat() {
+  const { uZen, uHor, uSun } = skyU;
+  const m = new THREE.NodeMaterial();
+  m.side = THREE.BackSide; m.depthWrite = false; m.fog = false;
+  // gl_Position = p.xyww: the dome sits on the far plane and never clips
+  m.vertexNode = Fn(() => { const p = cameraProjectionMatrix.mul(modelViewMatrix).mul(vec4(positionLocal, 1)); return vec4(p.x, p.y, p.w, p.w); })();
+  m.fragmentNode = Fn(() => {
+    const d = normalize(positionLocal), h = d.y;
+    const col = mix(uHor, uZen, pow(tslClamp(h, 0, 1), 0.55)).toVar();
+    If(h.lessThan(0), () => { col.assign(mix(uHor, uHor.mul(0.86), tslClamp(h.negate().mul(5), 0, 1))); });
+    const s = max(dot(d, uSun), 0);
+    col.addAssign(vec3(1, 0.88, 0.7).mul(pow(s, 10).mul(0.22).add(pow(s, 900).mul(5))));
+    return vec4(col, 1);
+  })();
+  return m;
+}
+const skyMat = makeSkyMat();
 const sky = new THREE.Mesh(new THREE.SphereGeometry(1000, 32, 16), skyMat);
 sky.renderOrder = -10; sky.frustumCulled = false; scene.add(sky);
 
@@ -410,51 +422,52 @@ const onAirfield = (x, z) => Math.abs(x - AF.x) < 170 && Math.abs(z - AF.z) < 95
 // =====================================================================
 //  Shared water material
 // =====================================================================
-const fogU = { uFogColor: { value: scene.fog.color }, uFogDensity: { value: FOG_DENSITY } };
-const waterMat = new THREE.ShaderMaterial({
-  uniforms: {
-    uTime: { value: 0 }, uSun: { value: SUN }, uDeep: { value: new THREE.Color('#0d3244') }, uShallow: { value: new THREE.Color('#22606c') }, uReef: { value: new THREE.Color('#4aa39a') },
-    uHor: { value: HORIZON }, uZen: { value: ZENITH }, uDepth: { value: null }, uGrid: { value: new V3(HALF, 100, 1) }, ...fogU,
-  },
-  vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.); vW = w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }`,
-  fragmentShader: `precision highp float; uniform float uTime; uniform vec3 uSun, uDeep, uShallow, uReef, uHor, uZen, uFogColor; uniform float uFogDensity; uniform sampler2D uDepth; uniform vec3 uGrid; varying vec3 vW;
-    vec2 wv(vec2 p, vec2 d, float f, float a, float s){ float k = dot(p,d)*f + uTime*s; return d*(f*a*cos(k)); }
-    void main(){
-      vec2 p = vW.xz; float dist = length(cameraPosition - vW);
-      vec2 uv = ((p + uGrid.x) / uGrid.y + 0.5) / uGrid.z;
-      float depth = (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) ? 60.0 : texture2D(uDepth, uv).r * 60.0;
-      float fade = 1.0 - smoothstep(300., 6000., dist);
-      float calm = 0.35 + 0.65*smoothstep(0.0, 6.0, depth);
-      vec2 g = (wv(p, vec2(0.8,0.6), 0.045, 0.9, 1.3) + wv(p, vec2(-0.5,0.86), 0.07, 0.5, 1.7) + wv(p, vec2(0.96,-0.28), 0.13, 0.22, 2.3))*calm;
-      g += (wv(p, vec2(0.3,0.95), 0.31, 0.10, 3.1) + wv(p, vec2(-0.9,0.4), 0.53, 0.05, 4.0) + wv(p, vec2(0.6,-0.8), 1.1, 0.02, 5.3))*fade*calm;
-      vec3 n = normalize(vec3(-g.x*0.6, 1.0, -g.y*0.6));
-      vec3 V = normalize(cameraPosition - vW);
-      float fres = 0.02 + 0.98*pow(1.0 - max(dot(n,V),0.0), 5.0);
-      vec3 R = reflect(-V, n);
-      vec3 skyc = mix(uHor, uZen, pow(clamp(R.y,0.,1.),0.6));
-      vec3 deepc = mix(uShallow, uDeep, smoothstep(0.,0.6,V.y));
-      vec3 body = mix(deepc, uReef, (1.0 - smoothstep(0.5, 14.0, depth)) * 0.9);
-      vec3 col = mix(body, skyc, fres*0.85);
-      float sd = max(dot(R,uSun),0.);
-      col += vec3(1.,.93,.82)*(pow(sd,300.)*3.2 + pow(sd,24.)*0.07);
-      float wob = sin(p.x*0.09 + uTime*0.8)*sin(p.y*0.11 - uTime*0.6);
-      float band = 1.0 - smoothstep(0.0, 2.4, depth + wob*0.5);
-      float surf = band * (0.55 + 0.45*sin(depth*2.8 - uTime*1.7 + wob));
-      col = mix(col, vec3(0.92,0.95,0.95), clamp(surf, 0.0, 1.0)*0.75*(1.0 - smoothstep(2500., 9000., dist)));
-      float f = 1.0 - exp(-uFogDensity*uFogDensity*dist*dist);
-      gl_FragColor = vec4(mix(col, uFogColor, f), 1.);
-      #include <tonemapping_fragment>
-      #include <colorspace_fragment>
-    }`,
-});
+const fogU = { uFogColor: uniform(scene.fog.color), uFogDensity: uniform(FOG_DENSITY) };
+// Sea, lake and river (TSL): waves, fresnel sky reflection, sun glint, shallow-water tint and surf from the baked depth map.
+const waterU = {
+  uTime: uniform(0), uSun: uniform(SUN), uDeep: uniform(new THREE.Color('#0d3244')), uShallow: uniform(new THREE.Color('#22606c')), uReef: uniform(new THREE.Color('#4aa39a')),
+  uHor: uniform(HORIZON), uZen: uniform(ZENITH), uGrid: uniform(new V3(HALF, 100, 1)), ...fogU,
+};
+// a 1x1 placeholder; buildDepthTex() fills it in before the first frame
+const waterDepthTex = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat); waterDepthTex.magFilter = waterDepthTex.minFilter = THREE.LinearFilter;
+const waterMat = new THREE.NodeMaterial();
+waterMat.fog = false; // fogged by hand below, as before
+waterMat.fragmentNode = Fn(() => {
+  const { uTime, uSun, uDeep, uShallow, uReef, uHor, uZen, uGrid, uFogColor, uFogDensity } = waterU;
+  const wv = (p, dx, dy, f, a, s) => { const d = vec2(dx, dy); return d.mul(cos(dot(p, d).mul(f).add(uTime.mul(s))).mul(f * a)); };
+  const vW = positionWorld, p = vW.xz, dist = length(cameraPosition.sub(vW));
+  const tuv = p.add(uGrid.x).div(uGrid.y).add(0.5).div(uGrid.z);
+  const outside = tuv.x.lessThan(0).or(tuv.y.lessThan(0)).or(tuv.x.greaterThan(1)).or(tuv.y.greaterThan(1));
+  const depth = select(outside, float(60), texture(waterDepthTex, tuv).r.mul(60)).toVar();
+  const fade = smoothstep(300, 6000, dist).oneMinus();
+  const calm = smoothstep(0, 6, depth).mul(0.65).add(0.35);
+  const g = wv(p, 0.8, 0.6, 0.045, 0.9, 1.3).add(wv(p, -0.5, 0.86, 0.07, 0.5, 1.7)).add(wv(p, 0.96, -0.28, 0.13, 0.22, 2.3)).mul(calm).toVar();
+  g.addAssign(wv(p, 0.3, 0.95, 0.31, 0.10, 3.1).add(wv(p, -0.9, 0.4, 0.53, 0.05, 4.0)).add(wv(p, 0.6, -0.8, 1.1, 0.02, 5.3)).mul(fade).mul(calm));
+  const n = normalize(vec3(g.x.mul(-0.6), 1, g.y.mul(-0.6)));
+  const V = normalize(cameraPosition.sub(vW));
+  const fres = pow(max(dot(n, V), 0).oneMinus(), 5).mul(0.98).add(0.02);
+  const R = reflect(V.negate(), n).toVar();
+  const skyc = mix(uHor, uZen, pow(tslClamp(R.y, 0, 1), 0.6));
+  const deepc = mix(uShallow, uDeep, smoothstep(0, 0.6, V.y));
+  const body = mix(deepc, uReef, smoothstep(0.5, 14, depth).oneMinus().mul(0.9));
+  const col = mix(body, skyc, fres.mul(0.85)).toVar();
+  const sd = max(dot(R, uSun), 0);
+  col.addAssign(vec3(1, 0.93, 0.82).mul(pow(sd, 300).mul(3.2).add(pow(sd, 24).mul(0.07))));
+  const wob = sin(p.x.mul(0.09).add(uTime.mul(0.8))).mul(sin(p.y.mul(0.11).sub(uTime.mul(0.6))));
+  const band = smoothstep(0, 2.4, depth.add(wob.mul(0.5))).oneMinus();
+  const surf = band.mul(sin(depth.mul(2.8).sub(uTime.mul(1.7)).add(wob)).mul(0.45).add(0.55));
+  col.assign(mix(col, vec3(0.92, 0.95, 0.95), tslClamp(surf, 0, 1).mul(0.75).mul(smoothstep(2500, 9000, dist).oneMinus())));
+  const f = exp(uFogDensity.mul(uFogDensity).mul(dist).mul(dist).negate()).oneMinus();
+  return vec4(mix(col, uFogColor, f), 1);
+})();
 function buildDepthTex() {
   const n1 = GN + 1, data = new Uint8Array(n1 * n1 * 4);
   for (let iz = 0; iz < n1; iz++) for (let ix = 0; ix < n1; ix++) {
     const i = iz * n1 + ix, d = clamp(waterLevelAt(-HALF + ix * CELL, -HALF + iz * CELL) - HGT[i], 0, 60);
     data[i * 4] = Math.round(d / 60 * 255); data[i * 4 + 3] = 255;
   }
-  const t = new THREE.DataTexture(data, n1, n1, THREE.RGBAFormat); t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true;
-  waterMat.uniforms.uDepth.value = t; waterMat.uniforms.uGrid.value.set(HALF, CELL, n1);
+  waterDepthTex.image = { data, width: n1, height: n1 }; waterDepthTex.needsUpdate = true;
+  waterU.uGrid.value.set(HALF, CELL, n1);
 }
 // Reflections for the metal and glass: a small blurred copy of the sky over green ground.
 // It goes on each PBR material as its own envMap, not on scene.environment: since three r183
@@ -462,12 +475,12 @@ function buildDepthTex() {
 // washed them out and faded their shadows, and only material.envMap honours envMapIntensity.
 let envMap = null;
 const PBR_MATS = [];
-function pbr(params) { const m = new THREE.MeshStandardMaterial(params); m.envMap = envMap; PBR_MATS.push(m); return m; }
+function pbr(params) { const m = new THREE.MeshStandardNodeMaterial(params); m.envMap = envMap; PBR_MATS.push(m); return m; }
 function buildEnv() {
   try {
-    const pm = new THREE.PMREMGenerator(renderer), es = new THREE.Scene();
-    es.add(new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), skyMat.clone()));
-    const ground = new THREE.Mesh(new THREE.CircleGeometry(390, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x51603c })); ground.position.y = -30; es.add(ground);
+    const pm = new THREE.PMREMGenerator(renderer), es = new THREE.Scene(); // the WebGPU build's PMREM (needs renderer.init(), done in boot)
+    es.add(new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), makeSkyMat()));
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(390, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicNodeMaterial({ color: 0x51603c })); ground.position.y = -30; es.add(ground);
     envMap = pm.fromScene(es, 0.02, 0.1, 1000).texture; pm.dispose();
     for (const m of PBR_MATS) { m.envMap = envMap; m.needsUpdate = true; }
   } catch (e) { console.warn('environment map unavailable', e); }
@@ -486,7 +499,7 @@ function buildCirrus() {
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(5, 5); t.colorSpace = THREE.SRGBColorSpace;
   const a = document.createElement('canvas'); a.width = a.height = 128; const ax = a.getContext('2d');
   const ag = ax.createRadialGradient(64, 64, 10, 64, 64, 64); ag.addColorStop(0, '#fff'); ag.addColorStop(0.6, '#bbb'); ag.addColorStop(1, '#000'); ax.fillStyle = ag; ax.fillRect(0, 0, 128, 128);
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(90000, 90000).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ map: t, alphaMap: new THREE.CanvasTexture(a), transparent: true, opacity: 0.7, depthWrite: false, fog: false, side: THREE.DoubleSide }));
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(90000, 90000).rotateX(Math.PI / 2), new THREE.MeshBasicNodeMaterial({ map: t, alphaMap: new THREE.CanvasTexture(a), transparent: true, opacity: 0.7, depthWrite: false, fog: false, side: THREE.DoubleSide }));
   m.position.y = 7200; m.renderOrder = -5; scene.add(m);
 }
 
@@ -496,29 +509,34 @@ function buildCirrus() {
 class Particles {
   constructor(max, additive) {
     this.max = max; this.n = 0;
-    const g = new THREE.BufferGeometry();
     this.pos = new Float32Array(max * 3); this.col = new Float32Array(max * 3); this.a = new Float32Array(max); this.sz = new Float32Array(max);
-    g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
-    g.setAttribute('color', new THREE.BufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage));
-    g.setAttribute('alpha', new THREE.BufferAttribute(this.a, 1).setUsage(THREE.DynamicDrawUsage));
-    g.setAttribute('size', new THREE.BufferAttribute(this.sz, 1).setUsage(THREE.DynamicDrawUsage));
-    g.boundingSphere = new THREE.Sphere(new V3(), 1e7);
     this.vel = new Float32Array(max * 3); this.life = new Float32Array(max); this.maxLife = new Float32Array(max);
     this.grow = new Float32Array(max); this.drag = new Float32Array(max); this.grav = new Float32Array(max); this.a0 = new Float32Array(max);
     this.kind = new Uint8Array(max); this.c0 = new Float32Array(max * 3);
-    this.mat = new THREE.ShaderMaterial({
-      uniforms: { uScale: { value: 400 }, ...fogU },
-      vertexShader: `attribute float alpha; attribute float size; attribute vec3 color; varying vec3 vC; varying float vA; varying float vFog; uniform float uScale; uniform float uFogDensity;
-        void main(){ vec4 mv = modelViewMatrix*vec4(position,1.); gl_PointSize = clamp(size*uScale/max(-mv.z,0.1), 1.0, 480.0); gl_Position = projectionMatrix*mv; vC = color; vA = alpha; float d = -mv.z; vFog = 1.0 - exp(-uFogDensity*uFogDensity*d*d); }`,
-      fragmentShader: `uniform vec3 uFogColor; varying vec3 vC; varying float vA; varying float vFog;
-        void main(){ float d = length(gl_PointCoord-0.5)*2.0; float a = vA*(1.0-smoothstep(0.25,1.0,d)); if(a<0.004) discard; vec3 c = mix(vC, uFogColor, vFog); gl_FragColor = vec4(c, a${additive ? '*(1.0-vFog)' : ''});
-        #include <tonemapping_fragment>
-      #include <colorspace_fragment>
-        }`,
-      transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
-    });
-    this.points = new THREE.Points(g, this.mat); this.points.frustumCulled = false; this.points.renderOrder = additive ? 3 : 2;
-    scene.add(this.points); this.geo = g;
+    // WebGPU draws points one pixel wide, so each particle is an instanced camera-facing quad (a Sprite drawn
+    // `count` times) sized in pixels like the old gl_PointSize. Per particle: (x, y, z, size) and (r, g, b, alpha).
+    this.ps = new THREE.InstancedBufferAttribute(new Float32Array(max * 4), 4).setUsage(THREE.DynamicDrawUsage);
+    this.ca = new THREE.InstancedBufferAttribute(new Float32Array(max * 4), 4).setUsage(THREE.DynamicDrawUsage);
+    this.uScale = uniform(400); // drawing-buffer height / (2 tan(fov / 2)), set in onResize and updateFov
+    const iPS = instancedDynamicBufferAttribute(this.ps), iCA = instancedDynamicBufferAttribute(this.ca);
+    const { uFogColor, uFogDensity } = fogU;
+    const m = new THREE.PointsNodeMaterial({ transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, sizeAttenuation: false });
+    m.fog = false; // fogged by hand, per particle
+    m.positionNode = iPS.xyz;
+    const depth = modelViewMatrix.mul(vec4(iPS.xyz, 1)).z.negate();
+    // gl_PointSize was in drawing-buffer pixels; sizeNode is in CSS pixels (the material multiplies by the pixel ratio)
+    m.sizeNode = tslClamp(iPS.w.mul(this.uScale).div(depth.max(0.1)), 1, 480).div(screenDPR);
+    const vFog = vertexStage(exp(uFogDensity.mul(uFogDensity).mul(depth).mul(depth).negate()).oneMinus());
+    m.fragmentNode = Fn(() => {
+      const d = length(tslUv().sub(0.5)).mul(2);
+      const a = iCA.w.mul(smoothstep(0.25, 1, d).oneMinus()).toVar();
+      If(a.lessThan(0.004), () => { Discard(); });
+      const c = mix(iCA.xyz, uFogColor, vFog);
+      return vec4(c, additive ? a.mul(vFog.oneMinus()) : a);
+    })();
+    this.mat = m;
+    this.points = new THREE.Sprite(m); this.points.count = 2; this.points.frustumCulled = false; this.points.renderOrder = additive ? 3 : 2;
+    scene.add(this.points);
   }
   spawn(x, y, z, vx, vy, vz, life, size, grow, r, g, b, a, drag, grav, kind) {
     if (this.n >= this.max) return;
@@ -552,8 +570,17 @@ class Particles {
       } else if (k === 3) { this.a[i] = this.a0[i] * (t < 0.8 ? 1 : (1 - t) * 5); }
       else { this.a[i] = this.a0[i] * Math.min(1, t * 8) * (1 - t); }
     }
-    this.geo.setDrawRange(0, this.n);
-    for (const nm of ['position', 'color', 'alpha', 'size']) this.geo.attributes[nm].needsUpdate = true;
+    // pack the live particles for the GPU; draw at least 2 instances (an instance count of 1 vs >1 changes the
+    // render object's cache key and would rebuild it), with spares fully transparent
+    const n = this.n, cnt = Math.max(2, n), P = this.ps.array, C = this.ca.array;
+    for (let i = 0; i < n; i++) {
+      const i3 = i * 3, i4 = i * 4;
+      P[i4] = this.pos[i3]; P[i4 + 1] = this.pos[i3 + 1]; P[i4 + 2] = this.pos[i3 + 2]; P[i4 + 3] = this.sz[i];
+      C[i4] = this.col[i3]; C[i4 + 1] = this.col[i3 + 1]; C[i4 + 2] = this.col[i3 + 2]; C[i4 + 3] = this.a[i];
+    }
+    for (let i = n; i < cnt; i++) C[i * 4 + 3] = 0;
+    this.points.count = cnt;
+    for (const at of [this.ps, this.ca]) { at.clearUpdateRanges(); at.addUpdateRange(0, cnt * 4); at.needsUpdate = true; }
   }
 }
 let smokeFX, fireFX;
@@ -587,15 +614,13 @@ async function buildWorld() {
   const pa = geo.attributes.position;
   for (let i = 0; i < pa.count; i++) pa.setY(i, HGT[i]);
   geo.computeVertexNormals();
-  const tex = new THREE.CanvasTexture(terrainCanvas); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  const tex = new THREE.CanvasTexture(terrainCanvas); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = Math.min(8, renderer.getMaxAnisotropy());
   const detail = makeDetailTexture();
-  const tmat = new THREE.MeshLambertMaterial({ map: tex });
-  tmat.onBeforeCompile = sh => {
-    sh.uniforms.detailMap = { value: detail };
-    sh.vertexShader = 'varying vec2 vWXZ;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vWXZ = (modelMatrix*vec4(position,1.0)).xz;');
-    sh.fragmentShader = 'uniform sampler2D detailMap;\nvarying vec2 vWXZ;\n' + sh.fragmentShader.replace('#include <map_fragment>',
-      '#include <map_fragment>\n diffuseColor.rgb *= (texture2D(detailMap, vWXZ*0.025).r*0.55+0.72) * (texture2D(detailMap, vWXZ*0.0037).g*0.36+0.82) * (texture2D(detailMap, vWXZ*0.13).r*0.3+0.86);');
-  };
+  // the colour map times three octaves of detail noise sampled in world XZ, so the ground has grain up close
+  const tmat = new THREE.MeshLambertNodeMaterial({ map: tex });
+  const wxz = positionWorld.xz;
+  const grain = texture(detail, wxz.mul(0.025)).r.mul(0.55).add(0.72).mul(texture(detail, wxz.mul(0.0037)).g.mul(0.36).add(0.82)).mul(texture(detail, wxz.mul(0.13)).r.mul(0.3).add(0.86));
+  tmat.colorNode = materialColor.mul(vec4(grain, grain, grain, 1));
   const terrain = new THREE.Mesh(geo, tmat); terrain.receiveShadow = true; scene.add(terrain);
   buildDepthTex();
 
@@ -691,7 +716,7 @@ function makeDetailTexture() {
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
 }
 
-const lam = (hex, extra = {}) => new THREE.MeshLambertMaterial({ color: hex, ...extra });
+const lam = (hex, extra = {}) => new THREE.MeshLambertNodeMaterial({ color: hex, ...extra });
 function addBox(w, h, d, mat, x, y, z, ry = 0, parent = scene) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.rotation.y = ry; m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; }
 
 function buildAirfield() {
@@ -705,8 +730,8 @@ function buildAirfield() {
   for (let k = 0; k < 8; k++) { x.fillRect(12 + k * 13.5, 2048 - 70, 8, 56); x.fillRect(12 + k * 13.5, 14, 8, 56); }
   x.font = 'bold 44px Arial'; x.textAlign = 'center'; x.fillText('36', 64, 2048 - 90);
   x.save(); x.translate(64, 90); x.rotate(Math.PI); x.fillText('18', 0, 0); x.restore();
-  const rt = new THREE.CanvasTexture(c); rt.colorSpace = THREE.SRGBColorSpace; rt.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-  const rw = new THREE.Mesh(new THREE.PlaneGeometry(AF.wid, AF.len).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: rt, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  const rt = new THREE.CanvasTexture(c); rt.colorSpace = THREE.SRGBColorSpace; rt.anisotropy = Math.min(8, renderer.getMaxAnisotropy());
+  const rw = new THREE.Mesh(new THREE.PlaneGeometry(AF.wid, AF.len).rotateX(-Math.PI / 2), new THREE.MeshLambertNodeMaterial({ map: rt, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
   rw.position.set(AF.x, AF.h + 0.06, AF.z); rw.receiveShadow = true; scene.add(rw);
   const apron = new THREE.Mesh(new THREE.PlaneGeometry(90, 260).rotateX(-Math.PI / 2), lam(0x8a877d, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
   apron.position.set(AF.x + 75, AF.h + 0.05, AF.z - 120); apron.receiveShadow = true; scene.add(apron);
@@ -772,7 +797,7 @@ function buildTown() {
   const sh = new THREE.Shape(); sh.moveTo(-0.5, 0); sh.lineTo(0.5, 0); sh.lineTo(0, 1); sh.lineTo(-0.5, 0);
   const roofGeo = new THREE.ExtrudeGeometry(sh, { depth: 1, bevelEnabled: false }).translate(0, 0, -0.5);
   const mk = (geo, list, scaleFn) => {
-    const im = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color: 0xffffff }), list.length);
+    const im = new THREE.InstancedMesh(geo, new THREE.MeshLambertNodeMaterial({ color: 0xffffff }), list.length);
     const m = new THREE.Matrix4(), q = new Q4(), s = new V3(), p = new V3(), col = new THREE.Color(), up = new V3(0, 1, 0);
     list.forEach((b, i) => { p.set(b.x, b.y, b.z); q.setFromAxisAngle(up, b.rot); scaleFn(b, s); m.compose(p, q, s); im.setMatrixAt(i, m); im.setColorAt(i, col.set(b.c)); });
     im.castShadow = true; im.receiveShadow = true; scene.add(im);
@@ -844,7 +869,7 @@ function buildTrees(count) {
   ]);
   for (const [geo, sel] of [[con, true], [dec, false]]) {
     const items = list.filter(t => t.con === sel); if (!items.length) continue;
-    const im = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }), items.length);
+    const im = new THREE.InstancedMesh(geo, new THREE.MeshLambertNodeMaterial({ vertexColors: true }), items.length);
     const m = new THREE.Matrix4(), q = new Q4(), sc = new V3(), p = new V3(), c = new THREE.Color(), up = new V3(0, 1, 0);
     items.forEach((t, i) => {
       p.set(t.x, t.h - 0.6, t.z); q.setFromAxisAngle(up, t.c * 6.28); sc.set(t.s, t.s * (0.85 + t.c * 0.35), t.s); m.compose(p, q, sc); im.setMatrixAt(i, m);
@@ -869,7 +894,7 @@ function buildClouds(n) {
   };
   const texs = [mkTex(3), mkTex(5), mkTex(8)];
   const mats = [];
-  for (const t of texs) for (const col of [0xffffff, 0xd7dde3, 0xb9c2cc]) mats.push(new THREE.SpriteMaterial({ map: t, color: col, transparent: true, depthWrite: false, fog: true, opacity: 0.92 }));
+  for (const t of texs) for (const col of [0xffffff, 0xd7dde3, 0xb9c2cc]) mats.push(new THREE.SpriteNodeMaterial({ map: t, color: col, transparent: true, depthWrite: false, fog: true, opacity: 0.92 }));
   const r = mulberry32(21);
   for (let i = 0; i < n; i++) {
     const cx = (r() * 2 - 1) * 14000, cz = (r() * 2 - 1) * 14000, cy = 1350 + r() * 650;
@@ -949,11 +974,9 @@ function insigniaTexture(kind) {
 function planeMaterial(tex, bottomHex) {
   const m = pbr({ map: tex, roughness: 0.6, metalness: 0.12, envMapIntensity: 0.75 });
   const bottom = new THREE.Color(bottomHex);
-  m.onBeforeCompile = sh => {
-    sh.uniforms.uBottom = { value: bottom };
-    sh.vertexShader = 'varying float vNY;\n' + sh.vertexShader.replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n vNY = objectNormal.y;');
-    sh.fragmentShader = 'uniform vec3 uBottom;\nvarying float vNY;\n' + sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n diffuseColor.rgb = mix(uBottom, diffuseColor.rgb, smoothstep(-0.4, -0.1, vNY));');
-  };
+  // underside paint: blend to the bottom colour where the object-space normal points down
+  const c = materialColor.mul(vec4(1)); // map x colour as a vec4
+  m.colorNode = vec4(mix(uniform(bottom), c.xyz, smoothstep(-0.4, -0.1, normalGeometry.y)), c.w);
   return m;
 }
 function mirrorX(g) {
@@ -981,9 +1004,9 @@ function sharedMats(key, ace) {
     dark: pbr({ color: 0x1d1f1d, roughness: 0.62, metalness: 0.25 }), metal: pbr({ color: 0x8a8d90, roughness: 0.32, metalness: 0.85 }),
     glass: pbr({ color: 0xb4cde0, roughness: 0.03, metalness: 0.1, transparent: true, opacity: 0.26, envMapIntensity: 2.4, depthWrite: false }),
     tip: pbr({ color: 0xd9a92a, roughness: 0.5 }),
-    disc: new THREE.MeshBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }),
+    disc: new THREE.MeshBasicNodeMaterial({ color: 0x222222, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }),
     insignia: pbr({ map: insigniaTexture(key), transparent: true, roughness: 0.62, metalness: 0.1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }),
-    band: pbr({ color: key === 'kestrel' ? 0xcfc6a6 : (ace ? 0xb02a22 : 0xd4ab2e), roughness: 0.5, metalness: 0.15 }), pilot: lam(0x5a4330), interior: new THREE.MeshLambertMaterial({ color: 0x2c2f2a, side: THREE.BackSide }),
+    band: pbr({ color: key === 'kestrel' ? 0xcfc6a6 : (ace ? 0xb02a22 : 0xd4ab2e), roughness: 0.5, metalness: 0.15 }), pilot: lam(0x5a4330), interior: new THREE.MeshLambertNodeMaterial({ color: 0x2c2f2a, side: THREE.BackSide }),
   };
   MAT_CACHE[id] = M; return M;
 }
@@ -1089,14 +1112,15 @@ function buildTracers() {
   for (let i = 0; i < TMAX; i++) { uv.set([0, 0, 1, 0, 0, 1, 1, 1], i * 8); idx.set([i * 4, i * 4 + 2, i * 4 + 1, i * 4 + 1, i * 4 + 2, i * 4 + 3], i * 6); }
   g.setAttribute('position', new THREE.BufferAttribute(tracerPos, 3).setUsage(THREE.DynamicDrawUsage)); g.setAttribute('color', new THREE.BufferAttribute(tracerCol, 4).setUsage(THREE.DynamicDrawUsage));
   g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.setIndex(new THREE.BufferAttribute(idx, 1)); g.boundingSphere = new THREE.Sphere(new V3(), 1e7);
-  const m = new THREE.ShaderMaterial({
-    vertexShader: `attribute vec4 color; varying vec4 vC; varying vec2 vUv; void main(){ vC = color; vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
-    fragmentShader: `varying vec4 vC; varying vec2 vUv; void main(){ float e = 1.0 - abs(vUv.y-0.5)*2.0; float a = vC.a*e*e*(0.4+0.6*vUv.x); gl_FragColor = vec4(vC.rgb*(1.0+e), a);
-    #include <tonemapping_fragment>
-      #include <colorspace_fragment>
-    }`,
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-  });
+  // glowing streaks: bright core across the width, fading toward the tail (TSL)
+  const m = new THREE.NodeMaterial();
+  Object.assign(m, { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
+  m.fragmentNode = Fn(() => {
+    const vC = attribute('color', 'vec4'), vUv = tslUv();
+    const e = abs(vUv.y.sub(0.5)).mul(2).oneMinus();
+    const a = vC.w.mul(e).mul(e).mul(vUv.x.mul(0.6).add(0.4));
+    return vec4(vC.xyz.mul(e.add(1)), a);
+  })();
   tracerMesh = new THREE.Mesh(g, m); tracerMesh.frustumCulled = false; tracerMesh.renderOrder = 5; scene.add(tracerMesh);
 }
 const _a = new V3(), _b = new V3(), _c = new V3(), _d = new V3(), _e = new V3(), _f = new V3();
@@ -2743,7 +2767,7 @@ function updateHint() {
 // =====================================================================
 //  Main loop
 // =====================================================================
-function onResize() { if (composer) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(innerWidth, innerHeight); } renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); resizeHUD(); const sc = renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)); if (smokeFX) { smokeFX.mat.uniforms.uScale.value = sc; fireFX.mat.uniforms.uScale.value = sc; } }
+function onResize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); resizeHUD(); const sc = renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)); if (smokeFX) { smokeFX.uScale.value = sc; fireFX.uScale.value = sc; } }
 addEventListener('resize', onResize);
 const STEP = 1 / 120;
 let acc = 0, last = performance.now();
@@ -2812,34 +2836,32 @@ function frame(now) {
   }
   if (G.state === 'paused' || G.state === 'play') $('portrait').hidden = $('portrait').hidden || G.state !== 'play';
   flash.intensity = Math.max(0, flash.intensity - rdt * 14); muzzleLight.intensity = Math.max(0, muzzleLight.intensity - rdt * 45);
-  waterMat.uniforms.uTime.value = now / 1000;
+  waterU.uTime.value = now / 1000;
   sky.position.copy(camera.position);
   const fp = G.player && G.state !== 'menu' ? G.player.pos : camera.position;
   sun.position.copy(fp).addScaledVector(SUN, 600); sun.target.position.copy(fp);
   if (tracerMesh) updateTracers();
-  if (composer && QUALITY[settings.quality].bloom) composer.render(); else renderer.render(scene, camera);
+  if (renderPipeline && QUALITY[settings.quality].bloom) renderPipeline.render(); else renderer.render(scene, camera);
   drawHUD(rdt);
   Sfx.update(G.player);
 }
 
 // Bloom on the high setting: the sun, tracers, fires and explosions glow. Loaded on demand.
-let composer = null;
+// A RenderPipeline: the scene pass (half float, 4x MSAA) plus bloom, then the pipeline's output transform applies
+// ACES and sRGB. It follows the renderer's size and pixel ratio by itself.
+let renderPipeline = null;
 async function setupPost() {
-  if (!QUALITY[settings.quality].bloom || composer) return;
+  if (!QUALITY[settings.quality].bloom || renderPipeline) return;
   try {
-    const base = 'three/addons/postprocessing/';
-    const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }] = await Promise.all(['EffectComposer', 'RenderPass', 'UnrealBloomPass', 'OutputPass'].map(n => import(base + n + '.js')));
-    const pr = renderer.getPixelRatio();
-    const rt = new THREE.WebGLRenderTarget(innerWidth * pr, innerHeight * pr, { type: THREE.HalfFloatType, samples: 4 });
-    const c = new EffectComposer(renderer, rt);
-    c.addPass(new RenderPass(scene, camera));
+    const { bloom } = await import('three/addons/tsl/display/BloomNode.js');
+    const scenePass = pass(scene, camera, { samples: 4 });
+    const color = scenePass.getTextureNode('output');
     // Since r181/r182 bloom grows linearly with strength (it used to grow with strength squared),
-    // so 0.32 * 0.32 keeps the glow we tuned with 0.32 on the old three.js.
-    c.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.1024, 0.45, 1.05));
-    c.addPass(new OutputPass());
-    c.setPixelRatio(pr); c.setSize(innerWidth, innerHeight);
-    composer = c;
-  } catch (e) { console.warn('post-processing unavailable', e); composer = null; }
+    // so 0.32 * 0.32 keeps the glow we tuned with 0.32 on the old three.js. BloomNode is the same
+    // algorithm as the old UnrealBloomPass (half-resolution, 5 mips), so the numbers carry over.
+    const p = new THREE.RenderPipeline(renderer, color.add(bloom(color, 0.1024, 0.45, 1.05)));
+    renderPipeline = p;
+  } catch (e) { console.warn('post-processing unavailable', e); renderPipeline = null; }
 }
 function updateFov(rdt) {
   const p = G.player; let f = isTouch ? 70 : 64;
@@ -2848,18 +2870,18 @@ function updateFov(rdt) {
   if (Math.abs(camera.fov - f) > 0.02) {
     camera.fov += (f - camera.fov) * Math.min(1, rdt * 3); camera.updateProjectionMatrix();
     const sc = renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
-    if (smokeFX) { smokeFX.mat.uniforms.uScale.value = sc; fireFX.mat.uniforms.uScale.value = sc; }
+    if (smokeFX) { smokeFX.uScale.value = sc; fireFX.uScale.value = sc; }
   }
 }
 
 // QA hook: run the simulation headless, e.g. window.__sim(60)
 window.__sim = (seconds, dt = 1 / 60) => { const n = Math.round(seconds / dt); for (let i = 0; i < n && G.state === 'play'; i++) { simulate(dt); smokeFX.update(dt); fireFX.update(dt); } const p = G.player; return p && { state: G.state, phase: G.mission && G.mission.phase, wave: G.mission && G.mission.wave, alive: p.alive, onGround: p.onGround, alt: +p.pos.y.toFixed(1), speedKmh: +(p.V * 3.6).toFixed(0), gear: p.gear, kills: G.stats.kills, shots: G.stats.shots, hits: G.stats.hits, enemies: enemies().length, fuel: +p.fuel.toFixed(0), time: +G.time.toFixed(1) }; };
-window.__game = { get post() { return !!composer; }, get fx() { return { smokeFX, fireFX }; }, camera, B, world: { coastX, groundH, TOWN, AF }, set hud(v) { hud.hidden = !v; },
-  renderNow(dt = 0) { smokeFX.update(dt); fireFX.update(dt); for (const p of G.planes) if (!p.gone) p.visuals(0); sky.position.copy(camera.position); updateTracers(); if (composer) composer.render(); else renderer.render(scene, camera); return canvas.toDataURL('image/png'); }, G, settings, startMission, SPECS, NET, netSend, finishNet, MSL, LOCK, launchMissile, dropFlares, DIFF };
+window.__game = { get post() { return !!renderPipeline; }, get fx() { return { smokeFX, fireFX }; }, camera, B, world: { coastX, groundH, TOWN, AF }, set hud(v) { hud.hidden = !v; },
+  renderNow(dt = 0) { smokeFX.update(dt); fireFX.update(dt); for (const p of G.planes) if (!p.gone) p.visuals(0); sky.position.copy(camera.position); updateTracers(); if (renderPipeline) renderPipeline.render(); else renderer.render(scene, camera); return canvas.toDataURL('image/png'); }, G, settings, startMission, SPECS, NET, netSend, finishNet, MSL, LOCK, launchMissile, dropFlares, DIFF };
 
 (async function boot() {
   resizeHUD();
-  try { await buildWorld(); }
+  try { await renderer.init(); window.__renderer = renderer; /* TEMP QA */ await buildWorld(); }
   catch (e) { console.error(e); progress('Could not build the world: ' + e.message, 1); return; }
   progress('Ready', 1);
   await setupPost();

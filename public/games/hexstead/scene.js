@@ -299,11 +299,12 @@ function harborSign(type) {
 function iconTexture(svg, ring) {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
+  // make the 2D context now: WebGPU can't upload a canvas that has none yet
+  const g = c.getContext('2d');
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   const img = new Image();
   img.onload = () => {
-    const g = c.getContext('2d');
     if (ring) {
       g.fillStyle = ring;
       g.beginPath();

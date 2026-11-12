@@ -210,11 +210,13 @@ table.res i{display:inline-block;width:10px;height:10px;border-radius:2px;margin
 <div id="portrait" hidden>Turn your phone sideways for a wider view. Tap to hide.</div>
 
 <!-- three.js comes from the Game Center's shared copy (public/vendor/three, see tools/update-three.mjs), never a CDN -->
-<script type="importmap">{"imports":{"three":"../../vendor/three/three.module.min.js","three/addons/":"../../vendor/three/addons/"}}</script>
+<script type="importmap">{"imports":{"three":"../../vendor/three/three.webgpu.min.js","three/webgpu":"../../vendor/three/three.webgpu.min.js","three/tsl":"../../vendor/three/three.tsl.min.js","three/addons/":"../../vendor/three/addons/"}}</script>
 <script type="module">
-// Three.js r187, through the import map above so the add-ons share one copy of it
-import * as THREE from 'three';
-import { Sky } from 'three/addons/objects/Sky.js';
+// Three.js r187 drawing with WebGPU (WebGPURenderer falls back to WebGL2 by itself), through
+// the import map above so the add-ons share one copy of it. Shaders are written in TSL.
+import * as THREE from 'three/webgpu';
+import { Fn, uniform, texture, uv, vec2, vec3, vec4, float, mix, smoothstep, pow, exp, dot, normalize, reflect, cos, positionWorld, positionGeometry, normalGeometry, cameraPosition, positionView, screenDPR, instancedDynamicBufferAttribute, pass, sample, unpackRGBToNormal } from 'three/tsl';
+import { SkyMesh } from 'three/addons/objects/SkyMesh.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // =====================================================================
@@ -266,11 +268,13 @@ const BOOTQ = QUALITY[settings.quality] || QUALITY.medium;
 //  Renderer, sky, light
 // =====================================================================
 const canvas = $('gl');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: BOOTQ.aa, powerPreference: 'high-performance', preserveDrawingBuffer: false });
+// WebGPU where the browser has it, WebGL2 otherwise (the renderer picks; nothing else changes)
+const renderer = new THREE.WebGPURenderer({ canvas, antialias: BOOTQ.aa, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, BOOTQ.pr));
 renderer.setSize(innerWidth, innerHeight, false);
 renderer.shadowMap.enabled = BOOTQ.shadows; renderer.shadowMap.type = THREE.PCFShadowMap; // r186+: PCF is the soft filter
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.1;
+await renderer.init();
 const scene = new THREE.Scene(); scene.environmentIntensity = 0.55; // sky reflections, kept off the matte surfaces' backs
 const HORIZON = new THREE.Color('#c3d3df'), ZENITH = new THREE.Color('#3d6aa3'), SUN = new V3(-0.45, 0.7, 0.55).normalize();
 const FOG = { density: 0.00028 };
@@ -291,25 +295,26 @@ const SKIES = {
   sunset: { sun: [0.74, 0.11, -0.66], sunCol: 0xffa868, sunI: 2.5, hs: 0xbfaecb, hg: 0x5a4636, hi: 1.05, exp: 1.12, fog: 0.0003, turb: 7, ray: 1.3, mie: 0.005, g: 0.85, cov: 0.35, dens: 0.45, elev: 0.6, gain: 0.5, desat: 0.55, hor: '#efb48a', zen: '#2c4a78' },
   morning: { sun: [0.55, 0.3, 0.78], sunCol: 0xfff3dc, sunI: 2.6, hs: 0xdbe6ef, hg: 0x5b5f45, hi: 1.25, exp: 1.08, fog: 0.0004, turb: 3.2, ray: 1.4, mie: 0.005, g: 0.82, cov: 0.45, dens: 0.38, elev: 0.45, gain: 0.55, hor: '#dfe3df', zen: '#4a7bb6' },
 };
-const sky = new Sky(); sky.scale.setScalar(20000); sky.frustumCulled = false; sky.renderOrder = -10; scene.add(sky);
-const skyU = sky.material.uniforms; skyU.skyGain = { value: 0.55 };
+const sky = new SkyMesh(); sky.scale.setScalar(20000); sky.frustumCulled = false; sky.renderOrder = -10; scene.add(sky);
+const skyU = { sunPosition: sky.sunPosition, turbidity: sky.turbidity, rayleigh: sky.rayleigh, mieCoefficient: sky.mieCoefficient, mieDirectionalG: sky.mieDirectionalG,
+  cloudCoverage: sky.cloudCoverage, cloudDensity: sky.cloudDensity, cloudElevation: sky.cloudElevation, skyGain: uniform(0.55) };
 // the r187 sky is tuned for an exposure of about 0.5; scale it to this scene's lighting
-sky.material.fragmentShader = 'uniform float skyGain;\n' + sky.material.fragmentShader.replace('gl_FragColor = vec4( texColor, 1.0 );', 'gl_FragColor = vec4( texColor * skyGain, 1.0 );');
-const probe = { scene: new THREE.Scene(), cam: new THREE.PerspectiveCamera(0.5, 1, 1, 50000), rt: null, px: new Float32Array(4) };
-function sampleSky(dir, out) {
+sky.material.colorNode = vec4(sky.material.colorNode.rgb.mul(skyU.skyGain), 1);
+const probe = { scene: new THREE.Scene(), cam: new THREE.PerspectiveCamera(0.5, 1, 1, 50000), rt: null };
+async function sampleSky(dir, out) {
   // render one pixel of the sky in a direction and read back its linear colour
   try {
-    probe.rt = probe.rt || new THREE.WebGLRenderTarget(1, 1, { type: THREE.FloatType });
+    probe.rt = probe.rt || new THREE.RenderTarget(1, 1, { type: THREE.FloatType, depthBuffer: false });
     const at = sky.position.clone(); sky.position.set(0, 0, 0); probe.scene.add(sky);
     probe.cam.position.set(0, 0, 0); probe.cam.lookAt(dir); probe.cam.updateMatrixWorld();
-    const prev = renderer.getRenderTarget(); renderer.setRenderTarget(probe.rt); renderer.render(probe.scene, probe.cam);
-    probe.px.fill(0); renderer.readRenderTargetPixels(probe.rt, 0, 0, 1, 1, probe.px); renderer.setRenderTarget(prev);
+    const prev = renderer.getRenderTarget(); renderer.setRenderTarget(probe.rt); renderer.render(probe.scene, probe.cam); renderer.setRenderTarget(prev);
     scene.add(sky); sky.position.copy(at);
-    if (!(probe.px[0] + probe.px[1] + probe.px[2] > 0)) return false;
-    out.setRGB(probe.px[0], probe.px[1], probe.px[2], THREE.LinearSRGBColorSpace); return true;
+    const px = await renderer.readRenderTargetPixelsAsync(probe.rt, 0, 0, 1, 1);
+    if (!(px[0] + px[1] + px[2] > 0)) return false;
+    out.setRGB(px[0], px[1], px[2], THREE.LinearSRGBColorSpace); return true;
   } catch (e) { scene.add(sky); return false; }
 }
-function applySky(name) {
+async function applySky(name) {
   const k = SKIES[name] || SKIES.day;
   SUN.set(...k.sun).normalize(); scene.fog.density = FOG.density = k.fog;
   sun.color.set(k.sunCol); sun.intensity = k.sunI; hemi.color.set(k.hs); hemi.groundColor.set(k.hg); hemi.intensity = k.hi; renderer.toneMappingExposure = k.exp;
@@ -321,13 +326,13 @@ function applySky(name) {
   // reflects the sky higher up.
   const acc = new THREE.Color(0, 0, 0), c = new THREE.Color(); let n = 0, logL = 0;
   const lum = col => col.r * 0.2126 + col.g * 0.7152 + col.b * 0.0722;
-  for (let a = 0; a < 8; a++) { const t = a / 8 * Math.PI * 2; if (sampleSky(new V3(Math.cos(t), 0.03, Math.sin(t)), c)) { acc.r += c.r; acc.g += c.g; acc.b += c.b; logL += Math.log(Math.max(1e-5, lum(c))); n++; } }
+  for (let a = 0; a < 8; a++) { const t = a / 8 * Math.PI * 2; if (await sampleSky(new V3(Math.cos(t), 0.03, Math.sin(t)), c)) { acc.r += c.r; acc.g += c.g; acc.b += c.b; logL += Math.log(Math.max(1e-5, lum(c))); n++; } }
   if (n) {
     // log-average like a camera's meter, so a bright sunset glow does not black out the rest
     const f = (k.skyLum || 1.0) / Math.exp(logL / n); skyU.skyGain.value = k.gain * f;
     HORIZON.setRGB(acc.r / n * f * 0.82, acc.g / n * f * 0.82, acc.b / n * f * 0.82, THREE.LinearSRGBColorSpace);
     const l = lum(HORIZON); if (l > 0.95) HORIZON.multiplyScalar(0.95 / l); const l2 = lum(HORIZON); HORIZON.lerp(new THREE.Color(l2, l2, l2), k.desat ?? 0.3);
-    if (sampleSky(new V3(-SUN.x, 0.8, -SUN.z), ZENITH)) ZENITH.multiplyScalar(f).lerp(new THREE.Color(k.zen), 0.5); else ZENITH.set(k.zen);
+    if (await sampleSky(new V3(-SUN.x, 0.8, -SUN.z), ZENITH)) ZENITH.multiplyScalar(f).lerp(new THREE.Color(k.zen), 0.5); else ZENITH.set(k.zen);
   } else { HORIZON.set(k.hor); ZENITH.set(k.zen); }
   scene.fog.color.copy(HORIZON);
 }
@@ -391,7 +396,7 @@ async function buildCircuit(key) {
   $('loading').hidden = false; progress('Surveying the course…', 0.02); await nextFrame();
   if (world) { world.traverse(o => { if (o.geometry) o.geometry.dispose(); }); scene.remove(world); }
   world = new THREE.Group(); scene.add(world);
-  seedNoise(tr.seed); applySky(tr.sky);
+  seedNoise(tr.seed); await applySky(tr.sky);
   // --- centre line
   const pts = tr.pts.map(([x, z]) => new V3(x * tr.scale, 0, z * tr.scale));
   const curve = new THREE.CatmullRomCurve3(pts, true, 'centripetal');
@@ -474,15 +479,12 @@ function buildTerrainMesh(tr) {
     const o = (py * S + px) * 4; d[o] = r; d[o + 1] = g; d[o + 2] = b; d[o + 3] = 255;
   }
   ctx.putImageData(img, 0, 0); TERR.canvas = c;
-  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = Math.min(8, renderer.getMaxAnisotropy());
   const detail = makeDetailTexture();
-  const mat = new THREE.MeshLambertMaterial({ map: tex });
-  mat.onBeforeCompile = sh => {
-    sh.uniforms.detailMap = { value: detail };
-    sh.vertexShader = 'varying vec2 vWXZ;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vWXZ = (modelMatrix*vec4(position,1.0)).xz;');
-    sh.fragmentShader = 'uniform sampler2D detailMap;\nvarying vec2 vWXZ;\n' + sh.fragmentShader.replace('#include <map_fragment>',
-      '#include <map_fragment>\n diffuseColor.rgb *= (texture2D(detailMap, vWXZ*0.06).r*0.5+0.75) * (texture2D(detailMap, vWXZ*0.009).g*0.34+0.83) * (texture2D(detailMap, vWXZ*0.31).r*0.26+0.87);');
-  };
+  // the field colours, broken up by three scales of detail noise laid in world space
+  const wxz = positionWorld.xz, base = texture(tex, uv());
+  const grain = texture(detail, wxz.mul(0.06)).r.mul(0.5).add(0.75).mul(texture(detail, wxz.mul(0.009)).g.mul(0.34).add(0.83)).mul(texture(detail, wxz.mul(0.31)).r.mul(0.26).add(0.87));
+  const mat = new THREE.MeshLambertNodeMaterial({ colorNode: vec4(base.rgb.mul(grain), base.a) });
   const m = new THREE.Mesh(geo, mat); m.receiveShadow = true; world.add(m);
 }
 function makeDetailTexture() {
@@ -501,7 +503,7 @@ function roadTexture() {
   x.fillStyle = 'rgba(25,25,27,0.35)'; x.fillRect(64, 0, 22, 512); x.fillRect(170, 0, 22, 512); // racing-line rubber
   x.fillStyle = '#ecebe4'; x.fillRect(8, 0, 6, 512); x.fillRect(242, 0, 6, 512);
   x.fillStyle = '#e8c43a'; x.fillRect(125, 0, 6, 220); x.fillRect(125, 300, 6, 160);
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy()); return t;
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = Math.min(16, renderer.getMaxAnisotropy()); return t;
 }
 function stripTexture(kind) {
   const c = document.createElement('canvas'); c.width = 64; c.height = 128; const x = c.getContext('2d');
@@ -655,45 +657,42 @@ function buildTrees(tr, count) {
   }
   for (const t of list) { const k = Math.floor(t.x / 20) * 100003 + Math.floor(t.z / 20); if (!TREES.bins.has(k)) TREES.bins.set(k, []); TREES.bins.get(k).push(t); }
 }
-const waterMat = new THREE.ShaderMaterial({
-  uniforms: { uTime: { value: 0 }, uSun: { value: SUN }, uHor: { value: HORIZON }, uZen: { value: ZENITH }, uFogC: { value: scene.fog.color }, uFogD: { value: 0.0003 } },
-  vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.); vW = w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }`,
-  fragmentShader: `precision highp float; uniform float uTime, uFogD; uniform vec3 uSun, uHor, uZen, uFogC; varying vec3 vW;
-    vec2 wv(vec2 p, vec2 d, float f, float a, float s){ float k = dot(p,d)*f + uTime*s; return d*(f*a*cos(k)); }
-    void main(){ vec2 p = vW.xz; float dist = length(cameraPosition - vW);
-      vec2 g = wv(p, vec2(0.8,0.6), 0.09, 0.4, 1.1) + wv(p, vec2(-0.5,0.86), 0.17, 0.2, 1.6) + wv(p, vec2(0.3,-0.95), 0.41, 0.06, 2.4);
-      vec3 n = normalize(vec3(-g.x*0.6, 1.0, -g.y*0.6)); vec3 V = normalize(cameraPosition - vW);
-      float fres = 0.02 + 0.98*pow(1.0 - max(dot(n,V),0.0), 5.0); vec3 R = reflect(-V, n);
-      vec3 skyc = mix(uHor, uZen, pow(clamp(R.y,0.,1.),0.6)); vec3 body = vec3(0.04,0.14,0.18);
-      vec3 col = mix(body, skyc, fres*0.75); col += vec3(1.,.9,.75)*pow(max(dot(R,uSun),0.),220.)*3.;
-      float f = 1.0 - exp(-uFogD*uFogD*dist*dist); gl_FragColor = vec4(mix(col, uFogC, f), 1.);
-      #include <tonemapping_fragment>
-      #include <colorspace_fragment>
-    }`,
-});
+// the lake: three swells of ripples, a Fresnel blend from the deep water colour to
+// the sky it reflects (horizon to zenith), a hot sun glint, and its own distance haze
+const waterU = { time: uniform(0), sun: uniform(SUN), hor: uniform(HORIZON), zen: uniform(ZENITH), fogC: uniform(scene.fog.color), fogD: uniform(0.0003) };
+const waterMat = new THREE.MeshBasicNodeMaterial({ fog: false, colorNode: Fn(() => {
+  const p = positionWorld.xz, toCam = cameraPosition.sub(positionWorld), dist = toCam.length();
+  const wv = (dx, dz, f, a, s) => { const d = vec2(dx, dz); return d.mul(cos(dot(p, d).mul(f).add(waterU.time.mul(s))).mul(f * a)); };
+  const g = wv(0.8, 0.6, 0.09, 0.4, 1.1).add(wv(-0.5, 0.86, 0.17, 0.2, 1.6)).add(wv(0.3, -0.95, 0.41, 0.06, 2.4));
+  const n = normalize(vec3(g.x.mul(-0.6), 1.0, g.y.mul(-0.6))), V = normalize(toCam);
+  const fres = float(1).sub(dot(n, V).max(0)).pow(5).mul(0.98).add(0.02), R = reflect(V.negate(), n);
+  const skyc = mix(waterU.hor, waterU.zen, pow(R.y.clamp(0, 1), 0.6));
+  const col = mix(vec3(0.04, 0.14, 0.18), skyc, fres.mul(0.75)).add(vec3(1, 0.9, 0.75).mul(pow(dot(R, waterU.sun).max(0), 220).mul(3)));
+  const f = float(1).sub(exp(waterU.fogD.mul(waterU.fogD).mul(dist).mul(dist).negate()));
+  return vec4(mix(col, waterU.fogC, f), 1);
+})() });
 function buildLake(tr) { const m = new THREE.Mesh(new THREE.CircleGeometry(tr.lake.r * 1.5, 64).rotateX(-Math.PI / 2), waterMat); m.position.set(tr.lake.x, 0, tr.lake.z); world.add(m); }
 
 // =====================================================================
 //  Particles: tyre smoke, dust, sparks
 // =====================================================================
 class Particles {
+  // soft round puffs drawn as camera-facing quads, one instance per particle (WebGPU points are
+  // always one pixel, so size comes from the quad); `size` is in metres, like a sprite
   constructor(max) {
-    this.max = max; this.n = 0; const g = new THREE.BufferGeometry();
+    this.max = max; this.n = 0;
     this.pos = new Float32Array(max * 3); this.col = new Float32Array(max * 3); this.a = new Float32Array(max); this.sz = new Float32Array(max);
-    for (const [n, arr, s] of [['position', this.pos, 3], ['color', this.col, 3], ['alpha', this.a, 1], ['size', this.sz, 1]]) g.setAttribute(n, new THREE.BufferAttribute(arr, s).setUsage(THREE.DynamicDrawUsage));
-    g.boundingSphere = new THREE.Sphere(new V3(), 1e7);
+    this.attrs = [[this.pos, 3], [this.col, 3], [this.a, 1], [this.sz, 1]].map(([arr, s]) => new THREE.InstancedBufferAttribute(arr, s).setUsage(THREE.DynamicDrawUsage));
+    const [aPos, aCol, aA, aSz] = this.attrs.map(a => instancedDynamicBufferAttribute(a));
     this.vel = new Float32Array(max * 3); this.life = new Float32Array(max); this.max0 = new Float32Array(max); this.grow = new Float32Array(max); this.a0 = new Float32Array(max);
-    this.mat = new THREE.ShaderMaterial({
-      uniforms: { uScale: { value: 400 } },
-      vertexShader: `attribute float alpha; attribute float size; attribute vec3 color; varying vec3 vC; varying float vA; uniform float uScale;
-        void main(){ vec4 mv = modelViewMatrix*vec4(position,1.); gl_PointSize = clamp(size*uScale/max(-mv.z,0.1), 1.0, 400.0); gl_Position = projectionMatrix*mv; vC = color; vA = alpha; }`,
-      fragmentShader: `varying vec3 vC; varying float vA; void main(){ float d = length(gl_PointCoord-0.5)*2.0; float a = vA*(1.0-smoothstep(0.2,1.0,d)); if(a<0.004) discard; gl_FragColor = vec4(vC, a);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }`,
-      transparent: true, depthWrite: false,
+    this.uScale = uniform(400); // drawing-buffer height / (2 tan(fov / 2)): metres at 1 m to device pixels
+    const fall = uv().sub(0.5).length().mul(2);
+    this.mat = new THREE.PointsNodeMaterial({
+      positionNode: aPos, colorNode: aCol, opacityNode: aA.mul(smoothstep(0.2, 1.0, fall).oneMinus()), alphaTest: 0.004,
+      sizeNode: aSz.mul(this.uScale).div(positionView.z.negate().max(0.1)).clamp(1, 400).div(screenDPR), sizeAttenuation: false,
+      transparent: true, depthWrite: false, fog: false,
     });
-    this.points = new THREE.Points(g, this.mat); this.points.frustumCulled = false; this.points.renderOrder = 2; scene.add(this.points); this.geo = g;
+    this.points = new THREE.Sprite(this.mat); this.points.count = 0; this.points.frustumCulled = false; this.points.renderOrder = 2; scene.add(this.points);
   }
   spawn(x, y, z, vx, vy, vz, life, size, grow, r, g, b, a) {
     if (this.n >= this.max) return; const i = this.n++, i3 = i * 3;
@@ -708,7 +707,7 @@ class Particles {
       this.pos[i3] += this.vel[i3] * dt; this.pos[i3 + 1] += this.vel[i3 + 1] * dt; this.pos[i3 + 2] += this.vel[i3 + 2] * dt;
       this.sz[i] += this.grow[i] * dt; const t = 1 - this.life[i] / this.max0[i]; this.a[i] = this.a0[i] * Math.min(1, t * 6) * (1 - t);
     }
-    this.geo.setDrawRange(0, this.n); for (const n of ['position', 'color', 'alpha', 'size']) this.geo.attributes[n].needsUpdate = true;
+    this.points.count = this.n; for (const at of this.attrs) { at.clearUpdateRanges(); at.addUpdateRange(0, Math.max(1, this.n) * at.itemSize); at.needsUpdate = true; }
   }
 }
 const smokeFX = new Particles(2500);
@@ -848,20 +847,12 @@ function liveryTexture(color, num, style) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
 }
 function paintMaterial(tex, s, ghost) {
-  const m = new THREE.MeshPhysicalMaterial({ map: tex, roughness: 0.36, metalness: 0.5, clearcoat: ghost ? 0 : 1, clearcoatRoughness: 0.05, envMapIntensity: 1.15, side: ghost ? THREE.FrontSide : THREE.DoubleSide });
   // project the livery: side half from the side, top half from above, blended by the normal
-  m.onBeforeCompile = sh => {
-    sh.uniforms.uDim = { value: new THREE.Vector4(-s.len / 2, s.len, s.wid, s.hgt) };
-    sh.vertexShader = 'varying vec3 vObjP;\nvarying vec3 vObjN;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vObjP = position; vObjN = normal;');
-    sh.fragmentShader = 'uniform vec4 uDim;\nvarying vec3 vObjP;\nvarying vec3 vObjN;\n' + sh.fragmentShader.replace('#include <map_fragment>', `
-      float zn = clamp((vObjP.z - uDim.x) / uDim.y, 0.0, 1.0);
-      float hn = clamp((vObjP.y - 0.2) / (uDim.w - 0.15), 0.0, 1.0);
-      vec2 uvS = vec2(vObjP.x < 0.0 ? zn : 1.0 - zn, 0.51 + 0.48 * hn);
-      vec2 uvT = vec2(zn, 0.01 + 0.48 * clamp(vObjP.x / uDim.z + 0.5, 0.0, 1.0));
-      float wTop = smoothstep(0.55, 0.85, abs(normalize(vObjN).y));
-      diffuseColor *= mix(texture2D(map, uvS), texture2D(map, uvT), wTop);`);
-  };
-  m.customProgramCacheKey = () => 'rally-livery';
+  const P = positionGeometry, zn = P.z.sub(-s.len / 2).div(s.len).clamp(0, 1), hn = P.y.sub(0.2).div(s.hgt - 0.15).clamp(0, 1);
+  const uvS = vec2(P.x.lessThan(0).select(zn, zn.oneMinus()), hn.mul(0.48).add(0.51));
+  const uvT = vec2(zn, P.x.div(s.wid).add(0.5).clamp(0, 1).mul(0.48).add(0.01));
+  const wTop = smoothstep(0.55, 0.85, normalize(normalGeometry).y.abs());
+  const m = new THREE.MeshPhysicalNodeMaterial({ colorNode: mix(texture(tex, uvS), texture(tex, uvT), wTop), roughness: 0.36, metalness: 0.5, clearcoat: ghost ? 0 : 1, clearcoatRoughness: 0.05, envMapIntensity: 1.15, side: ghost ? THREE.FrontSide : THREE.DoubleSide });
   if (ghost) { m.transparent = true; m.opacity = 0.35; m.depthWrite = false; }
   return m;
 }
@@ -1445,7 +1436,7 @@ function updateCamera(dt) {
   }
   if (G.shake > 0) { camera.position.x += (Math.random() - 0.5) * G.shake * 0.25; camera.position.y += (Math.random() - 0.5) * G.shake * 0.25; G.shake = Math.max(0, G.shake - dt * 3); }
   const fov = (isTouch ? 72 : 66) + clamp((V - 20) / 50, 0, 1) * 8;
-  if (Math.abs(camera.fov - fov) > 0.05) { camera.fov = lerp(camera.fov, fov, Math.min(1, dt * 3)); camera.updateProjectionMatrix(); smokeFX.mat.uniforms.uScale.value = renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)); }
+  if (Math.abs(camera.fov - fov) > 0.05) { camera.fov = lerp(camera.fov, fov, Math.min(1, dt * 3)); camera.updateProjectionMatrix(); smokeFX.uScale.value = pointScale(); }
 }
 
 // =====================================================================
@@ -1574,31 +1565,46 @@ $('btnFull').addEventListener('click', () => { const el = document.documentEleme
 // =====================================================================
 //  Post-processing (ambient occlusion and bloom on High) and the main loop
 // =====================================================================
-let composer = null; const postFX = { ao: null };
+// The High chain is one RenderPipeline: a depth-and-normals pre-pass feeds ground-truth AO
+// (denoised), which shades the multisampled scene pass; bloom picks out the sun, lights and
+// glints; the renderer's tone mapping and output colour space are applied once at the end.
+let postFX = null; // { pipeline, ao, nodes }
 async function setupPost() {
-  if (!QUALITY[settings.quality].bloom || composer) return;
+  if (!QUALITY[settings.quality].bloom || postFX) return;
   try {
-    const base = 'three/addons/postprocessing/';
-    const [{ EffectComposer }, { RenderPass }, { GTAOPass }, { UnrealBloomPass }, { OutputPass }] = await Promise.all(['EffectComposer', 'RenderPass', 'GTAOPass', 'UnrealBloomPass', 'OutputPass'].map(n => import(base + n + '.js')));
-    const pr = renderer.getPixelRatio(); const rt = new THREE.WebGLRenderTarget(innerWidth * pr, innerHeight * pr, { type: THREE.HalfFloatType, samples: 4 });
-    const c = new EffectComposer(renderer, rt); c.addPass(new RenderPass(scene, camera));
+    const [{ ao }, { denoise }, { bloom }] = await Promise.all(['GTAONode', 'DenoiseNode', 'BloomNode'].map(n => import(`three/addons/tsl/display/${n}.js`)));
+    if (postFX) return;
+    const pipeline = new THREE.RenderPipeline(renderer);
+    // opaque geometry only, single-sampled, drawn with a plain normal material (as cheap as the old AO's normal pass)
+    const pre = pass(scene, camera, { samples: 0 }); pre.transparent = false; pre.overrideMaterial = new THREE.MeshNormalNodeMaterial();
+    const preColor = pre.getTextureNode(), depth = pre.getTextureNode('depth');
+    const normal = sample(c => unpackRGBToNormal(preColor.sample(c)));
     // ground-truth ambient occlusion: soft contact shading under cars, round barns, in the trees
-    const ao = new GTAOPass(scene, camera, innerWidth, innerHeight);
-    ao.updateGtaoMaterial({ radius: 1.6, distanceExponent: 1.6, thickness: 1.5, scale: 1.1, samples: 16 }); ao.updatePdMaterial({ radius: 6, samples: 12 }); ao.blendIntensity = 0.85;
-    c.addPass(ao); postFX.ao = ao;
-    c.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.2, 0.35, 1.45)); c.addPass(new OutputPass()); c.setPixelRatio(pr); c.setSize(innerWidth, innerHeight); composer = c;
-  } catch (e) { console.warn('post-processing unavailable', e); composer = null; }
+    const aoNode = ao(depth, normal, camera);
+    aoNode.radius.value = 1.6; aoNode.thickness.value = 1.5; aoNode.scale.value = 1.1; aoNode.samples.value = 16;
+    const aoSoft = denoise(aoNode.getTextureNode(), depth, normal, camera);
+    aoSoft.lumaPhi.value = 10; aoSoft.depthPhi.value = 2; aoSoft.normalPhi.value = 3; aoSoft.radius.value = 6;
+    const scenePass = pass(scene, camera);
+    const shaded = scenePass.getTextureNode().rgb.mul(mix(float(1), aoSoft.r, 0.85));
+    const glow = bloom(shaded, 0.2, 0.35, 1.45);
+    pipeline.outputNode = vec4(shaded.add(glow.rgb), 1);
+    postFX = { pipeline, ao: aoNode, nodes: [pre, aoNode, aoSoft, scenePass, glow] };
+  } catch (e) { console.warn('post-processing unavailable', e); postFX = null; }
 }
+function disposePost() { if (!postFX) return; for (const n of postFX.nodes) n.dispose(); postFX.pipeline.dispose(); postFX = null; }
 function buildEnv() {
   // reflections come from the circuit's own sky, clouds and all, over a ground of its colour
   try {
     const pm = new THREE.PMREMGenerator(renderer), es = probe.scene, at = sky.position.clone(); sky.position.set(0, 0, 0); es.add(sky);
     const gr = new THREE.Mesh(new THREE.CircleGeometry(390, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(SKIES[TRACKS[curTrack]?.sky]?.hg ?? 0x4f5a3a).multiplyScalar(0.8) })); gr.position.y = -20; es.add(gr);
     const old = scene.environment; scene.environment = pm.fromScene(es, 0.02, 0.1, 50000).texture; if (old) old.dispose();
-    es.remove(gr); gr.geometry.dispose(); scene.add(sky); sky.position.copy(at); pm.dispose();
+    es.remove(gr); gr.geometry.dispose(); gr.material.dispose(); scene.add(sky); sky.position.copy(at); pm.dispose();
   } catch (e) { console.warn(e); scene.add(sky); }
 }
-function onResize() { if (composer) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(innerWidth, innerHeight); } renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); resizeHUD(); smokeFX.mat.uniforms.uScale.value = renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)); }
+const pointScale = () => renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+function onResize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); resizeHUD(); smokeFX.uScale.value = pointScale(); }
+const draw = () => { if (postFX && QUALITY[settings.quality].bloom) postFX.pipeline.render(); else renderer.render(scene, camera); };
+addEventListener('pagehide', e => { if (e.persisted) return; disposePost(); renderer.dispose(); });
 addEventListener('resize', onResize);
 const STEP = 1 / 120; let last = performance.now();
 function simulate(dt) {
@@ -1625,21 +1631,22 @@ function frame(now) {
   }
   if (G.state !== 'race') $('portrait').hidden = true;
   smokeFX.update(dt);
-  waterMat.uniforms.uTime.value = now / 1000;
-  sky.position.copy(camera.position); skyU.time.value = now / 1000;
+  waterU.time.value = now / 1000;
+  sky.position.copy(camera.position);
   const fp = RACE.player ? _ct.set(RACE.player.x, RACE.player.y, RACE.player.z) : camera.position;
   sun.position.copy(fp).addScaledVector(SUN, 400); sun.target.position.copy(fp);
-  if (composer && QUALITY[settings.quality].bloom) composer.render(); else renderer.render(scene, camera);
+  draw();
   drawHUD(dt);
   Sfx.update(RACE.player);
 }
 // QA hooks: run the race headless, or hold a frame still for a capture
 window.__sim = (seconds, dt = 1 / 60) => { const n = Math.round(seconds / dt); for (let i = 0; i < n && (G.state === 'race' || G.state === 'paused'); i++) simulate(dt); const p = RACE.player; return p && { state: G.state, phase: RACE.phase, lap: p.lap, pos: RACE.order.indexOf(p) + 1, of: RACE.order.length, mph: Math.round(p.speed * MPH), best: p.best, t: +RACE.t.toFixed(1), onRoad: p.onRoad, finished: p.finished }; };
-window.__game = { scene, ZENITH, HORIZON, RACE, G, T, settings, startRace, NET, TRACKS, CARS, camera, buildCircuit, set hud(v) { hud.hidden = !v; }, renderNow() { for (const c of RACE.cars) c.visuals(0.5); sky.position.copy(camera.position); if (composer) composer.render(); else renderer.render(scene, camera); return canvas.toDataURL('image/png'); }, get post() { return !!composer; }, frameAt };
+window.__game = { scene, ZENITH, HORIZON, RACE, G, T, settings, startRace, NET, TRACKS, CARS, camera, buildCircuit, set hud(v) { hud.hidden = !v; }, renderNow() { for (const c of RACE.cars) c.visuals(0.5); sky.position.copy(camera.position); if (postFX) postFX.pipeline.render(); else renderer.render(scene, camera); return canvas.toDataURL('image/png'); }, get post() { return !!postFX; }, frameAt };
+window.__renderer = renderer; // TEMP-WEBGPU-CHECK
 
 (async function boot() {
   resizeHUD();
-  buildMenus(); updateHint(); applySky('day');
+  buildMenus(); updateHint();
   try { await buildCircuit(settings.track); } catch (e) { console.error(e); progress('Could not build the circuit: ' + e.message, 1); return; }
   await setupPost(); onResize();
   G.state = 'menu'; showScreen('menu'); showcase();
