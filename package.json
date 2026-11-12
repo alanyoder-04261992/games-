@@ -1,0 +1,27 @@
+{
+  "name": "game-center",
+  "version": "1.0.0",
+  "description": "Game Center: multiplayer card and board games, starting with Rook",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "start": "node tools/serve.js",
+    "peer-server": "node tools/peer-server.cjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alanyoder-04261992/games-.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/alanyoder-04261992/games-/issues"
+  },
+  "homepage": "https://github.com/alanyoder-04261992/games-#readme",
+  "devDependencies": {
+    "express": "^4.22.3",
+    "peer": "^1.0.2",
+    "peerjs": "^1.5.5"
+  },
+  "type": "module",
+  "private": true
+}

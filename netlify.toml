@@ -1,0 +1,4 @@
+# The website is the public/ folder; there is no build step.
+[build]
+  publish = "public"
+  command = ""
