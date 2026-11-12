@@ -93,6 +93,20 @@ table.res i{display:inline-block;width:10px;height:10px;border-radius:2px;margin
 #tCam{right:calc(max(16px,env(safe-area-inset-right)) + 64px)}
 #tMap{right:calc(max(16px,env(safe-area-inset-right)) + 116px)}
 #tReset{right:calc(max(16px,env(safe-area-inset-right)) + 168px)}
+/* short screens: DRIFT moves beside BRAKE, everything a size smaller; tiny = under 300px tall */
+#touch.compact #tHand{right:calc(max(16px,env(safe-area-inset-right)) + 212px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 10px);width:66px;height:52px}
+#touch.compact #tLeft,#touch.compact #tRight{width:72px;height:72px;bottom:calc(max(10px,env(safe-area-inset-bottom)) + 8px)}
+#touch.compact #tRight{left:calc(max(16px,env(safe-area-inset-left)) + 96px)}
+#touch.compact #steerPad{bottom:calc(max(10px,env(safe-area-inset-bottom)) + 14px)}
+#touch.compact .tbtn.sq{width:40px;height:40px;font-size:.66rem;top:calc(max(6px,env(safe-area-inset-top)) + 2px)}
+#touch.compact #tCam{right:calc(max(16px,env(safe-area-inset-right)) + 58px)}
+#touch.compact #tMap{right:calc(max(16px,env(safe-area-inset-right)) + 104px)}
+#touch.compact #tReset{right:calc(max(16px,env(safe-area-inset-right)) + 150px)}
+#touch.tiny #tGas{width:84px;height:104px;bottom:calc(max(10px,env(safe-area-inset-bottom)) + 6px)}
+#touch.tiny #tBrake{width:76px;height:76px;right:calc(max(16px,env(safe-area-inset-right)) + 106px);bottom:calc(max(10px,env(safe-area-inset-bottom)) + 6px)}
+#touch.tiny #tHand{right:calc(max(16px,env(safe-area-inset-right)) + 188px);bottom:calc(max(10px,env(safe-area-inset-bottom)) + 6px);width:60px;height:44px;font-size:.68rem}
+#touch.tiny #tLeft,#touch.tiny #tRight{width:62px;height:62px;bottom:calc(max(10px,env(safe-area-inset-bottom)) + 6px);font-size:1.3rem}
+#touch.tiny #tRight{left:calc(max(16px,env(safe-area-inset-left)) + 84px)}
 #portrait{position:fixed;left:50%;top:calc(max(10px,env(safe-area-inset-top)) + 64px);transform:translateX(-50%);z-index:6;background:var(--panel);border:1px solid var(--line);padding:8px 12px;font-size:.9rem;color:var(--ink-dim);max-width:80vw;text-align:center}
 @media (max-height:500px){ .sheet{padding:12px 16px;gap:9px} h1{font-size:2.3rem} .lede,#ctrlHint,.card .stat,.card small{display:none} .card{padding:7px 10px} .card b{font-size:1.1rem} .settings{gap:6px 12px} }
 @media (max-width:560px){ .cards{grid-template-columns:1fr} }
@@ -910,6 +924,9 @@ class Car {
     this.pitch = 0; this.roll = 0; this.bounce = 0; this.wrongT = 0; this.offT = 0; this.wheelRot = 0; this.netSnap = null;
   }
   get speed() { return Math.hypot(this.vx, this.vz); }
+  // Full steering always means the tightest turn the tyres can hold: the angle for the car's
+  // grip at this speed plus the front tyres' peak slip. Asking for more only makes them plough on.
+  steerLimit(V) { const s = this.spec; return Math.min(s.maxSteer, (s.a + s.b) * s.mu * 9.81 * 1.1 / Math.max(V * V, 1) + 0.10); }
   fwd() { return [-Math.sin(this.yaw), -Math.cos(this.yaw)]; }
   place(i, lat, back) {
     const f = frameAt(i); this.x = f.x + f.rx * lat - f.tx * back; this.z = f.z + f.rz * lat - f.tz * back; this.yaw = f.yaw; this.vx = this.vz = this.r = 0;
@@ -923,13 +940,13 @@ class Car {
     const fx = -sinY, fz = -cosY, rx = cosY, rz = -sinY;
     let vf = this.vx * fx + this.vz * fz, vs = this.vx * rx + this.vz * rz;
     const V = Math.hypot(vf, vs);
-    const steerMax = s.maxSteer / (1 + V / 26);
+    const steerMax = this.steerLimit(V);
     this.steer += clamp(this.inSteer * steerMax - this.steer, -dt * 3.2, dt * 3.2);
     const delta = this.steer;
     this.idx = nearestIdx(this.x, this.z, this.idx);
     const lat = Math.abs(lateral(this.x, this.z, this.idx));
     this.onRoad = lat < HALF_W + 1.2;
-    const surf = this.onRoad ? 1 : lat < HALF_W + VERGE + 0.5 ? 0.82 : 0.62;
+    const surf = this.onRoad || window.__roadEverywhere ? 1 : lat < HALF_W + VERGE + 0.5 ? 0.82 : 0.62; // __roadEverywhere: test hook for grip measurements
     const down = (s.down || 0) * V * V;
     const L = s.a + s.b, h = 0.42;
     const shift = clamp(s.mass * this.ax * h / L, -0.16 * s.mass * g, 0.16 * s.mass * g); // weight transfer, damped by the springs
@@ -944,9 +961,9 @@ class Car {
     // the rear tyres are stiffer and grip a touch more than the fronts, so every car
     // understeers gently at the limit instead of spinning; the V8 has the least margin
     const pac = (a, B) => Math.sin(1.3 * Math.atan(B * a));
-    let Fyf = -mu * Nf * pac(af, 8);
+    let Fyf = -mu * Nf * pac(af, 14);
     const vsr = vs + s.b * this.r; const ar = Math.atan2(vsr, vl);
-    let Fyr = -muR * Nr * pac(ar, 13);
+    let Fyr = -muR * Nr * pac(ar, 18);
     // longitudinal: drive, brakes (65 % front), handbrake on the rear, reverse
     let Fdrive = 0, Fbf = 0, Fbr = 0;
     const reversing = this.brk > 0.3 && vf < 1.5 && this.thr < 0.1 && RACE.phase !== 'countdown';
@@ -982,6 +999,13 @@ class Car {
     const Iz = s.mass * (s.a * s.a + s.b * s.b) * 0.55;
     const tau = -s.a * Fyf * Math.cos(delta) + s.b * Fyr;
     this.r += tau / Iz * dt; if (V < 1) this.r *= 0.9;
+    // stability control: hold rotation to what the tyres can sustain (μg/v), so turn-in does
+    // not overshoot into a slide. Looser with the assist off; off under the handbrake to drift.
+    if (!this.hand && V > 4) {
+      const loose = this.player && !this.ai && !settings.assist ? (this.key === 'brumby' ? 1.45 : 1.3) : 1.08;
+      const rLim = mu * g * loose / V;
+      if (Math.abs(this.r) > rLim) this.r -= Math.sign(this.r) * (Math.abs(this.r) - rLim) * Math.min(1, dt * 10);
+    }
     this.yaw += this.r * dt;
     this.x += this.vx * dt; this.z += this.vz * dt;
     const gh = surfaceH(this.x, this.z, this.idx); this.y = gh;
@@ -1032,7 +1056,7 @@ function aiDrive(c, dt) {
   let steer = Math.atan(2 * (s.a + s.b) * Math.sin(alpha) / lookM) * 1.3;
   const latNow = lateral(c.x, c.z, c.idx), latHere = clamp(T.line[c.idx] * ai.line + ai.offset, -HALF_W + 1.4, HALF_W - 1.4);
   steer += clamp((latNow - latHere) * 0.012, -0.06, 0.06);
-  c.inSteer = clamp(steer / (s.maxSteer / (1 + V / 26)), -1, 1);
+  c.inSteer = clamp(steer / c.steerLimit(V), -1, 1);
   // speed: the slowest corner within braking distance, scaled by skill and grip
   let vt = 999;
   for (let o = 2; o < 70; o += 3) { const k = (c.idx + o) % N; const dist = o * T.ds; const v = T.vmax[k] * Math.sqrt(s.mu / 1.15) * skill * 0.94; const reach = Math.sqrt(v * v + 2 * 8.5 * s.mu * dist); if (reach < vt) vt = reach; }
@@ -1353,7 +1377,7 @@ function playerInput(c, dt) {
   if (!isTouch && !gp) steer = c.inSteerKey = lerp(c.inSteerKey || 0, steer, Math.min(1, dt * (steer ? 5 : 9)));
   if (settings.assist) {
     const [fx, fz] = c.fwd(); const vs = c.vx * Math.cos(c.yaw) - c.vz * Math.sin(c.yaw); const vf = c.vx * fx + c.vz * fz;
-    const slide = vf > 5 ? vs / vf : 0; steer = clamp(steer - slide * 1.4, -1, 1); // counter-steer
+    const slide = vf > 5 ? vs / vf : 0, over = Math.max(0, Math.abs(slide) - 0.08); steer = clamp(steer - Math.sign(slide) * over * 2.2, -1, 1); // counter-steer real slides only
     if (c.slipR > 0.2 && gas) gas *= 0.6; // traction control
   }
   if (RACE.phase === 'countdown') { brake = 1; }
@@ -1428,48 +1452,51 @@ function updateCamera(dt) {
 // =====================================================================
 const hud = $('hud'), hx = hud.getContext('2d');
 let HW = 0, HH = 0, HDPR = 1;
-function resizeHUD() { HDPR = Math.min(devicePixelRatio || 1, 2); HW = innerWidth; HH = innerHeight; hud.width = HW * HDPR; hud.height = HH * HDPR; }
+function resizeHUD() { HDPR = Math.min(devicePixelRatio || 1, 2); HW = innerWidth; HH = innerHeight; hud.width = HW * HDPR; hud.height = HH * HDPR; $('touch').classList.toggle('compact', HH < 430); $('touch').classList.toggle('tiny', HH < 300); }
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace', COND = '"Saira Condensed", "Arial Narrow", sans-serif';
 function txt(s, x, y, size = 13, col = '#f4f1e8', align = 'left', font = MONO, weight = 700, italic = false) { hx.font = `${italic ? 'italic ' : ''}${weight} ${size}px ${font}`; hx.textAlign = align; hx.fillStyle = 'rgba(8,10,12,0.65)'; hx.fillText(s, x + 1.5, y + 1.5); hx.fillStyle = col; hx.fillText(s, x, y); }
 function drawHUD(dt) {
   hx.setTransform(HDPR, 0, 0, HDPR, 0, 0); hx.clearRect(0, 0, HW, HH);
   if (G.state !== 'race' && G.state !== 'paused') return;
   const c = RACE.player; if (!c) return;
-  const sL = 16, sT = 14;
-  // position and lap
+  const sL = 16, sT = isTouch && HH < 430 ? 6 : 14, tiny = isTouch && HH < 300, k = tiny ? 0.72 : isTouch && HH < 430 ? 0.85 : 1;
+  // position and lap (smaller on short phone screens so the steering buttons stay clear)
   const pos = RACE.order.indexOf(c) + 1, n = RACE.order.length;
+  let ty = sT;
   if (RACE.mode !== 'trial') {
-    txt(String(pos), sL, sT + 46, 52, '#ffcc1a', 'left', COND, 800, true); hx.font = `italic 800 52px ${COND}`; const w = hx.measureText(String(pos)).width;
-    txt(`/${n}`, sL + w + 4, sT + 46, 22, '#f4f1e8', 'left', COND, 700, true);
-    txt(`LAP ${clamp(c.lap, 1, RACE.laps)}/${RACE.laps}`, sL, sT + 72, 15, '#f4f1e8', 'left', COND, 700);
-  } else txt('TIME TRIAL', sL, sT + 30, 22, '#ffcc1a', 'left', COND, 800, true);
+    const big = Math.round(52 * k); ty += big * 0.88;
+    txt(String(pos), sL, ty, big, '#ffcc1a', 'left', COND, 800, true); hx.font = `italic 800 ${big}px ${COND}`; const w = hx.measureText(String(pos)).width;
+    txt(`/${n}`, sL + w + 4, ty, Math.round(22 * k), '#f4f1e8', 'left', COND, 700, true);
+    txt(`LAP ${clamp(c.lap, 1, RACE.laps)}/${RACE.laps}`, sL + w + 4 + 34 * k, ty, Math.round(15 * k), '#f4f1e8', 'left', COND, 700);
+  } else { ty += 24 * k; txt('TIME TRIAL', sL, ty, Math.round(22 * k), '#ffcc1a', 'left', COND, 800, true); }
   const lapT = RACE.phase === 'countdown' ? 0 : RACE.t - c.lapStart;
-  txt(`${fmtT(lapT)}`, sL, sT + (RACE.mode === 'trial' ? 58 : 94), 15, '#f4f1e8');
-  txt(`BEST ${fmtT(c.best)}`, sL, sT + (RACE.mode === 'trial' ? 78 : 114), 12, '#b9bdc4');
+  ty += 22 * k; txt(`${fmtT(lapT)}`, sL, ty, Math.round(15 * k), '#f4f1e8');
+  if (!tiny || RACE.mode === 'trial') { ty += 18 * k; txt(`BEST ${fmtT(c.best)}`, sL, ty, Math.round(12 * k), '#b9bdc4'); }
   if (RACE.mode === 'trial' && RACE.ghostData && RACE.phase === 'racing') {
     // live gap to the ghost at the same point of the lap
     const f = RACE.ghostData.f; let bt = null; for (const p of f) { if (Math.hypot(p[1] - c.x, p[3] - c.z) < 12) { bt = p[0]; } }
-    if (bt != null) { const dlt = lapT - bt; txt(`${dlt >= 0 ? '+' : '−'}${Math.abs(dlt).toFixed(2)}`, sL, sT + 100, 16, dlt <= 0 ? '#6fd27a' : '#ef4836'); }
+    if (bt != null) { const dlt = lapT - bt; txt(`${dlt >= 0 ? '+' : '−'}${Math.abs(dlt).toFixed(2)}`, sL, ty + 20 * k, Math.round(16 * k), dlt <= 0 ? '#6fd27a' : '#ef4836'); }
   }
   // standings column (desktop)
   if (!isTouch && RACE.mode !== 'trial') RACE.order.slice(0, 8).forEach((o, k) => { const y = sT + 140 + k * 18; hx.fillStyle = COLORS[o.color % COLORS.length]; hx.fillRect(sL, y - 10, 4, 12); txt(`${k + 1} ${o.label.slice(0, 12)}`, sL + 10, y, 12, o === c ? '#ffcc1a' : '#f4f1e8', 'left', MONO, 600); });
-  // speedometer
-  const R = isTouch ? 52 : 70, cx = HW - sL - R - (isTouch ? 230 : 6), cy = HH - sT - R - (isTouch ? 6 : 8);
+  // speedometer: bottom right on desktop; bottom centre between the thumbs on a phone
+  const R = isTouch ? (tiny ? 34 : HH < 430 ? 42 : 52) : 70, cx = isTouch ? HW / 2 : HW - sL - R - 6, cy = HH - R - (isTouch ? (tiny ? 4 : 8) : 22);
   const mph = Math.round(c.speed * MPH), rpmF = clamp(c.rpm / 7600, 0, 1);
-  hx.lineWidth = 7; hx.lineCap = 'round';
+  hx.lineWidth = isTouch ? 5 : 7; hx.lineCap = 'round';
   hx.strokeStyle = 'rgba(244,241,232,0.14)'; hx.beginPath(); hx.arc(cx, cy, R, Math.PI * 0.75, Math.PI * 2.25); hx.stroke();
   hx.strokeStyle = rpmF > 0.86 ? '#ef4836' : '#ffcc1a'; hx.beginPath(); hx.arc(cx, cy, R, Math.PI * 0.75, Math.PI * 0.75 + Math.PI * 1.5 * rpmF); hx.stroke();
   txt(String(mph), cx, cy + R * 0.18, R * 0.62, '#f4f1e8', 'center', COND, 800, true);
-  txt('MPH', cx, cy + R * 0.48, 11, '#b9bdc4', 'center');
-  txt(RACE.phase === 'countdown' ? 'N' : c.inBrk > 0.3 && c.speed < 2 ? 'R' : String(c.gear), cx, cy - R * 0.42, 16, '#ffcc1a', 'center', COND, 800);
-  // minimap
-  if (settings.map === 'on') drawMinimap(c, isTouch ? sL + 116 : HW - sL - 170, isTouch ? sT + 4 : sT, isTouch ? 110 : 170);
+  txt('MPH', cx, cy + R * 0.5, tiny ? 9 : 11, '#b9bdc4', 'center');
+  txt(RACE.phase === 'countdown' ? 'N' : c.inBrk > 0.3 && c.speed < 2 ? 'R' : String(c.gear), cx, cy - R * 0.42, tiny ? 12 : 16, '#ffcc1a', 'center', COND, 800);
+  // minimap: top right on desktop; top centre on a phone, clear of the buttons in the corners
+  if (settings.map === 'on') { const S = isTouch ? Math.round(clamp(HH * 0.34, 64, 110)) : 170; drawMinimap(c, isTouch ? HW / 2 - S / 2 : HW - sL - 170, isTouch ? sT : sT, S); }
   // countdown, messages, warnings
-  if (RACE.phase === 'countdown') { const n2 = Math.ceil(RACE.count); if (n2 <= 3) txt(n2 > 0 ? String(n2) : '', HW / 2, HH * 0.4, 110, '#ffcc1a', 'center', COND, 800, true); else txt('GET READY', HW / 2, HH * 0.4, 48, '#f4f1e8', 'center', COND, 800, true); }
-  let y = HH * 0.22; for (const m of G.msgs) { hx.globalAlpha = clamp(m.t / 0.5, 0, 1); txt(m.text, HW / 2, y, m.text === 'GO!' ? 90 : 22, m.kind === 'good' ? '#6fd27a' : m.kind === 'warn' ? '#ffcc1a' : '#f4f1e8', 'center', COND, 800, true); y += m.text === 'GO!' ? 90 : 30; }
+  const huge = Math.min(110, HH * 0.32), mid = isTouch ? Math.round(clamp(HH * 0.34, 64, 110)) + sT + 22 * k : HH * 0.22, warnY = isTouch ? mid + 34 * k : HH * 0.36;
+  if (RACE.phase === 'countdown') { const n2 = Math.ceil(RACE.count); if (n2 <= 3) txt(n2 > 0 ? String(n2) : '', HW / 2, Math.max(HH * 0.4, mid + huge * 0.6), huge, '#ffcc1a', 'center', COND, 800, true); else txt('GET READY', HW / 2, Math.max(HH * 0.4, mid + 30 * k), Math.round(48 * k), '#f4f1e8', 'center', COND, 800, true); }
+  let y = mid; for (const m of G.msgs) { const go = m.text === 'GO!', fs = go ? Math.min(90, HH * 0.28) : Math.round(22 * k); hx.globalAlpha = clamp(m.t / 0.5, 0, 1); txt(m.text, HW / 2, y + (go ? fs * 0.5 : 0), fs, m.kind === 'good' ? '#6fd27a' : m.kind === 'warn' ? '#ffcc1a' : '#f4f1e8', 'center', COND, 800, true); y += go ? fs : fs + 8; }
   hx.globalAlpha = 1;
-  if (c.wrongT > 1.2 && (G.frame % 40) < 28) txt('WRONG WAY', HW / 2, HH * 0.36, 40, '#ef4836', 'center', COND, 800, true);
-  else if (c.offT > 0.8) txt('OFF TRACK · RESETTING', HW / 2, HH * 0.36, 26, '#ffcc1a', 'center', COND, 800, true);
+  if (c.wrongT > 1.2 && (G.frame % 40) < 28) txt('WRONG WAY', HW / 2, warnY, Math.round(40 * k), '#ef4836', 'center', COND, 800, true);
+  else if (c.offT > 0.8) txt('OFF TRACK · RESETTING', HW / 2, warnY, Math.round(26 * k), '#ffcc1a', 'center', COND, 800, true);
 }
 function drawMinimap(c, x, y, S) {
   if (!T.N) return; if (!drawMinimap.box || drawMinimap.track !== curTrack) { let a = Infinity, b = -Infinity, d = Infinity, e = -Infinity; for (let i = 0; i < T.N; i++) { a = Math.min(a, T.cx[i]); b = Math.max(b, T.cx[i]); d = Math.min(d, T.cz[i]); e = Math.max(e, T.cz[i]); } drawMinimap.box = { a, b, d, e }; drawMinimap.track = curTrack; }
