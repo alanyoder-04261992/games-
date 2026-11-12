@@ -8,4 +8,5 @@ export const GAME_MODULES = [
   () => import('./escape-grind/index.js'),
   () => import('./four-in-a-row/index.js'),
   () => import('./dogfight/index.js'),
+  () => import('./rally/index.js'),
 ];

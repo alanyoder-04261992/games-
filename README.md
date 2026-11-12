@@ -34,6 +34,10 @@ Plain HTML, CSS and JavaScript modules — no build step, hosts anywhere static 
   Up to four pilots team up against waves of raiders (you pick how many per wave and how
   many waves) or fight a free-for-all. Phone touch controls, mouse aim, keyboard and gamepad.
   Details in [docs/DOGFIGHT.md](docs/DOGFIGHT.md).
+- **Ridgeline Rally** — a real-time 3D racing game on Three.js r187: three country circuits
+  (farmland, a lakeside at sunset, a wooded hollow), three cars, up to four drivers online
+  plus computer cars, and a time trial against your own ghost. Phone touch controls, keyboard
+  and gamepad. Details in [docs/RALLY.md](docs/RALLY.md).
 
 ## Online play
 
@@ -76,6 +80,7 @@ public/                 ← the website (deploy this folder)
                         textures.js (painted-in-code textures), ui.js (HUD, controller), escape.css
   games/four-in-a-row/  example game
   games/dogfight/       Coastal Dogfight: play.html (the game), index.js, ui.js (frame bridge)
+  games/rally/          Ridgeline Rally: play.html (the game, Three.js r187 from the CDN), index.js, ui.js
   vendor/peerjs.min.js
   vendor/three/         three.js r169 (MIT) + OrbitControls, RoomEnvironment, RoundedBoxGeometry (Hexstead)
   vendor/three-r187/    three.js r187 (MIT), minified, + Water, Sky, bloom post-processing (Broadside)
