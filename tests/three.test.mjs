@@ -69,6 +69,16 @@ test('every three.js add-on a game imports exists in the shared folder', () => {
     for (const m of code.matchAll(/['"]([^'"]*vendor\/three\/addons\/[^'"]+\.js)['"]/g)) {
       if (!fs.existsSync(path.resolve(path.dirname(file), m[1]))) missing.push(`${rel(file)}: ${m[1]}`);
     }
+    // pages with an import map name add-ons as 'three/addons/<path>'
+    for (const m of code.matchAll(/['"]three\/addons\/([^'"]+\.js)['"]/g)) {
+      if (!fs.existsSync(path.join(vendor, 'addons', m[1]))) missing.push(`${rel(file)}: three/addons/${m[1]}`);
+    }
+    // lazy loaders: const base = 'three/addons/postprocessing/'; [...names].map(n => import(base + n + '.js'))
+    for (const m of code.matchAll(/const (\w+) = ['"](?:[^'"]*vendor\/three\/|three\/)addons\/([^'"]*\/)['"];[\s\S]{0,400}?\[([^\]]*)\]\.map\(\s*\(?(\w+)\)?\s*=>\s*import\(\s*\1\s*\+\s*\4\s*\+\s*['"]\.js['"]\s*\)/g)) {
+      for (const name of m[3].match(/[\w-]+/g) || []) {
+        if (!fs.existsSync(path.join(vendor, 'addons', m[2], `${name}.js`))) missing.push(`${rel(file)}: loads ${m[2]}${name}.js later`);
+      }
+    }
   }
   assert.deepEqual(missing, [], 'Add the add-on to public/vendor/three/addons.json and run npm run update-three');
 });

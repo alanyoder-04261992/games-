@@ -300,7 +300,7 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: BOOTQ.aa, powerPre
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, QUALITY[settings.quality].pr));
 renderer.setSize(innerWidth, innerHeight, false);
 renderer.shadowMap.enabled = QUALITY[settings.quality].shadows;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap; // PCF is the soft filter since r182 (PCFSoftShadowMap is gone); sun.shadow.radius sets the softness
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;
 const scene = new THREE.Scene();
 const HORIZON = new THREE.Color('#c3d3df'), ZENITH = new THREE.Color('#3d6aa3');
@@ -314,6 +314,7 @@ const sun = new THREE.DirectionalLight(0xfff0d8, 2.9);
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 10, far: 1400 });
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.6;
+sun.shadow.radius = 1.7; // r187 PCF at radius 1.7 gives the same edge width as the old PCFSoftShadowMap (about 2.75 texels)
 scene.add(sun, sun.target);
 const flash = new THREE.PointLight(0xffaa55, 0, 380, 0); scene.add(flash);
 const muzzleLight = new THREE.PointLight(0xffb060, 0, 26, 0); scene.add(muzzleLight);
@@ -456,12 +457,19 @@ function buildDepthTex() {
   waterMat.uniforms.uDepth.value = t; waterMat.uniforms.uGrid.value.set(HALF, CELL, n1);
 }
 // Reflections for the metal and glass: a small blurred copy of the sky over green ground.
+// It goes on each PBR material as its own envMap, not on scene.environment: since three r183
+// scene.environment also lights Lambert materials (terrain, runway, trees, buildings), which
+// washed them out and faded their shadows, and only material.envMap honours envMapIntensity.
+let envMap = null;
+const PBR_MATS = [];
+function pbr(params) { const m = new THREE.MeshStandardMaterial(params); m.envMap = envMap; PBR_MATS.push(m); return m; }
 function buildEnv() {
   try {
     const pm = new THREE.PMREMGenerator(renderer), es = new THREE.Scene();
     es.add(new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), skyMat.clone()));
     const ground = new THREE.Mesh(new THREE.CircleGeometry(390, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x51603c })); ground.position.y = -30; es.add(ground);
-    scene.environment = pm.fromScene(es, 0.02, 0.1, 1000).texture; pm.dispose();
+    envMap = pm.fromScene(es, 0.02, 0.1, 1000).texture; pm.dispose();
+    for (const m of PBR_MATS) { m.envMap = envMap; m.needsUpdate = true; }
   } catch (e) { console.warn('environment map unavailable', e); }
 }
 // High, thin cirrus streaks far above the fight
@@ -939,7 +947,7 @@ function insigniaTexture(kind) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 function planeMaterial(tex, bottomHex) {
-  const m = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, metalness: 0.12, envMapIntensity: 0.75 });
+  const m = pbr({ map: tex, roughness: 0.6, metalness: 0.12, envMapIntensity: 0.75 });
   const bottom = new THREE.Color(bottomHex);
   m.onBeforeCompile = sh => {
     sh.uniforms.uBottom = { value: bottom };
@@ -969,13 +977,13 @@ function sharedMats(key, ace) {
   const s = SPECS[key];
   const body = planeMaterial(camoTexture(s.camoA, s.camoB, key === 'kestrel' ? 4 : 9, key === 'falke'), s.bottom);
   const M = {
-    body, spinner: new THREE.MeshStandardMaterial({ color: ace ? 0xb02a22 : s.spinner, roughness: 0.38, metalness: 0.25 }),
-    dark: new THREE.MeshStandardMaterial({ color: 0x1d1f1d, roughness: 0.62, metalness: 0.25 }), metal: new THREE.MeshStandardMaterial({ color: 0x8a8d90, roughness: 0.32, metalness: 0.85 }),
-    glass: new THREE.MeshStandardMaterial({ color: 0xb4cde0, roughness: 0.03, metalness: 0.1, transparent: true, opacity: 0.26, envMapIntensity: 2.4, depthWrite: false }),
-    tip: new THREE.MeshStandardMaterial({ color: 0xd9a92a, roughness: 0.5 }),
+    body, spinner: pbr({ color: ace ? 0xb02a22 : s.spinner, roughness: 0.38, metalness: 0.25 }),
+    dark: pbr({ color: 0x1d1f1d, roughness: 0.62, metalness: 0.25 }), metal: pbr({ color: 0x8a8d90, roughness: 0.32, metalness: 0.85 }),
+    glass: pbr({ color: 0xb4cde0, roughness: 0.03, metalness: 0.1, transparent: true, opacity: 0.26, envMapIntensity: 2.4, depthWrite: false }),
+    tip: pbr({ color: 0xd9a92a, roughness: 0.5 }),
     disc: new THREE.MeshBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }),
-    insignia: new THREE.MeshStandardMaterial({ map: insigniaTexture(key), transparent: true, roughness: 0.62, metalness: 0.1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }),
-    band: new THREE.MeshStandardMaterial({ color: key === 'kestrel' ? 0xcfc6a6 : (ace ? 0xb02a22 : 0xd4ab2e), roughness: 0.5, metalness: 0.15 }), pilot: lam(0x5a4330), interior: new THREE.MeshLambertMaterial({ color: 0x2c2f2a, side: THREE.BackSide }),
+    insignia: pbr({ map: insigniaTexture(key), transparent: true, roughness: 0.62, metalness: 0.1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }),
+    band: pbr({ color: key === 'kestrel' ? 0xcfc6a6 : (ace ? 0xb02a22 : 0xd4ab2e), roughness: 0.5, metalness: 0.15 }), pilot: lam(0x5a4330), interior: new THREE.MeshLambertMaterial({ color: 0x2c2f2a, side: THREE.BackSide }),
   };
   MAT_CACHE[id] = M; return M;
 }
@@ -1476,8 +1484,8 @@ function hitPart(p, part, amt, owner) {
 // =====================================================================
 const MSL = [], FLARES = [];
 let MSL_SEQ = 0;
-const mslMat = new THREE.MeshStandardMaterial({ color: 0xd9d6cc, roughness: 0.45, metalness: 0.35 });
-const mslDark = new THREE.MeshStandardMaterial({ color: 0x2a2c2a, roughness: 0.6, metalness: 0.2 });
+const mslMat = pbr({ color: 0xd9d6cc, roughness: 0.45, metalness: 0.35 });
+const mslDark = pbr({ color: 0x2a2c2a, roughness: 0.6, metalness: 0.2 });
 const mslBodyG = new THREE.CylinderGeometry(0.11, 0.11, 2.3, 10).rotateX(Math.PI / 2);
 const mslNoseG = new THREE.ConeGeometry(0.11, 0.38, 10).rotateX(Math.PI / 2).translate(0, 0, 1.34);
 const mslFinG = new THREE.BoxGeometry(0.52, 0.025, 0.32).translate(0, 0, -0.95);
@@ -2825,7 +2833,9 @@ async function setupPost() {
     const rt = new THREE.WebGLRenderTarget(innerWidth * pr, innerHeight * pr, { type: THREE.HalfFloatType, samples: 4 });
     const c = new EffectComposer(renderer, rt);
     c.addPass(new RenderPass(scene, camera));
-    c.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.32, 0.45, 1.05));
+    // Since r181/r182 bloom grows linearly with strength (it used to grow with strength squared),
+    // so 0.32 * 0.32 keeps the glow we tuned with 0.32 on the old three.js.
+    c.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.1024, 0.45, 1.05));
     c.addPass(new OutputPass());
     c.setPixelRatio(pr); c.setSize(innerWidth, innerHeight);
     composer = c;
