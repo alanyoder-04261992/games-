@@ -13,6 +13,8 @@ Plain HTML, CSS and JavaScript modules — no build step, hosts anywhere static 
 
 ## Online play
 
+Step-by-step instructions for hosts and players: [docs/PLAYING_ONLINE.md](docs/PLAYING_ONLINE.md) — also built into the app (home page link, or `/#/help`).
+
 The host's browser runs the game; friends join with a 5-letter code or an invite link.
 Connections are peer-to-peer WebRTC through [PeerJS](https://peerjs.com), so there is no game
 server to run or pay for.
