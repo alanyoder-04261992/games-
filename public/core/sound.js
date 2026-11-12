@@ -111,6 +111,23 @@ export const sound = {
   win() {
     [523, 659, 784, 1046, 784, 1046, 1318].forEach((f, i) => tone({ freq: f, dur: 0.4, gain: 0.1, type: 'triangle', delay: i * 0.11 }));
   },
+  // naval sounds (Broadside)
+  cannon() {
+    burst({ freq: 420, q: 0.6, dur: 0.32, gain: 0.7, type: 'lowpass' });
+    tone({ freq: 90, dur: 0.3, gain: 0.25, slide: 0.5 });
+  },
+  whistle() {
+    tone({ freq: 1500, dur: 0.85, gain: 0.035, slide: 0.45 });
+  },
+  boom() {
+    burst({ freq: 220, q: 0.5, dur: 0.75, gain: 0.95, type: 'lowpass' });
+    burst({ freq: 900, q: 0.4, dur: 0.35, gain: 0.35 });
+    tone({ freq: 70, dur: 0.6, gain: 0.3, slide: 0.45 });
+  },
+  splash() {
+    burst({ freq: 1100, q: 0.45, dur: 0.5, gain: 0.45 });
+    burst({ freq: 2600, q: 0.7, dur: 0.25, gain: 0.2, delay: 0.05 });
+  },
   pop() {
     tone({ freq: 520, dur: 0.08, gain: 0.12, slide: 1.8 });
   },
