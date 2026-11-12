@@ -1,3 +1,4 @@
+/* three.js r187 add-on: examples/jsm/postprocessing/ShaderPass.js */
 import {
 	ShaderMaterial,
 	UniformsUtils
@@ -15,7 +16,7 @@ import { Pass, FullScreenQuad } from './Pass.js';
  * ```
  *
  * @augments Pass
- * @three_import import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+ * @three_import import { ShaderPass } from '../postprocessing/ShaderPass.js';
  */
 class ShaderPass extends Pass {
 

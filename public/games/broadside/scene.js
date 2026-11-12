@@ -4,14 +4,14 @@
 // in, water columns on a miss, explosions with shockwaves, debris, fire and smoke on a hit, and
 // ships that roll over and sink. Bloom makes fire and lights glow. The enemy grid sits to the
 // north, your own fleet to the south. "Low" quality drops reflections and bloom.
-import * as THREE from '../../vendor/three-r187/three.module.min.js';
-import { RoundedBoxGeometry } from '../../vendor/three-r187/addons/geometries/RoundedBoxGeometry.js';
-import { Water } from '../../vendor/three-r187/addons/objects/Water.js';
-import { Sky } from '../../vendor/three-r187/addons/objects/Sky.js';
-import { EffectComposer } from '../../vendor/three-r187/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from '../../vendor/three-r187/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from '../../vendor/three-r187/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from '../../vendor/three-r187/addons/postprocessing/OutputPass.js';
+import * as THREE from '../../vendor/three/three.module.min.js';
+import { RoundedBoxGeometry } from '../../vendor/three/addons/geometries/RoundedBoxGeometry.js';
+import { Water } from '../../vendor/three/addons/objects/Water.js';
+import { Sky } from '../../vendor/three/addons/objects/Sky.js';
+import { EffectComposer } from '../../vendor/three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from '../../vendor/three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from '../../vendor/three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from '../../vendor/three/addons/postprocessing/OutputPass.js';
 import { SHIPS, shipCells, COLS } from './engine.js';
 
 export const FLEET_COLORS = ['#2f6fd6', '#c8372d'];

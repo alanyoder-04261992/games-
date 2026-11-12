@@ -1,3 +1,4 @@
+/* three.js r187 add-on: examples/jsm/postprocessing/UnrealBloomPass.js */
 import {
 	AdditiveBlending,
 	Color,
@@ -31,7 +32,7 @@ import { LuminosityHighPassShader } from '../shaders/LuminosityHighPassShader.js
  * ```
  *
  * @augments Pass
- * @three_import import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+ * @three_import import { UnrealBloomPass } from '../postprocessing/UnrealBloomPass.js';
  */
 class UnrealBloomPass extends Pass {
 

@@ -1,3 +1,4 @@
+/* three.js r187 add-on: examples/jsm/postprocessing/MaskPass.js */
 import { Pass } from './Pass.js';
 
 /**
@@ -12,7 +13,7 @@ import { Pass } from './Pass.js';
  * ```
  *
  * @augments Pass
- * @three_import import { MaskPass } from 'three/addons/postprocessing/MaskPass.js';
+ * @three_import import { MaskPass } from '../postprocessing/MaskPass.js';
  */
 class MaskPass extends Pass {
 

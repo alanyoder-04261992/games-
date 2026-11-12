@@ -1,3 +1,4 @@
+/* three.js r187 add-on: examples/jsm/postprocessing/Pass.js */
 import {
 	BufferGeometry,
 	Float32BufferAttribute,
@@ -11,7 +12,7 @@ import {
  * This module is only relevant for post processing with {@link WebGLRenderer}.
  *
  * @abstract
- * @three_import import { Pass } from 'three/addons/postprocessing/Pass.js';
+ * @three_import import { Pass } from '../postprocessing/Pass.js';
  */
 class Pass {
 
@@ -133,7 +134,7 @@ const _geometry = new FullscreenTriangleGeometry();
  * This module can only be used with {@link WebGLRenderer}.
  *
  * @augments Mesh
- * @three_import import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+ * @three_import import { FullScreenQuad } from '../postprocessing/Pass.js';
  */
 class FullScreenQuad {
 

@@ -1,3 +1,4 @@
+/* three.js r187 add-on: examples/jsm/postprocessing/EffectComposer.js */
 import {
 	HalfFloatType,
 	NoBlending,
@@ -37,7 +38,7 @@ import { ClearMaskPass, MaskPass } from './MaskPass.js';
  * }
  * ```
  *
- * @three_import import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+ * @three_import import { EffectComposer } from '../postprocessing/EffectComposer.js';
  */
 class EffectComposer {
 

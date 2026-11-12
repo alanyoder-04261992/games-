@@ -1,3 +1,4 @@
+/* three.js r187 add-on: examples/jsm/objects/Sky.js */
 import {
 	BackSide,
 	BoxGeometry,
@@ -37,7 +38,7 @@ import {
  * ```
  *
  * @augments Mesh
- * @three_import import { Sky } from 'three/addons/objects/Sky.js';
+ * @three_import import { Sky } from '../objects/Sky.js';
  */
 class Sky extends Mesh {
 

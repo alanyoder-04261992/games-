@@ -1,10 +1,11 @@
+/* three.js r187 add-on: examples/jsm/shaders/LuminosityHighPassShader.js */
 import {
 	Color
 } from '../../three.module.min.js';
 
 /**
  * @module LuminosityHighPassShader
- * @three_import import { LuminosityHighPassShader } from 'three/addons/shaders/LuminosityHighPassShader.js';
+ * @three_import import { LuminosityHighPassShader } from '../shaders/LuminosityHighPassShader.js';
  */
 
 /**

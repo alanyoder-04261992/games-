@@ -1,6 +1,7 @@
+/* three.js r187 add-on: examples/jsm/shaders/CopyShader.js */
 /**
  * @module CopyShader
- * @three_import import { CopyShader } from 'three/addons/shaders/CopyShader.js';
+ * @three_import import { CopyShader } from '../shaders/CopyShader.js';
  */
 
 /**

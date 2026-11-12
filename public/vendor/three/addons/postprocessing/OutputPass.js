@@ -1,3 +1,4 @@
+/* three.js r187 add-on: examples/jsm/postprocessing/OutputPass.js */
 import {
 	ColorManagement,
 	RawShaderMaterial,
@@ -28,7 +29,7 @@ import { OutputShader } from '../shaders/OutputShader.js';
  * ```
  *
  * @augments Pass
- * @three_import import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+ * @three_import import { OutputPass } from '../postprocessing/OutputPass.js';
  */
 class OutputPass extends Pass {
 

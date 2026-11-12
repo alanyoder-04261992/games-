@@ -2,9 +2,9 @@
 // two loops of raised tiles, glossy pawns, rolling dice, flying cards, gold-coin stacks and a
 // tray for each player with miniature buildings for everything they own.
 import * as THREE from '../../vendor/three/three.module.min.js';
-import { RoomEnvironment } from '../../vendor/three/RoomEnvironment.js';
-import { RoundedBoxGeometry } from '../../vendor/three/RoundedBoxGeometry.js';
-import { OrbitControls } from '../../vendor/three/OrbitControls.js';
+import { RoomEnvironment } from '../../vendor/three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from '../../vendor/three/addons/geometries/RoundedBoxGeometry.js';
+import { OrbitControls } from '../../vendor/three/addons/controls/OrbitControls.js';
 import { GRIND, RING, PLAYER_COLORS } from './cards.js';
 import * as T from './textures.js';
 
@@ -57,8 +57,15 @@ export class Table3D {
     scene.background = new THREE.Color('#0b0806');
     scene.fog = new THREE.Fog('#0b0806', 34, 70);
     const pm = new THREE.PMREMGenerator(r);
-    scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
-    scene.environmentIntensity = 0.42;
+    // three r183 moved RoomEnvironment down to y = -3.5, which brightens its reflections (a grey sheen
+    // across the walnut table, duller gold). Keep the room where it was so the table looks the same.
+    const room = new RoomEnvironment();
+    room.position.y = 0;
+    scene.environment = pm.fromScene(room, 0.04).texture;
+    // 0.46 (0.42 before three r186, which made indirect diffuse a little darker): keeps the table,
+    // felt and shadowed areas as bright as before.
+    scene.environmentIntensity = 0.46;
+    room.dispose();
     pm.dispose();
 
     const cam = (this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 200));
@@ -119,7 +126,8 @@ export class Table3D {
     key.shadow.mapSize.set(hi ? 2048 : 1024, hi ? 2048 : 1024);
     key.shadow.bias = -0.0002;
     key.shadow.normalBias = 0.02;
-    key.shadow.radius = 5;
+    // PCFShadowMap became a 5-tap disk in three r182: radius 7 gives the soft edge radius 5 gave before
+    key.shadow.radius = 7;
     key.shadow.camera.near = 10;
     key.shadow.camera.far = 50;
     s.add(key, key.target);

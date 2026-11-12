@@ -209,7 +209,8 @@ table.res i{display:inline-block;width:10px;height:10px;border-radius:2px;margin
 </div>
 <div id="portrait" hidden>Turn your phone sideways for a wider view. Tap to hide.</div>
 
-<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"}}</script>
+<!-- three.js comes from the Game Center's shared copy (public/vendor/three, see tools/update-three.mjs), never a CDN -->
+<script type="importmap">{"imports":{"three":"../../vendor/three/three.module.min.js","three/addons/":"../../vendor/three/addons/"}}</script>
 <script type="module">
 // Three.js r187, through the import map above so the add-ons share one copy of it
 import * as THREE from 'three';

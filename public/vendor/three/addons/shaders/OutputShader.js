@@ -1,6 +1,7 @@
+/* three.js r187 add-on: examples/jsm/shaders/OutputShader.js */
 /**
  * @module OutputShader
- * @three_import import { OutputShader } from 'three/addons/shaders/OutputShader.js';
+ * @three_import import { OutputShader } from '../shaders/OutputShader.js';
  */
 
 /**

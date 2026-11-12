@@ -1,0 +1,16 @@
+{
+  "note": "Add-ons the games use; tools/update-three.mjs copies these and everything they import.",
+  "addons": [
+    "controls/OrbitControls.js",
+    "environments/RoomEnvironment.js",
+    "geometries/RoundedBoxGeometry.js",
+    "objects/Sky.js",
+    "objects/Water.js",
+    "postprocessing/EffectComposer.js",
+    "postprocessing/GTAOPass.js",
+    "postprocessing/OutputPass.js",
+    "postprocessing/RenderPass.js",
+    "postprocessing/UnrealBloomPass.js",
+    "utils/BufferGeometryUtils.js"
+  ]
+}

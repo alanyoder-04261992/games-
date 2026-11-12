@@ -78,12 +78,13 @@ public/                 ← the website (deploy this folder)
   games/hexstead/       Hexstead: engine.js, ai.js, geometry.js, scene.js (3D board), ui.js, art.js
   games/escape-grind/   Escape the Grind: engine.js, ai.js, cards.js (decks, jobs), scene.js (3D),
                         textures.js (painted-in-code textures), ui.js (HUD, controller), escape.css
+  games/broadside/      Broadside: engine.js, ai.js, scene.js (3D sea), ui.js, broadside.css, rules.html
   games/four-in-a-row/  example game
   games/dogfight/       Coastal Dogfight: play.html (the game), index.js, ui.js (frame bridge)
-  games/rally/          Ridgeline Rally: play.html (the game, Three.js r187 from the CDN), index.js, ui.js
+  games/rally/          Ridgeline Rally: play.html (the game), index.js, ui.js
   vendor/peerjs.min.js
-  vendor/three/         three.js r169 (MIT) + OrbitControls, RoomEnvironment, RoundedBoxGeometry (Hexstead)
-  vendor/three-r187/    three.js r187 (MIT), minified, + Water, Sky, bloom post-processing (Broadside)
+  vendor/three/         three.js r187 (MIT), shared by every 3D game, + the add-ons they use
+                        (update with `npm run update-three`; see docs/ADDING_A_GAME.md)
 tests/                  node --test
 tools/                  local server, local PeerJS server
 docs/ADDING_A_GAME.md   how to add a game
