@@ -67,7 +67,7 @@ Connect the repository in Cloudflare Pages with:
 - Build command: *(none)*
 - Build output directory: `public`
 
-Any static host works the same way (Netlify, GitHub Pages, …): publish the `public` folder.
+Netlify picks this up from `netlify.toml` (publish directory `public`). Any other static host works the same way: publish the `public` folder.
 
 ## Adding games
 
