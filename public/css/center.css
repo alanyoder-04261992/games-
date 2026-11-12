@@ -346,7 +346,8 @@ code { background: var(--panel-2); padding: 0.1em 0.4em; border-radius: 6px; fon
 .gc-mic.host-muted { color: #ff9a8a; background: rgba(255, 107, 107, 0.14); opacity: 0.8; }
 .gc-mic.starting { animation: pulse 1s infinite; }
 .gc-mic.off { color: #f0c35a; }
-.gc-mic-level { position: absolute; inset: 3px; border-radius: 10px; border: 2px solid #6ff0b0; animation: pulse 0.8s infinite; pointer-events: none; }
+.gc-mic-level { position: absolute; inset: 3px; border-radius: 10px; border: 2px solid #6ff0b0; animation: pulse 0.8s infinite; pointer-events: none; display: none; }
+.gc-mic-wrap.talking .gc-mic.live .gc-mic-level { display: block; }
 .gc-voice-strip { display: inline-flex; align-items: center; gap: 0; background: none; border: 0; padding: 2px 4px; cursor: pointer; min-width: 0; overflow: hidden; }
 .gc-voice-strip:empty { display: none; }
 .gc-vs-face { position: relative; display: inline-flex; border-radius: 50%; transition: box-shadow 0.15s; }

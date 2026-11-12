@@ -736,7 +736,10 @@ function voiceFor() {
 }
 
 // Re-render `build()` into `el` whenever voice changes, until `el` leaves the page.
-function live(el, build, events = ['change', 'speaking']) {
+// Only things without buttons re-render on 'speaking' (it fires many times a second while
+// people talk); anything with buttons re-renders on 'change' and updates the glow in place,
+// so a tap never lands on a button that was just replaced.
+function live(el, build, events = ['change']) {
   const voice = voiceFor();
   const paint = () => el.replaceChildren(...[build(voice)].flat());
   const offs = events.map((ev) =>
@@ -748,6 +751,15 @@ function live(el, build, events = ['change', 'speaking']) {
   requestAnimationFrame(() => (el.dataset.mounted = '1'));
   paint();
   return el;
+}
+
+function onSpeaking(el, fn) {
+  const voice = voiceFor();
+  const off = voice.on('speaking', () => {
+    if (!el.isConnected && el.dataset.mounted) return off();
+    fn(voice.speaking);
+  });
+  fn(voice.speaking);
 }
 
 function micState(voice) {
@@ -766,10 +778,11 @@ function pressMic(voice) {
 
 function micButton() {
   const wrap = h('div.gc-mic-wrap');
+  onSpeaking(wrap, (speaking) => wrap.classList.toggle('talking', speaking.has(current?.client.playerId)));
   return live(wrap, (voice) => {
     const st = micState(voice);
     return [
-      h(`button.gc-icon-btn.gc-mic.${st.cls}`, { title: st.label, 'aria-label': st.label, onclick: () => pressMic(voice) }, h('span', { html: st.icon }), voice.speaking.has(current?.client.playerId) ? h('i.gc-mic-level') : null),
+      h(`button.gc-icon-btn.gc-mic.${st.cls}`, { title: st.label, 'aria-label': st.label, onclick: () => pressMic(voice) }, h('span', { html: st.icon }), h('i.gc-mic-level')),
       voice.state === 'on' ? h('button.gc-icon-btn.gc-mic-more', { title: 'Voice chat', 'aria-label': 'Voice chat people', onclick: () => voicePanel() }, h('span', { html: ICON.people })) : null,
     ];
   });
@@ -777,7 +790,9 @@ function micButton() {
 
 function voiceStrip() {
   const el = h('button.gc-voice-strip', { title: 'Voice chat', onclick: () => voicePanel() });
-  return live(el, (voice) =>
+  return live(
+    el,
+    (voice) =>
     voice.roster().map((r) =>
       h(
         'span.gc-vs-face' + (r.speaking ? '.speaking' : '') + (r.muted || r.hostMuted || r.localMuted ? '.muted' : ''),
@@ -786,6 +801,7 @@ function voiceStrip() {
         r.muted || r.hostMuted || r.localMuted ? h('i', { html: ICON.micOff }) : null,
       ),
     ),
+    ['change', 'speaking'],
   );
 }
 
@@ -808,12 +824,14 @@ function voicePanel() {
   const isHost = current.client.isHost;
   const body = h('div.gc-form.gc-voice-panel');
   const sheet = modal(body);
+  let statusOf = null;
   live(body, () => {
     const roster = voice.roster();
     const inVoice = new Set(roster.map((r) => r.id));
     const others = (current?.client.lobby?.players || []).filter((p) => !inVoice.has(p.id) && p.connected);
     const status = (r) =>
       r.hostMuted ? 'Muted by host' : r.muted ? 'Muted' : !r.connected ? 'Connecting…' : r.speaking ? 'Talking' : r.me ? 'Mic on' : 'Listening';
+    statusOf = status;
     return [
       h('h2', 'Voice chat'),
       h('p.gc-hint', 'Everyone in voice hears everyone else. ', isHost ? 'As the host you can mute anyone for the whole table.' : 'Mute someone just for yourself with the speaker button.'),
@@ -822,6 +840,7 @@ function voicePanel() {
         roster.map((r) =>
           h(
             'div.gc-voice-person' + (r.speaking ? '.speaking' : ''),
+            { dataset: { id: r.id } },
             h('span.gc-vs-face' + (r.speaking ? '.speaking' : ''), avatar(r.name, r.hue)),
             h('div.gc-voice-who', h('strong', r.name, r.me ? ' (you)' : '', r.isHost ? h('span.gc-host-tag', 'Host') : null), h('small.' + (r.hostMuted || r.muted ? 'off' : r.speaking ? 'on' : ''), status(r))),
             h(
@@ -842,7 +861,22 @@ function voicePanel() {
         h('button.btn.ghost', { onclick: () => sheet.close() }, 'Done'),
       ),
     ];
-  }, ['change', 'speaking']);
+  });
+  // the talking glow updates in place, without replacing any buttons
+  onSpeaking(body, () => {
+    if (!statusOf) return;
+    for (const r of voice.roster()) {
+      const row = body.querySelector(`.gc-voice-person[data-id="${r.id}"]`);
+      if (!row) continue;
+      row.classList.toggle('speaking', r.speaking);
+      row.querySelector('.gc-vs-face')?.classList.toggle('speaking', r.speaking);
+      const small = row.querySelector('.gc-voice-who small');
+      if (small) {
+        small.textContent = statusOf(r);
+        small.className = r.hostMuted || r.muted ? 'off' : r.speaking ? 'on' : '';
+      }
+    }
+  });
 }
 
 function loadStyles(game) {
