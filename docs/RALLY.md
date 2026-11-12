@@ -2,7 +2,7 @@
 
 A browser racing game. Race country roads over hills, farms and lakeshores, against computer cars, against up to three friends online, or against your own ghost in a time trial.
 
-The game is part of the Game Center. It is one file, `public/games/rally/play.html`, with no build step and no assets. Three.js r187 comes from the Game Center's shared copy in `public/vendor/three/` through an import map (see the 3D section of [ADDING_A_GAME.md](ADDING_A_GAME.md)), and the circuits, cars, textures and sound are all generated in code when the page loads.
+The game is part of the Game Center. It is one file, `public/games/rally/play.html`, with no build step and no assets. Three.js r187 comes from the Game Center's shared copy in `public/vendor/three/` through an import map and draws with WebGPU (`WebGPURenderer`, which falls back to WebGL2 where WebGPU is missing) (see the 3D section of [ADDING_A_GAME.md](ADDING_A_GAME.md)), and the circuits, cars, textures and sound are all generated in code when the page loads.
 
 ## Running it
 

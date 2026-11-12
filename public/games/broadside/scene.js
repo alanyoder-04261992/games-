@@ -498,7 +498,11 @@ class Particles {
 // ---------------------------------------------------------------------
 export function createScene(container, { onCell, onHover, quality = 'high' } = {}) {
   let high = quality !== 'low';
-  if (!navigator.gpu && !document.createElement('canvas').getContext('webgl2')) throw new Error('Neither WebGPU nor WebGL 2 is available');
+  if (!navigator.gpu) {
+    const gl = document.createElement('canvas').getContext('webgl2');
+    if (!gl) throw new Error('Neither WebGPU nor WebGL 2 is available');
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+  }
   // WebGPU where the browser has it, WebGL 2 otherwise (the renderer picks; fallback stays on)
   const renderer = new THREE.WebGPURenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, high ? 2 : 1.5));

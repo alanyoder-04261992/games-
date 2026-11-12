@@ -45,7 +45,7 @@ export function mount(ctx) {
         if (view) sync(true);
       } catch (e) {
         console.error(e);
-        stage.append(h('div.bs-nogl', h('strong', '3D graphics are not available on this device.'), h('p', 'Broadside needs WebGL. Try another browser or turn on hardware acceleration.')));
+        stage.append(h('div.bs-nogl', h('strong', '3D graphics are not available on this device.'), h('p', 'Broadside needs WebGPU or WebGL 2. Try another browser or turn on hardware acceleration.')));
       }
     })
     .catch((e) => stage.append(h('div.bs-nogl', h('strong', 'The 3D sea could not load.'), h('p', String(e.message || e)))));
