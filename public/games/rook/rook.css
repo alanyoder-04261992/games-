@@ -322,3 +322,12 @@
 }
 .rook.compact .rk-seat.bottom { bottom: calc(var(--hand-h) + 62px); left: 8px; }
 .rook.compact .rk-seat.bottom .avatar { --size: 36px; }
+
+/* voice chat */
+.rk-seat.speaking .avatar { box-shadow: 0 0 0 3px #0b1424, 0 0 0 6px #4ade80, 0 0 22px 4px rgba(74, 222, 128, 0.75); }
+.rk-seat.speaking .rk-avatar-wrap { animation: rkTalk 0.6s ease-in-out infinite alternate; }
+@keyframes rkTalk { to { transform: scale(1.06); } }
+.rk-seat.mic-off .rk-avatar-wrap::after {
+  content: ''; position: absolute; left: -6px; bottom: -4px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #0b1424;
+  background: #b3261e url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='9' y='3' width='6' height='11' rx='3' fill='white'/%3E%3Cpath d='M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21' fill='none' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M4 4l16 16' stroke='white' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E") center / 12px no-repeat;
+}
