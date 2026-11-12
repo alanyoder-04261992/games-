@@ -15,6 +15,8 @@ export function mount(ctx) {
   const root = h('div.eg');
   const stage = h('div.eg-stage');
   const hud = h('div.eg-hud');
+  const econEl = h('button.eg-econ', { onclick: () => openMarket() });
+  const lesson = h('div.eg-lesson');
   const strip = h('div.eg-strip');
   const ticker = h('div.eg-ticker');
   const banner = h('div.eg-banner');
@@ -23,7 +25,7 @@ export function mount(ctx) {
   const sheet = h('div.eg-sheet');
   const padHint = h('div.eg-padhint');
   const loading = h('div.eg-loading', h('div.eg-loading-coin'), h('p', 'Setting the table…'));
-  hud.append(strip, tools, ticker, banner, bar, padHint);
+  hud.append(strip, econEl, lesson, tools, ticker, banner, bar, padHint);
   root.append(stage, h('div.eg-vignette'), hud, sheet, loading);
   ctx.el.append(root);
 
@@ -93,6 +95,7 @@ export function mount(ctx) {
         table.syncTray(i, p);
       });
       syncDecks(v);
+      if (v.econ?.on) table.setMood(v.econ.phase, true);
       if (needsCard(v)) await showCard(v);
       return;
     }
@@ -169,6 +172,16 @@ export function mount(ctx) {
       table.syncTray(i, p, { animate: true });
     });
     syncDecks(v);
+    // 5) the economy turned
+    if (v.econ?.news && v.econ.news.seq !== prev.econ?.news?.seq) {
+      const ph = E.ECON[v.econ.phase];
+      table.setMood(v.econ.phase);
+      renderEcon();
+      (v.econ.phase === 'recession' || v.econ.phase === 'slowdown' ? sound.bad : sound.good)();
+      flash(ph.label.toUpperCase(), `econ ${v.econ.phase}`, 2200 * speed);
+      showLesson(v.econ.phase);
+      await sleep(1200 * speed);
+    }
     const ev = msg.event;
     if (v.phase === 'over' && prev.phase !== 'over') {
       (v.winner === me() ? sound.win : sound.good)();
@@ -202,8 +215,57 @@ export function mount(ctx) {
     renderTicker();
     renderBar();
     renderTools();
+    renderEcon();
     if (statementSeat != null) renderStatement(statementSeat);
     focusFirst();
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // the economy (real-life mode)
+  // ---------------------------------------------------------------------------------------------
+  function renderEcon() {
+    const e = view?.econ;
+    econEl.classList.toggle('on', !!e?.on);
+    root.classList.toggle('econ-on', !!e?.on);
+    if (!e?.on) return;
+    const ph = E.ECON[e.phase];
+    const hist = e.history.length > 1 ? e.history : [e.history[0], e.history[0]];
+    const prevIdx = hist.length > 1 ? hist[hist.length - 2] : e.index;
+    const chg = e.index - prevIdx;
+    const lo = Math.min(...hist) - 2, hi = Math.max(...hist) + 2;
+    const pts = hist.map((v, i) => `${((i / Math.max(1, hist.length - 1)) * 160).toFixed(1)},${(44 - ((v - lo) / (hi - lo)) * 40).toFixed(1)}`).join(' ');
+    const deals = e.mult < 1 ? `${Math.round((1 - e.mult) * 100)}% off` : e.mult > 1 ? `+${Math.round((e.mult - 1) * 100)}%` : 'normal';
+    econEl.style.setProperty('--ec', ph.color);
+    econEl.replaceChildren(
+      h('div.eg-econ-top', h('span.eg-econ-phase', ph.label), h(`span.eg-econ-idx${chg < 0 ? '.down' : ''}`, `${e.index.toFixed(1)} ${chg >= 0 ? '▲' : '▼'}${Math.abs(chg).toFixed(1)}`)),
+      h('div.eg-spark', { html: `<svg viewBox="0 0 160 46" preserveAspectRatio="none"><polyline points="0,46 ${pts} 160,46" fill="var(--ec)" fill-opacity=".14" stroke="none"/><polyline points="${pts}" fill="none" stroke="var(--ec)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>` }),
+      h('div.eg-econ-grid',
+        h('span', 'Deals'), h(`b${e.mult < 1 ? '.good' : e.mult > 1 ? '.bad' : ''}`, deals),
+        h('span', 'Loan rate'), h('b', `${Math.round(e.rate * 100)}%/mo`),
+        h('span', 'Business income'), h(`b${e.biz < 1 ? '.bad' : e.biz > 1 ? '.good' : ''}`, `${Math.round(e.biz * 100)}%`),
+      ),
+      h('div.eg-econ-stocks', ...Object.entries(e.prices).map(([sym, pr]) => {
+        const d = pr - (e.prev[sym] ?? pr);
+        return h(`span${d < 0 ? '.down' : d > 0 ? '.up' : ''}`, h('i', sym), `$${pr}`);
+      })),
+    );
+  }
+  let lessonTimer;
+  function showLesson(phase) {
+    const ph = E.ECON[phase];
+    clearTimeout(lessonTimer);
+    lesson.style.setProperty('--ec', ph.color);
+    lesson.replaceChildren(h('strong', `Money lesson · ${ph.label}`), h('p', ph.headline), h('p.tip', ph.tip));
+    lesson.classList.add('show');
+    lessonTimer = setTimeout(() => lesson.classList.remove('show'), 11000);
+  }
+  function openMarket() {
+    if (!view?.econ?.on) return;
+    if (view.phase === 'roll' && E.actors(view)[0] === me() && !busy) {
+      panelMode = 'stocks';
+      renderBar();
+      focusFirst();
+    } else showLesson(view.econ.phase);
   }
 
   function renderStrip() {
@@ -268,7 +330,8 @@ export function mount(ctx) {
     if (waiting) return;
     waiting = true;
     sound.pop();
-    panelMode = null;
+    // stay in the stock market after a trade so you can keep trading
+    if (!(panelMode === 'stocks' && ['trade', 'short', 'cover'].includes(move.type))) panelMode = null;
     renderBar();
     ctx.client.act(move);
     setTimeout(() => {
@@ -317,6 +380,7 @@ export function mount(ctx) {
     switch (view.phase) {
       case 'roll': {
         if (panelMode === 'money' && p.track === 'grind') return renderMoney(p, legal);
+        if (panelMode === 'stocks' && view.econ?.on) return renderStocks(p, legal);
         const two = L('roll', (m) => m.dice === 2);
         const one = L('roll', (m) => m.dice === 1);
         kids.push(
@@ -326,6 +390,7 @@ export function mount(ctx) {
         if (two && one) acts.push(btn('Roll 1 die', () => act(one)), btn('Roll 2 dice', () => act(two), { primary: true }));
         else acts.push(btn(two ? 'Roll the dice' : 'Roll', () => act(two || one), { primary: true }));
         if (p.track === 'grind') acts.push(btn('Loans & payoffs', () => ((panelMode = 'money'), renderBar(), focusFirst())));
+        if (view.econ?.on) acts.push(btn('Stock market', () => ((panelMode = 'stocks'), renderBar(), focusFirst()), { sub: E.ECON[view.econ.phase].label }));
         kids.push(h('div.eg-actions', acts));
         break;
       }
@@ -415,6 +480,43 @@ export function mount(ctx) {
     again?.focus();
   }
 
+  function renderStocks(p, legal) {
+    const e = view.econ;
+    const has = (m) => legal.some((x) => x.type === m.type && x.sym === m.sym && x.qty === m.qty);
+    const rows = Object.entries(e.prices).map(([sym, pr]) => {
+      const d = pr - (e.prev[sym] ?? pr);
+      const own = p.stocks[sym] || 0;
+      const sh = p.shorts?.[sym];
+      let pos = 'No position';
+      if (own) {
+        const pl = (pr - (p.stockCost[sym] || 0)) * own;
+        pos = `Own ${own.toLocaleString('en-US')} @ $${(p.stockCost[sym] || 0).toFixed(2)} · ${pl >= 0 ? '+' : ''}${money(pl)}`;
+      } else if (sh) {
+        const pl = (sh.price - pr) * sh.qty;
+        pos = `Short ${sh.qty.toLocaleString('en-US')} @ $${sh.price} · ${pl >= 0 ? '+' : ''}${money(pl)}`;
+      }
+      const btns = [];
+      for (const q of [10, 100, 1000]) if (has({ type: 'trade', sym, qty: q })) btns.push(btn(`Buy ${q}`, () => act({ type: 'trade', sym, qty: q }), { sub: money(q * pr), cls: 'sm' }));
+      if (own) btns.push(btn('Sell all', () => act({ type: 'trade', sym, qty: -own }), { sub: money(own * pr), cls: 'sm' }));
+      if (sh) btns.push(btn('Cover', () => act({ type: 'cover', sym }), { sub: 'close short', cls: 'sm' }));
+      for (const q of [10, 100, 1000]) if (has({ type: 'short', sym, qty: q })) btns.push(btn(`Short ${q}`, () => act({ type: 'short', sym, qty: q }), { sub: `bet on a fall`, cls: 'sm.short' }));
+      return h(
+        'div.eg-stock',
+        h('div.eg-stock-name', h('strong', sym), h('small', STOCKS[sym].name)),
+        h(`div.eg-stock-price${d < 0 ? '.down' : d > 0 ? '.up' : ''}`, h('strong', `$${pr}`), h('small', d ? `${d > 0 ? '▲' : '▼'} $${Math.abs(d)}` : '—')),
+        h(`div.eg-stock-pos${/ \+/.test(pos) ? '.up' : /-\$/.test(pos) ? '.down' : ''}`, pos),
+        h('div.eg-stock-btns', btns.length ? btns : h('small.eg-note', 'Not enough cash')),
+      );
+    });
+    const ph = E.ECON[e.phase];
+    bar.replaceChildren(
+      h('div.eg-prompt', h('strong', 'Stock market'), h('span', `${ph.label} · cash ${money(p.cash)}. ${ph.tip}`)),
+      h('div.eg-stocks', rows),
+      h('small.eg-note', `Short selling: you profit when the price falls and lose if it rises. You need cash of ${E.SHORT_MARGIN * 100}% of every short; if the loss grows too big the bank closes it (a margin call).`),
+      h('div.eg-actions', btn('Done', () => ((panelMode = null), renderBar(), focusFirst()), { back: true, primary: true })),
+    );
+  }
+
   function renderMoney(p, legal) {
     const payoffs = legal.filter((m) => m.type === 'payoff').map((m) => {
       const d = p.debts[m.key];
@@ -467,7 +569,14 @@ export function mount(ctx) {
   function renderStatement(seat) {
     const p = view.players[seat];
     const row = (label, val, cls = '') => h(`div.eg-row${cls ? '.' + cls : ''}`, h('span', label), h('b', val));
-    const inc = [row('Salary', money(p.salary)), ...p.assets.filter((a) => a.flow).map((a) => row(a.name, `${a.flow > 0 ? '+' : ''}${money(a.flow)}`, a.flow < 0 ? 'neg' : 'pos'))];
+    const inc = [
+      row('Salary', money(p.salary)),
+      ...p.assets.filter((a) => a.flow).map((a) => {
+        const f = E.assetFlow(p, a);
+        const note = f !== a.flow ? ` (economy ${Math.round((p.bizMod ?? 1) * 100)}%)` : '';
+        return row(a.name + note, `${f > 0 ? '+' : ''}${money(f)}`, f < 0 ? 'neg' : 'pos');
+      }),
+    ];
     const exp = [
       ...Object.entries(p.exp).filter(([, v]) => v).map(([k, v]) => row(EXPENSE_LABELS[k], money(v))),
       p.children ? row(`Children (${p.children} × ${money(p.perChild)})`, money(p.children * p.perChild)) : null,
@@ -475,7 +584,13 @@ export function mount(ctx) {
     ];
     const assets = [
       row('Cash', money(p.cash)),
-      ...Object.entries(p.stocks).map(([sym, n]) => row(`${STOCKS[sym]?.name || sym}: ${n.toLocaleString('en-US')} sh`, `avg $${(p.stockCost[sym] || 0).toFixed(2)}`)),
+      ...Object.entries(p.stocks).map(([sym, n]) =>
+        row(`${STOCKS[sym]?.name || sym}: ${n.toLocaleString('en-US')} sh (avg $${(p.stockCost[sym] || 0).toFixed(2)})`, p.stockPrice?.[sym] ? `worth ${money(n * p.stockPrice[sym])}` : '—'),
+      ),
+      ...Object.entries(p.shorts || {}).map(([sym, sh]) => {
+        const pl = (sh.price - (p.stockPrice?.[sym] ?? sh.price)) * sh.qty;
+        return row(`Short ${sym}: ${sh.qty.toLocaleString('en-US')} sh at $${sh.price}`, `${pl >= 0 ? '+' : ''}${money(pl)}`, pl < 0 ? 'neg' : 'pos');
+      }),
       ...p.assets.map((a) => row(a.name, `paid ${money(a.cost)}`)),
       ...(p.ventures || []).map((v) => row(v.name, money(v.cost))),
     ];

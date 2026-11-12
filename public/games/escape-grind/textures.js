@@ -441,6 +441,22 @@ export function cardFace(card, deck) {
   else if (card.type === 'setback') rows.push(['You lose', card.half ? 'Half your cash' : money(card.amount), '#b3261e']);
   else if (card.type === 'split') rows.push(['Shares', card.factor > 1 ? '×2' : '÷2', '#1b4f9a']);
 
+  if (card.listCost && card.listCost !== card.cost) rows.unshift(['Normal price', money(card.listCost), '#7a6b4c']);
+  if (card.econNote) {
+    // a stamped banner: "Recession sale: 22% off"
+    const sale = /off|less/.test(card.econNote) && card.type !== 'offer';
+    g.save();
+    g.translate(CW / 2, y + 30);
+    g.rotate(-0.04);
+    g.fillStyle = sale || /more/.test(card.econNote) ? '#1b7a46' : '#b3261e';
+    roundRect(g, -(CW - 120) / 2, -30, CW - 120, 60, 12);
+    g.fill();
+    g.fillStyle = '#fff';
+    g.font = `800 30px ${SANS}`;
+    g.fillText(card.econNote.toUpperCase(), 0, 2);
+    g.restore();
+    y += 70;
+  }
   let ry = Math.max(y + 10, CH - 110 - rows.length * 86);
   for (const [label, val, col] of rows) {
     g.fillStyle = 'rgba(0,0,0,0.05)';

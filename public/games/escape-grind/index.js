@@ -17,6 +17,16 @@ export default {
   accent: '#e0a526',
   options: [
     {
+      key: 'economy',
+      label: 'Economy',
+      type: 'select',
+      default: 'classic',
+      choices: [
+        { value: 'classic', label: 'Classic' },
+        { value: 'real', label: 'Real-life (advanced): booms, recessions, live stock market' },
+      ],
+    },
+    {
       key: 'length',
       label: 'Game length',
       type: 'select',

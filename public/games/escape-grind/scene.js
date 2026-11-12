@@ -109,7 +109,8 @@ export class Table3D {
   // ---------------------------------------------------------------------------------------------
   #lights() {
     const s = this.scene;
-    s.add(new THREE.HemisphereLight('#ffe9cc', '#1a120c', 0.35));
+    this.hemi = new THREE.HemisphereLight('#ffe9cc', '#1a120c', 0.35);
+    s.add(this.hemi);
     const key = (this.key = new THREE.SpotLight('#ffdcae', 2600, 80, 0.72, 0.65, 2));
     key.position.set(4, 26, 7);
     key.target.position.set(0, 0, 0);
@@ -679,6 +680,29 @@ export class Table3D {
   }
   setActive(seat) {
     this.active = seat;
+  }
+
+  // The room's light follows the economy: golden in a boom, cold and dim in a recession.
+  setMood(phase, snap = false) {
+    const MOODS = {
+      expansion: { key: '#ffdcae', k: 2600, sky: '#ffe9cc', h: 0.35 },
+      boom: { key: '#ffcf85', k: 3100, sky: '#fff0c8', h: 0.42 },
+      slowdown: { key: '#f2cfae', k: 2250, sky: '#e8dccb', h: 0.3 },
+      recession: { key: '#bccbf2', k: 1800, sky: '#b9c6e6', h: 0.24 },
+      recovery: { key: '#ffe3c2', k: 2450, sky: '#f4e6d2', h: 0.33 },
+    };
+    const m = MOODS[phase] || MOODS.expansion;
+    if (this.mood === phase) return;
+    this.mood = phase;
+    const c0 = this.key.color.clone(), s0 = this.hemi.color.clone();
+    const k0 = this.key.intensity, h0 = this.hemi.intensity;
+    const c1 = new THREE.Color(m.key), s1 = new THREE.Color(m.sky);
+    this.tween(snap ? 0 : 2200, (k) => {
+      this.key.color.lerpColors(c0, c1, k);
+      this.hemi.color.lerpColors(s0, s1, k);
+      this.key.intensity = k0 + (m.k - k0) * k;
+      this.hemi.intensity = h0 + (m.h - h0) * k;
+    });
   }
 
   // ---------------------------------------------------------------------------------------------

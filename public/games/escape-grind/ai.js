@@ -1,5 +1,5 @@
 // Escape the Grind — computer players. They see the same view a person sees.
-import { passive, expenses, cashflow, income, offerValue, FREEDOM_GOAL } from './engine.js';
+import { passive, expenses, cashflow, income, offerValue, FREEDOM_GOAL, SHORT_MARGIN, shortExposure } from './engine.js';
 
 export const LEVELS = {
   easy: { label: 'Easy', reserve: 0.5, roiMin: 0.08, loans: false, noise: 0.3 },
@@ -16,6 +16,8 @@ export function chooseAction(view, moves, levelKey = 'normal') {
 
   switch (view.phase) {
     case 'roll': {
+      const t = view.econ?.on && (view.turnTrades || 0) < 3 ? economyMove(view, p, moves, levelKey, reserve) : null;
+      if (t) return t;
       if (p.track === 'grind') {
         // clear the bank loan first (10% a month is the worst rate), then the best payoff
         const repay = moves.filter((m) => m.type === 'repay').sort((a, b) => b.amount - a.amount);
@@ -100,4 +102,35 @@ export function chooseAction(view, moves, levelKey = 'normal') {
       return find('buy') || find('pass');
   }
   return moves[0];
+}
+
+// Real-life economy: read the business cycle like a patient investor.
+function economyMove(view, p, moves, levelKey, reserve) {
+  const e = view.econ;
+  const ph = e.phase;
+  const pr = e.prices;
+  // take profits when stocks are expensive
+  for (const [sym, n] of Object.entries(p.stocks)) {
+    const cost = p.stockCost[sym] || 0;
+    if (pr[sym] > cost && (ph === 'boom' || pr[sym] >= cost * 1.6)) return { type: 'trade', sym, qty: -n };
+  }
+  // cover shorts once the fall has happened (or cut the loss when the market turns up)
+  for (const [sym, sh] of Object.entries(p.shorts || {})) {
+    const fell = pr[sym] < sh.price * 0.8;
+    if (fell || ph === 'recovery' || ph === 'expansion' || (ph === 'recession' && e.left <= 1)) return { type: 'cover', sym };
+  }
+  if (levelKey === 'easy') return null;
+  // buy the dip: broad, steady stocks when everything is on sale
+  if ((ph === 'recession' || e.index < 85) && p.track === 'grind') {
+    const sym = levelKey === 'hard' ? 'OAK' : 'BMF';
+    const budget = (p.cash - reserve * 3) * 0.35;
+    const qty = Math.floor(budget / pr[sym] / 10) * 10;
+    if (!p.stocks[sym] && qty >= 10) return { type: 'trade', sym, qty };
+  }
+  // experts short the most jumpy stock as the economy cools
+  if (levelKey === 'hard' && ph === 'slowdown' && !p.shorts?.NPK && !p.stocks.NPK) {
+    const qty = Math.floor((p.cash * 0.3) / pr.NPK / 10) * 10;
+    if (qty >= 10 && p.cash >= SHORT_MARGIN * (shortExposure(p, pr) + qty * pr.NPK)) return { type: 'short', sym: 'NPK', qty };
+  }
+  return null;
 }

@@ -16,6 +16,9 @@ Plain HTML, CSS and JavaScript modules — no build step, hosts anywhere static 
   glossy pawns, cards that fly up to the camera, coin stacks and miniature buildings for everything
   you own. Plays with mouse, touch, keyboard or a game controller (A choose, B back, Y statement,
   X camera, right stick orbit, triggers zoom, Start full screen).
+  **Real-life economy** (advanced option): a market index runs through expansion, boom, slowdown,
+  recession and recovery. Deal prices, buyer offers, business income and loan rates follow it, and
+  a live stock market lets players buy the dip, sell the boom, and short stocks to profit from a fall.
 - **Four in a Row** — a small, complete example of how a game plugs in.
 
 ## Online play
