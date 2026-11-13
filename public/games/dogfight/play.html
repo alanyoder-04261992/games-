@@ -48,6 +48,14 @@ p{margin:0;line-height:1.4;max-width:62ch}
 .pcard small{color:var(--ink-dim);font-size:.9rem}
 .planes h4{grid-column:1/-1;margin:8px 0 -2px;font-family:var(--f-data);font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim)}
 .pcard b{font-size:1.35rem}
+.pcard .ph{display:grid;grid-template-columns:128px 1fr;gap:10px;align-items:center}
+.pcard .ph > div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pcard img{display:block;width:128px;height:64px;object-fit:cover;border-radius:4px;background:#5d7686}
+.pcard .spec{font-family:var(--f-data);font-size:.72rem;letter-spacing:.04em;color:var(--amber)}
+.pcard .facts{margin:2px 0 0;padding:0 0 0 1.05em;font-size:.8rem;line-height:1.35;color:var(--ink-dim)}
+.pcard .facts li{margin:2px 0}
+.pcard .facts::before{content:'Did you know?';display:block;margin:0 0 2px -1.05em;font-family:var(--f-data);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink)}
+@media (max-width:560px){.planes{grid-template-columns:1fr}}
 .stat{display:grid;grid-template-columns:4.2em 1fr;align-items:center;gap:8px;font-family:var(--f-data);font-size:.7rem;color:var(--ink-dim);text-transform:uppercase}
 .bar{height:5px;background:rgba(241,232,210,.12);position:relative}
 .bar i{position:absolute;inset:0 auto 0 0;background:var(--ink)}
@@ -990,7 +998,7 @@ const SPECS = {
     guns: [{ x: -2.15, y: -0.28, z: -1.0, t: 'c' }, { x: 2.15, y: -0.28, z: -1.0, t: 'c' }, { x: -3.0, y: -0.25, z: -0.75, t: 'm' }, { x: 3.0, y: -0.25, z: -0.75, t: 'm' }, { x: -3.45, y: -0.24, z: -0.7, t: 'm' }, { x: 3.45, y: -0.24, z: -0.7, t: 'm' }],
     ammo: { m: 1400, c: 240 }, span: 11.2, length: 9.5, noseZ: -4.15, R: 1.0,
     camoA: '#4a5833', camoB: '#7b6744', bottom: '#b8c2a9', spinner: '#d6cfb4', blades: 4,
-    era: 'prop', side: 'blue', card: ['Elliptical wing, tight turns, six guns', 92, 66, 62, 90],
+    era: 'prop', side: 'blue', card: ['Elliptical wing, tight turns, six guns', 92, 66, 62, 90], top: 340, facts: ["Its elliptical wing spreads lift almost perfectly evenly from root to tip, which is why it turns so tightly.", "All six guns are angled to meet at one point 300 m ahead of the nose."],
     look: { prof: [[0, 0.05], [0.04, 0.16], [0.14, 0.28], [0.34, 0.44], [0.52, 0.56], [0.66, 0.62], [0.8, 0.6], [0.9, 0.55], [0.97, 0.44], [1, 0.3]], wing: { shape: 'ellipse', root: 2.55 }, band: [2.49, 2.81], bandCol: 0xcfc6a6, scoops: [[1.3, -0.6, -0.15, 0.15, 0.85, 1.35], [-1.3, -0.6, -0.15, 0.13, 0.7, 1.35]],
       exh: 6, hoops: [-0.62, 0.38], gearX: 0.95, camoSeed: 4, insignia: 'roundel' },
   },
@@ -1001,7 +1009,7 @@ const SPECS = {
     guns: [{ x: -0.26, y: 0.52, z: -2.7, t: 'm' }, { x: 0.26, y: 0.52, z: -2.7, t: 'm' }, { x: 0, y: 0.0, z: -4.2, t: 'c' }],
     ammo: { m: 1200, c: 150 }, span: 9.9, length: 9.0, noseZ: -4.0, R: 0.93,
     camoA: '#6d777b', camoB: '#8d9594', bottom: '#a8bbca', spinner: '#d4ab2e', blades: 3,
-    era: 'prop', side: 'red', card: ['Small wing, fast climb, nose cannon', 60, 84, 90, 68],
+    era: 'prop', side: 'red', card: ['Small wing, fast climb, nose cannon', 60, 84, 90, 68], top: 370, facts: ["Its nose cannon fires through the hollow hub of the propeller, straight down the middle.", "Small wing, big engine: it out-climbs every other 1940s fighter here."],
     look: { prof: [[0, 0.05], [0.04, 0.15], [0.14, 0.26], [0.34, 0.42], [0.52, 0.53], [0.66, 0.58], [0.8, 0.57], [0.9, 0.53], [0.97, 0.45], [1, 0.33]], wing: { shape: 'taper', root: 2.1, tip: 1.15, tipC: 0.62, from: 0.92, sweep: 0.18, round: 0.86 }, band: [-3.75, -2.65], bandCol: 0xd4ab2e, aceBand: true,
       scoops: [[0, -0.66, -2.8, 0.15, 0.4, 1.6], [1.7, -0.6, -0.45, 0.11, 0.7, 1.5], [-1.7, -0.6, -0.45, 0.11, 0.7, 1.5]], exh: 6, hoops: [-0.66, -0.25, 0.18, 0.55], diag: true,
       cowlGuns: true, spinnerGun: true, gearX: 0.62, tailY: 0.02, camoSeed: 9, mottled: true, insignia: 'cross' },
@@ -1014,7 +1022,7 @@ const SPECS = {
     guns: [{ x: -2.35, y: -0.3, z: -0.85, t: 'h' }, { x: 2.35, y: -0.3, z: -0.85, t: 'h' }, { x: -2.75, y: -0.28, z: -0.8, t: 'h' }, { x: 2.75, y: -0.28, z: -0.8, t: 'h' }, { x: -3.15, y: -0.26, z: -0.75, t: 'h' }, { x: 3.15, y: -0.26, z: -0.75, t: 'h' }],
     ammo: { h: 1800 }, span: 11.3, length: 9.8, noseZ: -4.3, R: 0.95,
     camoA: '#a9afb3', camoB: '#9fa5a9', bottom: '#aab0b4', spinner: '#b8322a', blades: 4,
-    era: 'prop', side: 'blue', card: ['Fast escort in bare metal, six heavy guns', 72, 92, 70, 86],
+    era: 'prop', side: 'blue', card: ['Fast escort in bare metal, six heavy guns', 72, 92, 70, 86], top: 365, facts: ["The air its belly radiator heats rushes out the back and gives a little thrust back.", "Left in bare metal to save the weight of paint, it carries more fuel than any other propeller fighter here."],
     look: { prof: [[0, 0.05], [0.04, 0.15], [0.14, 0.27], [0.34, 0.42], [0.52, 0.54], [0.66, 0.6], [0.8, 0.6], [0.9, 0.56], [0.97, 0.46], [1, 0.3]],
       wing: { shape: 'taper', root: 2.75, tip: 1.35, tipC: 0.9, from: 0.93, sweep: 0.1, round: 0.9 }, band: [-4.15, -3.7], bandCol: 0xb8322a,
       scoops: [[0, -0.72, 0.95, 0.3, 1.9, 1.15]], exh: 6, hoops: [-0.62], gearX: 1.6, camoSeed: 12, insignia: 'star', metal: 0.62, rough: 0.3 },
@@ -1027,7 +1035,7 @@ const SPECS = {
     guns: [{ x: -0.24, y: 0.5, z: -2.6, t: 'm' }, { x: 0.24, y: 0.5, z: -2.6, t: 'm' }, { x: -2.7, y: -0.25, z: -0.9, t: 'c' }, { x: 2.7, y: -0.25, z: -0.9, t: 'c' }],
     ammo: { m: 1400, c: 120 }, span: 12.0, length: 9.1, noseZ: -3.9, R: 1.0,
     camoA: '#a3a690', camoB: '#979a84', bottom: '#b4b5a2', spinner: '#bdb69a', blades: 3,
-    era: 'prop', side: 'red', card: ['Feather-light, out-turns anything, fragile', 100, 56, 78, 62],
+    era: 'prop', side: 'red', card: ['Feather-light, out-turns anything, fragile', 100, 56, 78, 62], top: 305, facts: ["It weighs about 60% of a Ranger: no armour plate and no self-sealing tanks.", "Slowest stall here, around 75 mph, so it can turn inside anything that chases it."],
     look: { prof: [[0, 0.05], [0.05, 0.15], [0.15, 0.27], [0.35, 0.42], [0.55, 0.55], [0.72, 0.6], [0.85, 0.62], [0.93, 0.63], [0.98, 0.61], [1, 0.55]],
       wing: { shape: 'taper', root: 2.6, tip: 1.4, tipC: 0.8, from: 0.9, sweep: 0.12, round: 0.82 }, band: [-3.85, -2.75], bandCol: 0x26282a, radial: true, spinnerR: 0.22,
       scoops: [[0, -0.66, -2.3, 0.12, 0.45, 1.5]], exh: 2, hoops: [-0.66, -0.3, 0.05, 0.4, 0.75], diag: true, cowlGuns: true, gearX: 1.5, camoSeed: 21, insignia: 'disc' },
@@ -1040,7 +1048,7 @@ const SPECS = {
     hp: { engine: 140, wingL: 150, wingR: 150, tail: 110, fuel: 100, pilot: 50, fuse: 220 }, fuel: 1500,
     guns: [{ x: -0.85, y: 0.38, z: -3.7, t: 'r' }], ammo: { r: 510 }, span: 9.5, length: 15, noseZ: -7.6, R: 0.62, exhZ: 7.7, eye: [0, 0.9, -4.1], cockpitZ: -4.05,
     camoA: '#8c959b', camoB: '#9aa2a7', bottom: '#b7bec2', spinner: '#777', blades: 0,
-    era: 'jet', side: 'blue', card: ['Single-engine jet: quick roll, afterburner, rotary cannon', 88, 92, 95, 80],
+    era: 'jet', side: 'blue', card: ['Single-engine jet: quick roll, afterburner, rotary cannon', 88, 92, 95, 80], top: 740, facts: ["Fly-by-wire: pull the stick right back and the computer gives you 9 g, never more.", "Its rotary cannon fires 50 rounds a second, enough to empty it in about ten seconds."],
     look: { jet: 'lancer', camoSeed: 31, insignia: 'lowvis', metal: 0.25, rough: 0.5 },
   },
   talon: {
@@ -1050,12 +1058,12 @@ const SPECS = {
     hp: { engine: 170, wingL: 170, wingR: 170, tail: 130, fuel: 120, pilot: 50, fuse: 260 }, fuel: 2400,
     guns: [{ x: 1.05, y: 0.4, z: -4.6, t: 'r' }], ammo: { r: 400 }, span: 12.4, length: 17, noseZ: -8.6, R: 0.7, exhZ: 8.5, eye: [0, 0.95, -4.9], cockpitZ: -4.85,
     camoA: '#8199ac', camoB: '#9fb2c0', bottom: '#c2ced5', spinner: '#777', blades: 0,
-    era: 'jet', side: 'red', card: ['Twin-engine heavy jet: big wing, long legs, tough', 84, 95, 90, 78],
+    era: 'jet', side: 'red', card: ['Twin-engine heavy jet: big wing, long legs, tough', 84, 95, 90, 78], top: 730, facts: ["Its twin fins lean outward so the rudders keep working with the nose pitched up high.", "It carries 2,400 litres of fuel, more than six Kestrels' worth."],
     look: { jet: 'talon', camoSeed: 37, insignia: 'redstar', metal: 0.25, rough: 0.5 },
   },
 };
 const GUN = { m: { v: 860, rate: 15, dmg: 9, spread: 0.0022 }, h: { v: 880, rate: 13, dmg: 13, spread: 0.0024 }, c: { v: 760, rate: 10, dmg: 42, spread: 0.003 }, r: { v: 1030, rate: 50, dmg: 24, spread: 0.0018 } };
-const GUN_LABEL = { m: 'MG', h: 'HMG', c: 'CN', r: 'GUN' };
+const GUN_LABEL = { m: 'MG', h: 'HMG', c: 'CN', r: 'GUN' }, GUN_NAME = { m: 'MG', h: 'heavy MG', c: 'cannon', r: 'rotary cannon' };
 // which planes the other side flies against you: same era, other side
 const ERA_NAME = { prop: '1940s fighters', jet: 'Modern jets' };
 function opposingTypes(key) { const me = SPECS[key] || SPECS.kestrel, l = Object.keys(SPECS).filter(k => SPECS[k].era === me.era && SPECS[k].side !== me.side); return l.length ? l : [key]; }
@@ -3503,7 +3511,13 @@ $('btnFull').addEventListener('click', () => {
     for (const k of Object.keys(SPECS).filter(k => SPECS[k].era === era)) {
       const sp = SPECS[k], [blurb, ...bars] = sp.card, b = document.createElement('button');
       b.className = 'pcard'; b.id = 'pick-' + k; b.setAttribute('role', 'radio'); b.dataset.plane = k;
-      b.innerHTML = `<b>${esc(sp.full)}</b><small>${esc(blurb)}</small>` + ['Turn', 'Speed', 'Climb', 'Guns'].map((n, i) => `<div class="stat">${n}<div class="bar"><i style="width:${bars[i]}%"></i></div></div>`).join('');
+      // a picture rendered from the game (tools/dogfight-plane-thumbs.cjs), a spec line, the bars and two fun facts
+      const guns = {}; for (const gn of sp.guns) guns[gn.t] = (guns[gn.t] || 0) + 1;
+      const gunTxt = Object.entries(guns).map(([t, n]) => `${n} ${GUN_NAME[t]}`).join(' + ');
+      b.innerHTML = `<div class="ph"><img src="planes/${k}.jpg" alt="${esc(sp.full)}" width="128" height="64" loading="lazy"><div><b>${esc(sp.full)}</b><small>${esc(blurb)}</small></div></div>`
+        + `<span class="spec">Top ${sp.top} mph · ${gunTxt} · ${DIFF.normal.playerMsl + (sp.mslBonus || 0)} missiles</span>`
+        + ['Turn', 'Speed', 'Climb', 'Guns'].map((n, i) => `<div class="stat">${n}<div class="bar"><i style="width:${bars[i]}%"></i></div></div>`).join('')
+        + `<ul class="facts">${(sp.facts || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul>`;
       b.addEventListener('click', () => pick(k)); box.append(b);
     }
   }

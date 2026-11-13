@@ -76,6 +76,7 @@ Computer pilots always fly the empty seats in a free-for-all. Their skill follow
   - *Talon T-27* (modern jet): twin engines, twin canted fins, big wing, long range and tough.
   - The jets have afterburners (hold boost at full throttle; it burns fuel three times as fast instead of running out), fly-by-wire that pulls to 9 g and no further, a transonic drag rise that holds them to about 740 mph, tricycle gear, and two more missiles and four more flares than the 1940s fighters.
   - Raiders fly the other side's aircraft of your era: pick a 1940s fighter and you meet 1940s fighters, pick a jet and you meet jets.
+  - The picker shows each aircraft with a small picture rendered from the game (`node tools/dogfight-plane-thumbs.cjs` remakes `public/games/dogfight/planes/*.jpg` after a model changes; it needs `npm start` running and Playwright), its top speed, guns and missiles, and two fun facts.
   - Every aircraft has moving ailerons (flaperons on the jets), elevators (all-moving tailplanes on the jets) and rudders, retracting gear, a canopy with a pilot inside, and a cockpit view with working gauges. The propellers blur to a disc at speed; the jets' nozzles glow with the throttle and show an afterburner plume.
 - **Guns.** Rounds are ballistic, with muzzle velocity and gravity drop. Wing guns converge at 300 m. Every second or third round is a tracer.
 - **Damage model.** Each part has its own hit points: engine, fuel tank, left wing, right wing, tail, pilot and fuselage.
