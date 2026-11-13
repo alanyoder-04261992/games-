@@ -183,6 +183,12 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
       <button id="btnRestart">Restart sortie</button>
       <button id="btnEnd">End mission</button>
     </div>
+    <div class="settings" id="missionHere">
+      <label for="setMission">Switch mission
+        <select id="setMission"></select>
+      </label>
+      <button id="btnMissionHere">Start it here, now</button>
+    </div>
     <h3>Settings</h3>
     <div class="settings">
       <label for="setControl">Controls
@@ -1840,6 +1846,8 @@ class Plane {
     this.alive = true; this.wreck = false; this.gone = false; this.onGround = false; this.belly = false;
     this.alpha = 0; this.beta = 0; this.V = 0; this.g = 1; this.gs = 1; this.rpm = 0; this.engineOn = true; this.onFire = false; this.leak = 0; this.stall = 0; this.dropSign = 1;
     this.firing = false; this.gunT = this.spec.guns.map(() => 0); this.lastAttacker = null; this.lastHitT = -99; this.emitT = 0; this.touchVS = 0; this.wreckSpin = 0;
+    // you get a tighter-turning aircraft than the computer pilots (spawning sets theirs by difficulty)
+    this.liftK = this.player ? 1.3 : 1;
     this.brain = this.skill && !o.remote ? { mode: 'attack', t: 0, side: 1, noise: new V3(), burst: 0, cool: 0, think: 0, dir: new V3(0, 0, -1) } : null;
     this.overstress = 0;
     this.missiles = 0; this.flares = 0; this.wep = 1; this.boosting = false; this.mslCool = 0;
@@ -1876,10 +1884,11 @@ class Plane {
     else if (aa < 0.7) { stall = Math.min(1, (aa - as) / 0.3); CL = (s.CL0 + s.CLa * as * Math.sign(alpha)) * (1 - 0.5 * stall); }
     else { stall = 1; CL = 0.85 * Math.sin(2 * alpha); }
     CL += this.flapT * 0.38 * (stall > 0.3 ? 0.5 : 1);
+    const lk = this.liftK || 1; CL *= lk; // more lift for the same angle of attack: a tighter turn
     if (!this.stall && stall > 0.05) this.dropSign = Math.abs(this.w.z) > 0.15 ? -Math.sign(this.w.z) : (Math.random() < 0.5 ? -1 : 1);
     this.stall = stall;
     const wingF = 0.5 * (fL + fR); CL *= wingF;
-    const k = 1 / (Math.PI * s.e * s.AR);
+    const k = 1 / (Math.PI * s.e * s.AR) / lk; // and the turn bleeds less speed
     const CD = s.CD0 + k * Math.min(CL * CL, 2.6) + 0.9 * Math.max(0, Math.sin(aa) ** 2 - Math.sin(as) ** 2) + 0.45 * beta * beta + this.flapT * 0.04 + this.gearT * 0.022 + (1 - wingF) * 0.03 + (this.engineOn ? 0 : 0.008) + (s.mdd ? 0.1 * smooth(s.mdd, s.mdd + 0.3, V / 340) : 0); // transonic drag rise
     _F.set(0, 0, 0);
     if (V > 0.5) {
@@ -1904,10 +1913,10 @@ class Plane {
     const cv = s.compV || 205, comp = V > cv ? clamp(1 - (V - cv) / (s.jet ? 120 : 70), 0.25, 1) : 1;
     // fly-by-wire: hold the stick back and a jet pulls to its g limit, no further
     let pc = this.ctrl.pitch;
-    if (s.gLimit && V > 30 && this.alive) { const aMax = (s.gLimit * s.mass * 9.81 / Math.max(1, qd * s.S) - s.CL0) / s.CLa; const lim = Math.max(0.05, (aMax - s.trimA) * s.Cma / (s.Ke * Math.max(0.2, tailF * comp))); pc = clamp(pc, -lim * 0.45, lim); }
+    if (s.gLimit && V > 30 && this.alive) { const aMax = (s.gLimit * s.mass * 9.81 / Math.max(1, qd * s.S * lk) - s.CL0) / s.CLa; const lim = Math.max(0.05, (aMax - s.trimA) * s.Cma / (s.Ke * Math.max(0.2, tailF * comp))); pc = clamp(pc, -lim * 0.45, lim); }
     let pA = qn * (s.Ke * pc * tailF * comp * (1 - 0.5 * stall) - s.Cma * (alpha - s.trimA)) - s.Cmq * this.w.x * sq;
     const rollFade = V > s.rollFadeV ? clamp(1 - (V - s.rollFadeV) / 130, 0.35, 1) : 1;
-    let rA = -qn * s.Ka * rollFade * comp * this.ctrl.roll - s.Clp * this.w.z * sq + qn * 3.0 * (fR - fL) * clamp(CL, -1.5, 1.5);
+    let rA = -qn * s.Ka * (this.player ? 1.15 : 1) * rollFade * comp * this.ctrl.roll - s.Clp * this.w.z * sq + qn * 3.0 * (fR - fL) * clamp(CL, -1.5, 1.5);
     let yA = qn * (-s.Kr * this.ctrl.yaw * tailF - s.Cnb * beta) - s.Cnr * this.w.y * sq;
     if (stall > 0 && !this.onGround) { rA += this.dropSign * stall * qn * 5.5; pA -= stall * qn * 1.5 * Math.sign(alpha); yA += this.dropSign * stall * qn * 1.2; }
     if (this.wreck) { rA += this.wreckSpin * 3; }
@@ -2392,7 +2401,7 @@ function rearm(p) {
   const d = diff();
   p.hp = { ...p.spec.hp }; p.onFire = false; p.leak = 0; p.engineOn = true; p.fuel = p.spec.fuel; p.ammo = { ...p.spec.ammo };
   p.missiles = p.spec.noMsl ? 0 : d.playerMsl + (p.spec.mslBonus || 0); p.flares = d.flares + (p.spec.flareBonus || 0); p.wep = 1;
-  if (missionKind() !== 'dogfight') p.bombs = p.spec.bombs || 0;
+  p.bombs = p.spec.bombs || 0;
   msg('Rearmed, refuelled and repaired', 'good', 4); Sfx.chime();
 }
 
@@ -2482,10 +2491,10 @@ function assistStick(p, sx, sy, sz, out) {
 // Difficulty moves every raider up or down a skill level, sharpens their aim, scales the damage
 // you take and decides who carries missiles (indexed rookie / veteran / ace).
 const DIFF = {
-  easy: { label: 'Easy', shift: -1, aim: 1.7, react: 0.5, dmg: 0.5, playerMsl: 6, flares: 10, enemyMsl: [0, 0, 0] },
-  normal: { label: 'Normal', shift: 0, aim: 1.0, react: 1.0, dmg: 1.0, playerMsl: 4, flares: 6, enemyMsl: [0, 0, 1] },
-  hard: { label: 'Hard', shift: 1, aim: 0.8, react: 1.4, dmg: 1.25, playerMsl: 4, flares: 6, enemyMsl: [0, 1, 2] },
-  ace: { label: 'Ace', shift: 2, aim: 0.6, react: 2.0, dmg: 1.5, playerMsl: 4, flares: 4, enemyMsl: [1, 2, 2] },
+  easy: { label: 'Easy', shift: -1, aim: 1.7, react: 0.5, dmg: 0.5, aiTurn: 0.8, playerMsl: 6, flares: 10, enemyMsl: [0, 0, 0] },
+  normal: { label: 'Normal', shift: 0, aim: 1.0, react: 1.0, dmg: 1.0, aiTurn: 0.88, playerMsl: 4, flares: 6, enemyMsl: [0, 0, 1] },
+  hard: { label: 'Hard', shift: 1, aim: 0.8, react: 1.4, dmg: 1.25, aiTurn: 0.97, playerMsl: 4, flares: 6, enemyMsl: [0, 1, 2] },
+  ace: { label: 'Ace', shift: 2, aim: 0.6, react: 2.0, dmg: 1.5, aiTurn: 1.04, playerMsl: 4, flares: 4, enemyMsl: [1, 2, 2] },
 };
 const SKILLS = ['rookie', 'veteran', 'ace'];
 function diff() { return DIFF[NET.on ? NET.opts.difficulty : settings.difficulty] || DIFF.normal; }
@@ -2519,7 +2528,7 @@ function aiThink(p, dt, target) {
   _c.subVectors(target.pos, p.pos); const dist = _c.length(); _d.copy(_c).multiplyScalar(1 / dist);
   const tgtPointing = target.fwd.dot(_e.copy(_d).negate());
   const behindMe = p.fwd.dot(_d) < -0.2;
-  if (b.mode !== 'evade' && dist < 900 && tgtPointing > 0.93 && behindMe && Math.random() < dt * sk.react * df.react) { b.mode = 'evade'; b.t = rand(2.5, 5); b.side = Math.random() < 0.5 ? -1 : 1; }
+  if (b.mode !== 'evade' && dist < 900 && tgtPointing > 0.93 && behindMe && Math.random() < dt * sk.react * df.react * 0.6) { b.mode = 'evade'; b.t = rand(2.5, 5); b.side = Math.random() < 0.5 ? -1 : 1; }
   if (b.mode === 'attack' && dist < 180 && p.fwd.dot(_d) < 0.5) { b.mode = 'extend'; b.t = rand(3, 5); }
   if (b.mode !== 'attack' && b.t <= 0) b.mode = 'attack';
   // collision avoidance: break above or below when the closure time gets short
@@ -2572,7 +2581,9 @@ const MISSIONS = {
   ground: { name: 'Ground attack', blurb: 'An armoured convoy is moving up to a fuel depot guarded by flak guns. Destroy the tanks, trucks, fuel tanks and sheds.' },
   intercept: { name: 'Bomber intercept', blurb: 'Enemy bombers are heading for the harbour town with fighter cover. Shoot them down before three of them get through.' },
 };
-function missionKind() { return NET.on ? 'dogfight' : (MISSIONS[settings.mission] ? settings.mission : 'dogfight'); }
+// online, missions run when nobody else is at the table (just you and computer players, co-op)
+function soloTable() { return NET.on && NET.opts.mode === 'coop' && !NET.roster.some(r => r.kind === 'human' && r.seat !== NET.seat); }
+function missionKind() { return NET.on && !soloTable() ? 'dogfight' : (MISSIONS[settings.mission] ? settings.mission : 'dogfight'); }
 const TOWN_LIMIT = 3; // bombers through to the town before the intercept fails
 const GW = { units: [], ship: null, flak: [], bombs: [], center: new V3(), active: false };
 // what shoots back from the ground: kills and hits are credited to it like to a pilot
@@ -2876,7 +2887,7 @@ function dropBomb(p) {
 }
 function dropPlayerBomb() {
   const p = G.player; if (!p || !p.alive || G.state !== 'play' || p.onGround) return;
-  if ((p.bombs || 0) <= 0) { if (missionKind() !== 'dogfight') msg('No bombs left · land at the airfield to rearm', 'warn'); return; }
+  if ((p.bombs || 0) <= 0) { msg('No bombs left · land at the airfield to rearm', 'warn'); return; }
   dropBomb(p); if (p.spec.role === 'bomber') setTimeout(() => dropBomb(p), 180); // a bomber drops in pairs
   msg(`Bomb away · ${p.bombs} left`, 'info', 1.6);
 }
@@ -2957,7 +2968,7 @@ function spawnEscorts(n, near, text) {
     NET.raiderSeq++;
     const sk = shiftSkill(j ? 'veteran' : 'rookie', d.shift), k = types[j % types.length];
     const e = new Plane(k, { skill: sk, id: 'r' + NET.raiderSeq, team: 'red', role: 'raider' });
-    e.missiles = d.enemyMsl[SKILLS.indexOf(sk)] + (e.spec.jet ? 1 : 0); e.flares = 3;
+    e.missiles = d.enemyMsl[SKILLS.indexOf(sk)] + (e.spec.jet ? 1 : 0); e.flares = 3; e.liftK = d.aiTurn;
     const pl = G.player, yaw = pl ? Math.atan2(-(pl.pos.x - near.x), -(pl.pos.z - near.z)) : 0;
     e.place(near.x + j * 80, Math.max(near.y, 900) + j * 30, near.z + j * 60, yaw, 0, (e.spec.cruise || 130)); e.gear = e.gearT = 0;
     G.planes.push(e);
@@ -3047,18 +3058,20 @@ function clearWorldPlanes() { for (const p of G.planes) scene.remove(p.model.gro
 function myTeam() { return NET.on && NET.opts.mode === 'versus' ? 't' + NET.seat : 'blue'; }
 function startMission(mode) {
   if (NET.on && NET.seat == null) { msg('You are watching. Ask the host to give you a seat.', 'warn'); return; }
-  if (!NET.on) { clearWorldPlanes(); smokeFX.n = 0; fireFX.n = 0; G.crashSites = []; }
+  // a mission on this device alone: offline, or a Game Center table with nobody else at it
+  const local = !NET.on || (soloTable() && missionKind() !== 'dogfight');
+  if (local) { clearWorldPlanes(); smokeFX.n = 0; fireFX.n = 0; G.crashSites = []; }
   else if (G.player) removePlane(G.player);
   G.msgs = []; G.ended = false;
-  WAVES = buildWaves(NET.on ? NET.opts.enemies : settings.enemies, NET.on ? NET.opts.waves : settings.waves);
+  WAVES = buildWaves(NET.on && !local ? NET.opts.enemies : settings.enemies, NET.on && !local ? NET.opts.waves : settings.waves);
   G.stats = { shots: 0, hits: 0, kills: 0, deaths: 0, score: 0, dmgTaken: 0, killList: [], start: 0 };
   G.time = 0; G.timeScale = 1; G.cam.mode = 'chase'; G.cam.kill = null; G.hitFlash = 0; G.respawnT = null; G.popups = []; G.streak = 0; G.lastKillT = -99; G.rearmT = 0;
   for (const m of MSL) { scene.remove(m.mesh); Sfx.motorStop(m); } MSL.length = 0; FLARES.length = 0; LOCK.target = null;
   camera.near = 1; camera.updateProjectionMatrix();
   const pl = spawnPlayer(mode);
-  if (!NET.on) {
-    if (mode === 'sortie') { G.mission = { mode, phase: 'takeoff', wave: 0, next: null, t: 0 }; msg('Full throttle to start your take-off roll', 'info', 6); }
-    else { G.mission = { mode, phase: 'combat', wave: 0, next: 3, t: 0 }; }
+  if (local) {
+    if (mode === 'sortie') { G.mission = { mode, phase: 'takeoff', wave: 0, next: null, t: 0, local: NET.on }; msg('Full throttle to start your take-off roll', 'info', 6); }
+    else { G.mission = { mode, phase: 'combat', wave: 0, next: 3, t: 0, local: NET.on }; }
     setupMission(G.mission);
     const k = G.mission.kind;
     if (mode !== 'sortie') { if (k !== 'dogfight') G.mission.next = k === 'intercept' ? 6 : 30; msg(k === 'dogfight' ? 'Bandits inbound from the sea' : k === 'naval' ? 'Battleship off the coast · bomb it until it sinks (B to drop)' : k === 'ground' ? 'Convoy and depot inland · bomb and strafe them (B to drop)' : 'Bombers heading for the town · stop them', 'info', 5); }
@@ -3096,7 +3109,7 @@ function spawnPlayer(mode) {
     pl.place(AF.x + 1500 + s * 90, 1300 + s * 40, AF.z - 2500 + s * 60, -0.9, 0.02, (pl.spec.cruise || 130) * 0.96); pl.gear = pl.gearT = 0; pl.throttle = 0.9;
   }
   pl.missiles = pl.spec.noMsl ? 0 : diff().playerMsl + (pl.spec.mslBonus || 0); pl.flares = diff().flares + (pl.spec.flareBonus || 0);
-  pl.bombs = missionKind() === 'dogfight' ? 0 : (pl.spec.bombs || 0);
+  pl.bombs = pl.spec.bombs || 0;
   $('tGear').classList.toggle('on', !!pl.gear); $('tFlaps').classList.remove('on');
   return pl;
 }
@@ -3115,7 +3128,7 @@ function spawnWave(i) {
     const d = diff(), skill = shiftSkill(sk, d.shift);
     const ekey = types[(i + j) % types.length];
     const e = new Plane(ekey, { skill, ace: sk === 'ace', id: 'r' + NET.raiderSeq, team: 'red', role: 'raider' });
-    e.missiles = d.enemyMsl[SKILLS.indexOf(skill)] + (e.spec.jet ? 1 : 0); e.flares = (skill === 'rookie' ? 0 : 3) + (e.spec.jet ? 2 : 0);
+    e.missiles = d.enemyMsl[SKILLS.indexOf(skill)] + (e.spec.jet ? 1 : 0); e.flares = (skill === 'rookie' ? 0 : 3) + (e.spec.jet ? 2 : 0); e.liftK = d.aiTurn;
     const off = (j - (list.length - 1) / 2) * 70;
     e.place(cx + Math.cos(yaw) * off, y + (j % 3) * 15, cz - Math.sin(yaw) * off, yaw, 0, (e.spec.cruise || 130) * 1.04); e.gear = e.gearT = 0;
     G.planes.push(e);
@@ -3127,7 +3140,7 @@ function spawnWave(i) {
 function missionUpdate(dt) {
   const m = G.mission, pl = G.player; if (!m) return;
   m.t += dt;
-  if (NET.on) return netMission(dt);
+  if (NET.on && !m.local) return netMission(dt);
   if (m.phase === 'takeoff') {
     if (!pl.onGround && pl.agl() > 70) { m.phase = 'combat'; m.next = 14; msg('Airborne. Raise the gear and climb', 'good', 4.5); }
   } else if (m.phase === 'combat' && m.kind && m.kind !== 'dogfight') {
@@ -3332,7 +3345,7 @@ function netObjective() {
 function netMenu() {
   const o = NET.opts, seated = NET.seat != null;
   $('soloSetup').hidden = false; $('optEnemiesL').hidden = $('optWavesL').hidden = $('optDiffL').hidden = true; $('btnOnline').hidden = true;
-  $('missionHead').hidden = $('missionList').hidden = true; // online tables fly the dogfight
+  $('missionHead').hidden = $('missionList').hidden = !soloTable(); // with other people at the table, everyone flies the dogfight
   $('btnSortie').textContent = 'Take off from runway'; $('btnQuick').textContent = 'Launch airborne';
   $('btnSortie').disabled = $('btnQuick').disabled = !seated;
   const pilots = NET.roster.filter(r => r.kind === 'human').map(r => r.name).join(', ');
@@ -3373,7 +3386,7 @@ function playerDown(cause, killer) {
   G.stats.deaths = (G.stats.deaths || 0) + 1;
   if (G.cam.mode === 'cockpit') { G.cam.mode = 'chase'; camera.near = 1; camera.updateProjectionMatrix(); }
   G.player.firing = false;
-  if (NET.on) {
+  if (NET.on && !m.local) {
     const by = killer ? (killer.label || (killer.role === 'raider' ? `a ${killer.spec.name}` : '')) : '';
     if (G.respawnT == null && !NET.over) { G.respawnT = 6; msg(`You ${cause}${by ? ' · ' + by : ''}`, 'danger', 5); }
     return;
@@ -3455,6 +3468,8 @@ const STICK_R = 60;
 function resetStick() { touch.stickId = null; touch.sx = touch.sy = 0; stickKnob.style.transform = ''; stickBase.classList.remove('live'); stickBase.style.left = ''; stickBase.style.top = ''; }
 stickZone.addEventListener('pointerdown', e => {
   e.preventDefault();
+  // in tilt mode a tap asks for motion access, then re-centres: hold the phone how you like and tap
+  if (settings.control === 'tilt') { askTilt(); if (touch.tilt) { touch.tiltRef = { ...touch.tilt }; msg('Tilt centred', 'info', 1.2); return; } }
   if (settings.control === 'touch-aim') { touch.aimId = e.pointerId; touch.lx = e.clientX; touch.ly = e.clientY; stickZone.setPointerCapture(e.pointerId); return; }
   if (touch.stickId !== null) return;
   touch.stickId = e.pointerId; touch.ox = e.clientX; touch.oy = e.clientY; stickZone.setPointerCapture(e.pointerId);
@@ -3497,16 +3512,27 @@ $('tGear').addEventListener('click', toggleGear); $('tFlaps').addEventListener('
 $('portrait').addEventListener('click', () => { $('portrait').hidden = true; G.portraitDismissed = true; });
 addEventListener('deviceorientation', e => {
   if (e.beta == null) return;
-  const ang = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+  const ang = ((screen.orientation && screen.orientation.angle) ?? window.orientation ?? 0) % 360;
   let roll, pitch;
-  if (ang === 90) { roll = e.beta; pitch = -e.gamma; } else if (ang === -90 || ang === 270) { roll = -e.beta; pitch = e.gamma; } else { roll = e.gamma; pitch = e.beta; }
+  if (ang === 90) { roll = e.beta; pitch = -e.gamma; } else if (ang === -90 || ang === 270) { roll = -e.beta; pitch = e.gamma; } else if (ang === 180) { roll = -e.gamma; pitch = -e.beta; } else { roll = e.gamma; pitch = e.beta; }
   touch.tilt = { roll, pitch };
 });
+// iPhones and iPads hand out motion data only after asking, and only from a tap
+let tiltAsked = false;
+function askTilt() {
+  if (tiltAsked) return; tiltAsked = true;
+  for (const E of [window.DeviceOrientationEvent, window.DeviceMotionEvent]) {
+    if (E && typeof E.requestPermission === 'function') E.requestPermission().then(r => { if (r !== 'granted') msg('Motion access not allowed · tilt needs it (iPhone Settings → Safari → Motion & Orientation Access)', 'warn', 7); }).catch(() => { tiltAsked = false; });
+  }
+}
 function applyControlMode() {
   $('touch').classList.toggle('aim', settings.control === 'touch-aim');
   touch.tiltRef = null; resetStick();
-  if (settings.control === 'tilt' && typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission) DeviceOrientationEvent.requestPermission().catch(() => { });
-  if (settings.control === 'tilt') setTimeout(() => { if (!touch.tilt && G.state === 'play') { msg('Tilt is not available here, switched to stick', 'warn', 5); settings.control = 'stick-assist'; saveSettings(); applyControlMode(); } }, 1500);
+  if (settings.control === 'tilt') {
+    askTilt();
+    // no sensor yet: the stick keeps working meanwhile; say how to get tilt going instead of giving up on it
+    setTimeout(() => { if (!touch.tilt && G.state === 'play' && settings.control === 'tilt') msg('Tilt: no motion data yet · tap the screen to allow motion access (the stick works until then)', 'warn', 6); }, 4000);
+  }
 }
 function pollPad() { const pads = navigator.getGamepads ? navigator.getGamepads() : []; for (const gp of pads) if (gp && gp.connected) return gp; return null; }
 const dz = (v, d = 0.12) => Math.abs(v) < d ? 0 : (v - Math.sign(v) * d) / (1 - d);
@@ -3801,7 +3827,7 @@ function drawHUD(rdt) {
   const safeL = 16, safeT = 14;
   // vision effects
   if (p.alive) {
-    const gl = clamp((p.gs - 6.2) / 2.8, 0, 1), rl = clamp((-p.gs - 2.4) / 1.6, 0, 1);
+    const gl = clamp((p.gs - 7.8) / 2.4, 0, 1), rl = clamp((-p.gs - 2.4) / 1.6, 0, 1);
     if (gl > 0 || rl > 0) { const g = hx.createRadialGradient(HW / 2, HH / 2, Math.min(HW, HH) * 0.15 * (1 - gl), HW / 2, HH / 2, Math.max(HW, HH) * 0.7); const col = rl > 0 ? `rgba(120,0,0,${rl * 0.95})` : `rgba(0,0,0,${gl * 0.97})`; g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, col); hx.fillStyle = g; hx.fillRect(0, 0, HW, HH); }
     let cl = 0; for (const c of cloudCenters) { const d = Math.hypot(camera.position.x - c.x, (camera.position.y - c.y) * 2.2, camera.position.z - c.z); if (d < c.r) cl = Math.max(cl, 1 - d / c.r); }
     if (cl > 0) { hx.fillStyle = `rgba(232,236,240,${Math.min(0.85, cl * 1.6)})`; hx.fillRect(0, 0, HW, HH); }
@@ -3909,7 +3935,7 @@ function drawHUD(rdt) {
     if (s.ok) { hx.strokeStyle = '#97c46f'; hx.lineWidth = 2; hx.strokeRect(s.x - 10, s.y - 10, 20, 20); txt(`BASE ${(d / 1000).toFixed(1)} km`, s.x, s.y + 26, 11, '#97c46f', 'center'); }
   }
   // objective, score
-  const obj = !m ? '' : NET.on ? netObjective() : m.phase === 'takeoff' ? liftOffText() : m.phase === 'combat' && m.kind && m.kind !== 'dogfight' ? missionLine(m) : m.phase === 'combat' ? (m.next !== null ? `Wave ${m.wave + 1} inbound in ${Math.ceil(m.next)} s` : `Wave ${m.wave} of ${WAVES.length} · ${enemies().length} bandit${enemies().length === 1 ? '' : 's'} remaining`) : m.phase === 'rtb' ? 'Return to base and land on the runway' : m.phase === 'landed' ? 'Landed' : '';
+  const obj = !m ? '' : NET.on && !m.local ? netObjective() : m.phase === 'takeoff' ? liftOffText() : m.phase === 'combat' && m.kind && m.kind !== 'dogfight' ? missionLine(m) : m.phase === 'combat' ? (m.next !== null ? `Wave ${m.wave + 1} inbound in ${Math.ceil(m.next)} s` : `Wave ${m.wave} of ${WAVES.length} · ${enemies().length} bandit${enemies().length === 1 ? '' : 's'} remaining`) : m.phase === 'rtb' ? 'Return to base and land on the runway' : m.phase === 'landed' ? 'Landed' : '';
   txt(obj.toUpperCase(), HW / 2, safeT + 18, isTouch ? 13 : 15, '#f1e8d2', 'center', COND, 600);
   // on phones the score sits under the button row
   const scoreX = HW - safeL, scoreY = isTouch ? safeT + 66 : safeT;
@@ -4072,19 +4098,20 @@ function drawGauges(p) {
 function showScreen(id) { for (const s of ['loading', 'menu', 'pause', 'debrief']) $(s).hidden = s !== id; }
 function pause(on) {
   if (on && G.state === 'play') { G.state = 'paused'; showScreen('pause'); $('touch').hidden = true; mouseFire = false; touch.fire = false; if (document.pointerLockElement) document.exitPointerLock(); fillSettings(); if (Sfx.ok) Sfx.ctx.suspend(); }
-  else if (!on && G.state === 'paused') { G.state = 'play'; showScreen(null); $('touch').hidden = !isTouch; if (Sfx.ok) Sfx.ctx.resume(); }
+  else if (!on && G.state === 'paused') { touch.tiltRef = null; G.state = 'play'; showScreen(null); $('touch').hidden = !isTouch; if (Sfx.ok) Sfx.ctx.resume(); }
 }
 function fillSettings() {
   $('setControl').value = settings.control; $('setQuality').value = settings.quality; $('setVolume').value = settings.volume; $('setInvert').checked = settings.invert; $('setKill').checked = settings.killcam;
   const help = isTouch ? [
     ['Steer (stick)', 'left thumb'], ['Throttle', 'slider'], ['Boost', 'drag into the red top of the slider'], ['Fire all guns', 'FIRE'], ['Missile', 'MSL (wait for the lock)'], ['Flares', 'FLARE'], ['Corner map', 'MAP'], ['Gear / flaps', 'GEAR · FLAP'], ['Camera', 'CAM'], ['Pause', 'II'], ['Drop a bomb', 'BOMB (attack missions)'], ['Rudder', 'hold ◀ RUD / RUD ▶ (turn on in settings)'],
-    ['Stick, assisted', 'auto-levels, holds height'], ['Touch-drag aim', 'drag anywhere, plane follows'], ['Tilt', 'tilt phone to steer'],
+    ['Stick, assisted', 'auto-levels, holds height'], ['Touch-drag aim', 'drag anywhere, plane follows'], ['Tilt', 'tilt to steer · tap the left side to re-centre'],
   ] : [
     ['Aim (mouse mode)', 'move mouse'], ['Fire', 'click · Space'], ['Missile', 'right click · X'], ['Flares', 'F'], ['Pitch', 'W / S'], ['Roll', 'A / D'], ['Rudder', 'Q / E'], ['Throttle', 'Shift / Z · wheel · 1–0'],
     ['Boost', 'hold Shift at full throttle'], ['Drop a bomb', 'B in the air'], ['Corner map', 'M'], ['Gear', 'G'], ['Flaps', 'V'], ['Brakes', 'B'], ['Camera', 'C'], ['Pause', 'Esc · P'], ['Gamepad', 'RT fire · LB missile · RB flares · LT bomb · Y map'],
   ];
   $('helpGrid').innerHTML = help.map(([a, b]) => `<div><span>${a}</span><span>${b}</span></div>`).join('');
   $('pauseEyebrow').textContent = G.player ? `${SPECS[settings.plane].full} · ${fmtTime(G.time)} airborne · ${G.stats ? G.stats.kills : 0} kills` : 'Settings';
+  $('missionHere').hidden = !G.player || !G.player.alive || (NET.on && !soloTable()); $('setMission').value = MISSIONS[settings.mission] ? settings.mission : 'dogfight';
   $('setPhone').value = settings.phone; $('setRudder').value = settings.rudder; $('setDiff').value = settings.difficulty; $('setLock').value = settings.lock; $('setMap').value = settings.map;
   $('setDiffL').hidden = NET.on;
   $('btnResume').textContent = G.player ? 'Resume' : 'Back';
@@ -4103,7 +4130,7 @@ $('btnEnd').addEventListener('click', () => {
   if (NET.on) { if (NET.host) { G.state = 'play'; showScreen(null); NET.w.done = true; finishNet('ended'); } else post({ type: 'leave' }); return; }
   G.state = 'play'; endMission(false);
 });
-$('btnAgain').addEventListener('click', () => { if (NET.on) { post({ type: 'rematch' }); if (!NET.host) { NET.rmSent = true; rematchButton(); } return; } startMission(G.mission ? G.mission.mode : 'sortie'); });
+$('btnAgain').addEventListener('click', () => { if (NET.on && !(G.mission && G.mission.local)) { post({ type: 'rematch' }); if (!NET.host) { NET.rmSent = true; rematchButton(); } return; } startMission(G.mission ? G.mission.mode : 'sortie'); });
 // The Game Center's shared rematch: the host's tap starts a new round for everyone at the table
 // (same pilots, same room code); anyone else's tap says "I'm in" and the host sees who is ready.
 function rematchButton() {
@@ -4113,7 +4140,7 @@ function rematchButton() {
   else if (rm.mine || NET.rmSent) { b.textContent = `You're in ✓ — waiting for ${rm.host}`; b.disabled = true; }
   else { b.textContent = "Rematch — I'm in"; b.disabled = false; }
 }
-$('btnMenu').addEventListener('click', () => { if (NET.on) { post({ type: 'leave' }); return; } G.state = 'menu'; clearWorldPlanes(); clearGroundWar(); G.player = null; G.mission = null; showScreen('menu'); });
+$('btnMenu').addEventListener('click', () => { const local = G.mission && G.mission.local; if (NET.on && !local) { post({ type: 'leave' }); return; } G.state = 'menu'; clearWorldPlanes(); clearGroundWar(); G.player = null; G.mission = null; showScreen('menu'); if (local) netMenu(); });
 function setPhoneMode(v) {
   settings.phone = v; isTouch = v === 'on' || (v !== 'off' && touchDevice);
   if (isTouch && settings.control === 'mouse') settings.control = 'stick-assist';
@@ -4129,8 +4156,8 @@ const syncSetting = (key, ids) => ids.forEach(id => $(id).addEventListener('chan
 syncSetting('rudder', ['optRudder', 'setRudder']); $('optRudder').addEventListener('change', applyRudder); $('setRudder').addEventListener('change', applyRudder);
 syncSetting('difficulty', ['optDiff', 'setDiff']); syncSetting('lock', ['optLock', 'setLock']); syncSetting('map', ['optMap', 'setMap']);
 $('optWaves').addEventListener('change', e => { settings.waves = Number(e.target.value); saveSettings(); });
-$('btnSortie').addEventListener('click', () => startMission('sortie'));
-$('btnQuick').addEventListener('click', () => startMission('quick'));
+$('btnSortie').addEventListener('click', () => { if (settings.control === 'tilt') askTilt(); startMission('sortie'); });
+$('btnQuick').addEventListener('click', () => { if (settings.control === 'tilt') askTilt(); startMission('quick'); });
 $('btnMenuSettings').addEventListener('click', () => { G.state = 'paused-menu'; fillSettings(); showScreen('pause'); });
 const fsOK = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
 $('btnFull').hidden = !fsOK;
@@ -4165,6 +4192,22 @@ $('btnFull').addEventListener('click', () => {
     b.innerHTML = `<b>${ms.name}</b><small>${ms.blurb}</small>`; b.addEventListener('click', () => pickMission(k)); box.append(b);
   }
 })();
+// the pause menu can switch mission mid-flight: the old fight is cleared and the new one starts round you
+function startMissionHere() {
+  const pl = G.player; if (!pl || !pl.alive || (NET.on && !soloTable())) return;
+  pickMission($('setMission').value);
+  for (const p of [...G.planes]) if (p !== pl && !p.remote) removePlane(p);
+  for (const m of MSL) { scene.remove(m.mesh); Sfx.motorStop(m); } MSL.length = 0; FLARES.length = 0; LOCK.target = null;
+  WAVES = buildWaves(settings.enemies, settings.waves);
+  G.mission = { mode: 'quick', phase: pl.onGround ? 'takeoff' : 'combat', wave: 0, next: 4, t: 0, local: NET.on };
+  setupMission(G.mission);
+  const k = G.mission.kind; if (k !== 'dogfight') G.mission.next = k === 'intercept' ? 6 : 25;
+  pl.bombs = pl.spec.bombs || 0; G.ended = false;
+  pause(false);
+  msg(`${MISSIONS[k].name}: ${k === 'dogfight' ? 'bandits inbound' : k === 'naval' ? 'the battleship is off the coast · follow the gold marker' : k === 'ground' ? 'the convoy and depot are inland · follow the gold marker' : 'bombers inbound for the town'}`, 'info', 5);
+}
+$('btnMissionHere').addEventListener('click', startMissionHere);
+for (const [k, ms] of Object.entries(MISSIONS)) { const o = document.createElement('option'); o.value = k; o.textContent = ms.name; $('setMission').append(o); }
 function pickMission(k) { if (!MISSIONS[k]) k = 'dogfight'; settings.mission = k; saveSettings(); for (const b of $('missionList').querySelectorAll('.pcard')) b.setAttribute('aria-checked', b.dataset.mission === k); }
 function pick(k) { if (!SPECS[k]) k = 'kestrel'; settings.plane = k; saveSettings(); for (const b of $('planeList').querySelectorAll('.pcard')) b.setAttribute('aria-checked', b.dataset.plane === k); }
 function updateHint() {
@@ -4229,8 +4272,11 @@ function frame(now) {
   const live = G.state === 'play' || (NET.on && G.player && (G.state === 'debrief' || ((G.state === 'paused' || G.state === 'paused-menu') && sharedSky())));
   if (live) {
     const dt = rdt * G.timeScale;
-    simulate(dt);
-    for (const p of G.planes) { if (!p.gone) emitTrails(p, dt); }
+    // the kill replay freezes the fight (you, the others, rounds in flight); only the aircraft you shot keeps falling
+    const replay = G.cam.mode === 'kill' && G.cam.kill && !NET.on ? G.cam.kill : null;
+    if (replay) { let rem = dt; while (rem > 1e-6) { const h = Math.min(STEP, rem); if (!replay.gone) replay.physics(h); rem -= h; } }
+    else simulate(dt);
+    for (const p of G.planes) { if (!p.gone && (!replay || p === replay)) emitTrails(p, dt); }
     for (const c of G.crashSites) { c.t -= dt; if (Math.random() < dt * 8 && c.t > 0) { smokeFX.spawn(c.x + rand(-3, 3), c.y + 1, c.z + rand(-3, 3), rand(-1, 1) + 2, rand(5, 8), rand(-1, 1), rand(6, 10), 6, 4, 0.14, 0.13, 0.12, c.t / 45 * 0.7, 0.1, -0.2, 0); if (Math.random() < 0.4 && !c.water) fireFX.spawn(c.x + rand(-2, 2), c.y + 0.5, c.z + rand(-2, 2), 0, rand(2, 5), 0, 0.6, 3, 1, 1, 0.6, 0.3, c.t / 45, 0.5, -1, 1); } }
     G.crashSites = G.crashSites.filter(c => c.t > 0);
     smokeFX.update(dt); fireFX.update(dt); updateBlastFX(dt);
@@ -4296,7 +4342,7 @@ window.__game = { get post() { return !!renderPipeline; }, get fx() { return { s
       resolve(canvas.toDataURL('image/png'));
     }));
   }, G, settings, startMission, SPECS, NET, netSend, finishNet, MSL, LOCK, launchMissile, dropFlares, DIFF, explosion, Sfx };
-window.__gw = GW; window.__gwDrop = p => { while (p.bombs > 0 && dropBomb(p)); }; window.__town = TOWN; window.__simNoPlayer = dt => { updateBullets(dt); updateGroundWar(dt); };
+window.__gw = GW; window.__gwDrop = p => { while (p.bombs > 0 && dropBomb(p)); }; window.__town = TOWN; window.__simNoPlayer = dt => { updateBullets(dt); updateGroundWar(dt); }; window.__kill = p => destroy(p, 'shot down', G.player, false); window.__net = NET; window.__netMenu = () => netMenu();
 
 (async function boot() {
   resizeHUD();

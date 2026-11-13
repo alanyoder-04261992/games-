@@ -34,17 +34,20 @@ The **High** graphics setting adds bloom, which makes the sun, tracers, fires an
 
 The game's menu has:
 
-- **Mission** (single player; online tables fly the dogfight):
+- **Mission** (single player, and Game Center tables where nobody else is sitting; with other people at the table everyone flies the dogfight). The pause menu can **switch mission mid-flight**: the old fight is cleared and the new one starts round you.
   - *Dogfight*: waves of enemy fighters come in off the sea; shoot them all down, then land.
   - *Naval strike*: a 190 m battleship steams up and down the coast about 5 km out. Its ten light AA mounts throw up flak bursts timed to where you will be and streams of tracer when you come close, its turrets turn to follow you, and its main battery shells the coast now and then. Bomb it (two to four direct hits, more for near misses) until it rolls over and sinks, then land. Fighters scramble to defend it.
   - *Ground attack*: a convoy of tanks and trucks drives up a track to a fuel depot (four fuel tanks and two supply sheds) guarded by three flak guns. Bomb and strafe them: trucks fall to guns, tanks need cannon or bombs, and fuel tanks go up in a fireball. Flak guns are optional targets. Fighters scramble to defend it.
   - *Bomber intercept*: formations of twin-engine bombers with fighter cover fly for the harbour town. Their top and tail gunners shoot back. If three bombers get through and drop on the town, the mission fails. The *Waves* option sets how many formations come (one to three).
-  - **Bombs**: every aircraft carries bombs on attack missions (two to four on fighters, eight on the attack jet, ten in the bomber). Drop with **B** in the air (B is still the brake on the ground), **BOMB** on touch, or **LT** on a gamepad. A bomb sight on the HUD shows where a bomb released now would land and how long it would fall. Land on the airfield to rearm.
+  - **Bombs**: every aircraft carries bombs, in every mission (two to four on fighters, eight on the attack jet, ten in the bomber). Drop with **B** in the air (B is still the brake on the ground), **BOMB** on touch, or **LT** on a gamepad. A bomb sight on the HUD shows where a bomb released now would land and how long it would fall. Land on the airfield to rearm.
   - Targets show as red brackets on screen and squares on the radar; a gold marker (or an arrow at the edge of the screen) points to the objective.
+- **Your aircraft turns tighter than the computer's.** You get about 30% more lift for the same angle (a tighter turn that bleeds less speed) and a quicker roll; raiders get less by difficulty (Easy 0.8, Normal 0.88, Hard 0.97, Ace 1.04) and notice you on their tail later, so you can work round behind them.
+- **Kill replay**: when you shoot one down, the fight freezes (you, the others and the rounds in flight) while the camera circles the aircraft going down in slow motion.
 - **Enemies per wave**: Standard (2, then 3, then more), or a fixed 1, 2, 3, 4, 6, 8 or 12.
 - **Waves**: 1, 2, 3, 5 or 8. Skill rises through the sortie, and the last wave brings an ace.
 - **Difficulty**, **Missile lock** (auto or manual) and **Corner map** are in the same menu and in the pause menu.
 - **Phone mode**: Auto turns the touch controls on for phones. On forces them, which is useful on a tablet or a touch laptop. Off hides them in favour of the keyboard and mouse. The same switch is in the pause menu.
+- **Tilt** (pause menu → Controls → Tilt phone): on iPhone and iPad the first tap asks for motion access. Tap the left half of the screen to re-centre on however you are holding the phone. Until the sensor answers, the stick keeps working.
 - **Rudder buttons** (touch, off by default): two hold buttons above the stick, ◀ RUD and RUD ▶, that yaw the nose for fine aiming and for steering on the runway. Keyboard and gamepad already have rudder (Q / E, right stick).
 
 ## Multiplayer
