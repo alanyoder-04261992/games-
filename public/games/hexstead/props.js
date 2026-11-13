@@ -117,53 +117,140 @@ const shade = (hex, k) => new THREE.Color(hex).multiplyScalar(k);
 // ---------------------------------------------------------------------
 // trees
 // ---------------------------------------------------------------------
-function pineGeo(seed, tiers) {
+// a branch pointing out along +x from the origin: a flattened cone, base at the trunk
+function frond(len, width, flat = 0.42) {
+  return new THREE.ConeGeometry(width, len, 5).rotateZ(-Math.PI / 2).scale(1, flat, 1).translate(len / 2, 0, 0);
+}
+const lerpCol = (a, b, k) => new THREE.Color(a).lerp(new THREE.Color(b), clamp01(k));
+
+// Conifers built branch by branch: whorls of drooping, needle-green fronds around a tapering
+// trunk with flared roots, darker inside and underneath, lighter at the tips and the crown.
+function pineGeo(seed, { tiers = 7, height = 0.44, spread = 1, dark = '#143a22', light = '#5aa35c', per = 10 } = {}) {
   const r = rng(seed);
-  const parts = [paint(new THREE.CylinderGeometry(0.012, 0.024, 0.14, 6).translate(0, 0.07, 0), '#4a3020', { top: '#6b4a30', ao: 0.5, vary: 0.15, seed })];
-  let y = 0.055, rad = 0.155, h = 0.17;
-  const cones = [];
-  for (let t = 0; t < tiers; t++) {
-    const seg = 10;
-    const c = new THREE.ConeGeometry(rad, h, seg, 2);
-    const p = c.attributes.position;
-    for (let i = 0; i < p.count; i++) {
-      const x = p.getX(i), yy = p.getY(i), z = p.getZ(i);
-      if (Math.hypot(x, z) < 1e-6) continue;
-      const idx = Math.round(((Math.atan2(z, x) + Math.PI) / (Math.PI * 2)) * seg) % seg;
-      if (yy < -h / 2 + 1e-6) {
-        // a jagged skirt of drooping branch tips
-        const f = idx % 2 ? 1.17 : 0.9 + 0.06 * Math.sin(idx * 12.9 + seed);
-        p.setXYZ(i, x * f, yy - (idx % 2 ? 0.028 : 0.004), z * f);
-      } else if (yy < h / 2 - 1e-6) {
-        // pull the middle in for a concave, layered silhouette
-        p.setXYZ(i, x * 0.84, yy, z * 0.84);
-      }
-    }
-    c.rotateY(r() * Math.PI).translate(0, y + h / 2, 0);
-    cones.push(c);
-    y += h * 0.52;
-    rad *= 0.77;
-    h *= 0.88;
+  const bark = { top: '#6b4a30', ao: 0.55, vary: 0.22, seed };
+  const parts = [paint(new THREE.CylinderGeometry(0.008, 0.021, height * 0.8, 7).translate(0, height * 0.4, 0), '#3d281a', bark)];
+  for (let k = 0; k < 5; k++) {
+    const a = (k / 5) * Math.PI * 2 + r();
+    parts.push(paint(frond(0.045, 0.012, 1).rotateZ(-0.55).rotateY(-a).translate(0, 0.022, 0), '#3d281a', bark));
   }
-  const height = y + h * 0.6;
-  cones.forEach((c, t) => parts.push(paint(c, '#173f24', { top: '#4f9a55', y0: 0.03, y1: height, ao: 0.15, vary: 0.16, seed: seed + t })));
+  // the dense inner cone the branches grow out of
+  parts.push(paint(new THREE.ConeGeometry(0.075 * spread, height * 0.82, 8).translate(0, 0.06 + height * 0.41, 0), dark, { top: lerpCol(dark, light, 0.5), ao: 0.4, vary: 0.12, seed }));
+  for (let t = 0; t < tiers; t++) {
+    const f = t / (tiers - 1);
+    const y = 0.075 + f * (height - 0.13);
+    const len = (0.185 - f * 0.13) * spread;
+    const n = Math.max(4, Math.round(per - f * 3));
+    const droop = 0.38 - f * 0.22;
+    for (let k = 0; k < n; k++) {
+      const a = (k / n) * Math.PI * 2 + t * 0.73 + r() * 0.35;
+      const L = len * (0.82 + r() * 0.36);
+      const g = frond(L, L * 0.48, 0.5).rotateZ(-droop - r() * 0.12).rotateY(-a).translate(0, y + (r() - 0.5) * 0.012, 0);
+      const tip = r() * 0.12;
+      parts.push(paintFaces(g, (c, nrm, i) => {
+        const out = clamp01(Math.hypot(c.x, c.z) / (len * 0.9));
+        const col = lerpCol(dark, light, 0.15 + 0.4 * f + 0.4 * out + tip);
+        return col.multiplyScalar((nrm.y < 0 ? 0.62 : 1) * (0.88 + 0.24 * hash(i, seed + t, k)));
+      }));
+    }
+  }
+  parts.push(paint(new THREE.ConeGeometry(0.016, 0.075, 6).translate(0, height + 0.03, 0), lerpCol(dark, light, 0.6), { top: light }));
   return merge(parts);
 }
 
-function leafyGeo(seed, leaf, leafTop) {
+// A broadleaf crown: a dome of leafy clumps on a forked trunk. Each facet is shaded by how much
+// it faces the sky and the outside of the crown, so the canopy reads round and deep.
+function oakGeo(seed, dark, light) {
   const r = rng(seed);
-  const bark = { top: '#6d5038', ao: 0.5, vary: 0.12, seed };
-  const parts = [paint(new THREE.CylinderGeometry(0.011, 0.022, 0.2, 6).translate(0, 0.1, 0), '#4c3626', bark)];
-  for (const s of [-1, 1]) parts.push(paint(place(new THREE.CylinderGeometry(0.005, 0.009, 0.09, 5), s * 0.03, 0.17, s * 0.01, 0, 0, -s * 0.75), '#4c3626', bark));
-  const blobs = [
-    [0, 0.255, 0, 0.095], [0.07, 0.225, 0.03, 0.072], [-0.065, 0.23, -0.035, 0.076],
-    [0.015, 0.215, -0.07, 0.066], [-0.025, 0.215, 0.07, 0.064], [-0.03, 0.31, 0.025, 0.07], [0.04, 0.3, -0.025, 0.062],
-  ];
-  blobs.forEach(([x, y, z, rad], i) => {
-    const b = lumpy(new THREE.IcosahedronGeometry(rad * (0.9 + r() * 0.2), 1), rad * 0.2, seed + i * 3, 26).translate(x, y, z);
-    parts.push(paint(b, leaf, { top: leafTop, y0: 0.15, y1: 0.38, ao: 0.25, vary: 0.18, seed: seed + i }));
-  });
+  const barkFace = (c, n, i) => lerpCol('#3a2a1e', '#6e5440', 0.3 + 0.5 * hash(i, seed) + c.y * 1.2);
+  const parts = [paintFaces(new THREE.CylinderGeometry(0.012, 0.025, 0.2, 7, 3).translate(0, 0.1, 0), barkFace)];
+  for (let k = 0; k < 4; k++) {
+    const a = (k / 4) * Math.PI * 2 + r() * 0.8;
+    parts.push(paintFaces(new THREE.CylinderGeometry(0.004, 0.009, 0.11, 5).translate(0, 0.055, 0).rotateZ(-0.7 - r() * 0.3).rotateY(-a).translate(0, 0.15 + r() * 0.04, 0), barkFace));
+  }
+  const C0 = new THREE.Vector3(0, 0.27, 0);
+  const out = new THREE.Vector3();
+  const n = 12;
+  for (let i = 0; i < n; i++) {
+    // spread the clumps over a dome (a golden-angle spiral), a few tucked underneath
+    const yk = 1 - (i + 0.5) / n * 1.25;
+    const rad = Math.sqrt(Math.max(0, 1 - yk * yk));
+    const th = i * 2.399 + seed;
+    const p = new THREE.Vector3(Math.cos(th) * rad * 0.1, yk * 0.07, Math.sin(th) * rad * 0.1).add(C0);
+    const size = 0.048 + r() * 0.03;
+    const blob = lumpy(new THREE.IcosahedronGeometry(size, 1), size * 0.24, seed + i * 5, 34).scale(1, 0.85, 1).translate(p.x, p.y, p.z);
+    parts.push(paintFaces(blob, (c, nrm, f) => {
+      out.copy(c).sub(C0).normalize();
+      const k = 0.3 * clamp01(0.5 + 0.5 * nrm.y) + 0.4 * clamp01(nrm.dot(out)) + 0.3 * clamp01((c.y - 0.17) / 0.22);
+      const col = lerpCol(dark, light, k);
+      if (hash(f, seed, i) < 0.05) col.lerp(new THREE.Color(light), 0.6).multiplyScalar(1.12); // sunlit leaves
+      return col.multiplyScalar(0.84 + 0.3 * hash(seed, f, i));
+    }));
+  }
   return merge(parts);
+}
+
+// a slender birch: white bark with black marks, a light, airy crown
+function birchGeo(seed) {
+  const r = rng(seed);
+  const parts = [paintFaces(new THREE.CylinderGeometry(0.007, 0.013, 0.34, 7, 8).translate(0, 0.17, 0), (c, n, i) => {
+    const mark = hash(Math.floor(c.y * 45), Math.floor(Math.atan2(c.z, c.x) * 2), seed) < 0.22;
+    return mark ? new THREE.Color('#2b2622') : lerpCol('#cfc9bc', '#f2efe6', 0.4 + c.y * 2);
+  })];
+  const C0 = new THREE.Vector3(0, 0.3, 0);
+  const out = new THREE.Vector3();
+  for (let i = 0; i < 9; i++) {
+    const y = 0.2 + (i / 8) * 0.17 + (r() - 0.5) * 0.02;
+    const a = i * 2.399 + seed;
+    const d = 0.035 * (1 - Math.abs(y - 0.28) * 3) + 0.01;
+    const size = 0.03 + r() * 0.02;
+    const blob = lumpy(new THREE.IcosahedronGeometry(size, 1), size * 0.25, seed + i, 40).translate(Math.cos(a) * d, y, Math.sin(a) * d);
+    parts.push(paintFaces(blob, (c, nrm, f) => {
+      out.copy(c).sub(C0).normalize();
+      const k = 0.35 * clamp01(0.5 + 0.5 * nrm.y) + 0.35 * clamp01(nrm.dot(out)) + 0.3 * clamp01((c.y - 0.2) / 0.18);
+      return lerpCol('#4a8530', '#c7e070', k).multiplyScalar(0.86 + 0.28 * hash(seed, f, i));
+    }));
+  }
+  return merge(parts);
+}
+
+// a fern: arching fronds, each a tapering strip with serrated edges (two-sided)
+function fernGeo(seed) {
+  const r = rng(seed);
+  const pts = [];
+  for (let k = 0; k < 7; k++) {
+    const a = (k / 7) * Math.PI * 2 + r() * 0.5;
+    const L = 0.07 + r() * 0.03;
+    const ca = Math.cos(a), sa = Math.sin(a);
+    const seg = 6;
+    let prev = null;
+    for (let j = 0; j <= seg; j++) {
+      const u = j / seg;
+      const d = u * L;
+      const y = Math.sin(u * Math.PI * 0.85) * 0.035 + 0.004;
+      const w = 0.012 * Math.sin(Math.PI * Math.min(1, u * 1.15)) * (j % 2 ? 1 : 0.55);
+      const cx = ca * d, cz = sa * d;
+      const cur = [[cx + sa * w, y, cz - ca * w], [cx - sa * w, y, cz + ca * w]];
+      if (prev) pts.push(...prev[0], ...prev[1], ...cur[1], ...prev[0], ...cur[1], ...cur[0]);
+      prev = cur;
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  g.computeVertexNormals();
+  return paint(g, '#24561f', { top: '#7cb24a', y0: 0, y1: 0.04, vary: 0.18, seed });
+}
+
+// a stump with growth rings and a cap of moss
+function stumpGeo() {
+  const rings = paintFaces(new THREE.RingGeometry(0.001, 0.027, 12, 4).rotateX(-Math.PI / 2).translate(0, 0.045, 0), (c) => {
+    const rr = Math.hypot(c.x, c.z);
+    return new THREE.Color(Math.floor(rr * 160) % 2 ? '#c8a06c' : '#a77e50');
+  });
+  return merge([
+    paintFaces(new THREE.CylinderGeometry(0.027, 0.034, 0.045, 10, 2, true).translate(0, 0.0225, 0), (c, n, i) => lerpCol('#3a2a1e', '#6e5440', 0.3 + 0.5 * hash(i, 4))),
+    rings,
+    paint(lumpy(new THREE.IcosahedronGeometry(0.014, 1), 0.004, 2, 50).scale(1.4, 0.5, 1).translate(0.015, 0.046, 0.008), '#4c7a2a', { top: '#86b04a', vary: 0.2 }),
+  ]);
 }
 
 function bushGeo(seed, base, tip) {
@@ -376,60 +463,155 @@ function kilnGlowGeo() {
 // ---------------------------------------------------------------------
 // quarry
 // ---------------------------------------------------------------------
-function rockColor(c, n, i, seed, h, snowAt) {
+// Rock, shaded per facet: strata bands, darker at the foot, lichen on low ledges, snow on high
+// upward faces, and seams of ore (rusty iron, gold) running across the face on a slant.
+function rockColor(c, n, i, seed, h, { snowAt = null, veins = false } = {}) {
   const k = clamp01(h);
-  if (snowAt != null && k > snowAt + 0.05 * Math.sin(c.x * 40 + c.z * 30 + seed) && n.y > 0.12) return shade('#eef3f7', 0.88 + 0.12 * n.y);
-  const band = Math.sin(c.y * 75 + c.x * 9 + seed) * 0.5 + 0.5; // strata
-  const col = new THREE.Color('#47505b').lerp(new THREE.Color('#8f9aa6'), 0.2 + 0.5 * k + band * 0.15);
+  if (snowAt != null && k > snowAt + 0.06 * Math.sin(c.x * 40 + c.z * 30 + seed) && n.y > 0.1) return shade('#eef3f7', 0.86 + 0.14 * n.y);
+  const band = Math.sin(c.y * 80 + c.x * 9 + seed) * 0.5 + 0.5; // strata
+  const col = new THREE.Color('#434c57').lerp(new THREE.Color('#939eaa'), 0.18 + 0.5 * k + band * 0.16);
+  if (k < 0.35 && n.y > 0.72 && hash(i, seed, 2) < 0.5) col.lerp(new THREE.Color('#6d7a46'), 0.55); // lichen
+  if (veins && k < 0.62) {
+    const d = c.x * Math.sin(seed) + c.y * 0.8 + c.z * Math.cos(seed);
+    const v = Math.abs(((d * 6 + seed) % 1 + 1) % 1 - 0.5);
+    const gold = hash(Math.floor(d * 6 + seed), seed) < 0.3;
+    if (v < 0.022) col.lerp(new THREE.Color(gold ? '#d9a93a' : '#7a4a30'), gold ? 0.75 : 0.55);
+  }
   const f = hash(i, seed);
-  // ore in the lower slopes: rusty iron and the odd fleck of gold
-  if (k < 0.45 && f < 0.022) col.set('#7e4a2e');
-  else if (k < 0.45 && f < 0.03) col.set('#c99a32');
-  return col.multiplyScalar((0.62 + 0.38 * clamp01(k * 2.2)) * (0.9 + 0.2 * hash(seed, i)) * (0.85 + 0.15 * Math.max(0, n.y)));
+  if (k < 0.45 && f < 0.008) col.lerp(new THREE.Color('#8a4b2a'), 0.6);
+  else if (k < 0.45 && f < 0.011) col.set('#d9a93a');
+  return col.multiplyScalar((0.6 + 0.4 * clamp01(k * 2.2)) * (0.88 + 0.24 * hash(seed, i)) * (0.82 + 0.18 * Math.max(0, n.y)));
+}
+
+// layered noise: broad swells, sharp ridges (cliff edges) and fine grit
+function crag(geo, seed, scale = 1) {
+  const g = geo.index ? geo.toNonIndexed() : geo;
+  const p = g.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const len = v.length();
+    if (len < 1e-6) continue;
+    const x = v.x / scale, y = v.y / scale, z = v.z / scale;
+    const broad = noise3(x * 7, y * 7, z * 7, seed);
+    const ridge = 1 - Math.abs(noise3(x * 15 + 3, y * 15, z * 15 - 2, seed + 1)) * 1.5;
+    const grit = noise3(x * 34 + 7, y * 34, z * 34, seed + 2);
+    v.setLength(len + scale * (0.05 * broad + 0.03 * ridge + 0.012 * grit));
+    p.setXYZ(i, v.x, v.y, v.z);
+  }
+  g.computeVertexNormals();
+  return g;
 }
 
 function peakGeo(seed) {
-  // a craggy, tapering peak: lumpy rock, narrowed toward the summit, with one side pushed out
-  const g = lumpy(new THREE.IcosahedronGeometry(0.24, 2), 0.05, seed, 9).scale(1, 1.75, 1).translate(0, 0.14, 0);
+  // a craggy, tapering peak, narrowed toward the summit and leaning a little
+  const g = crag(new THREE.IcosahedronGeometry(0.24, 6), seed).scale(1, 1.75, 1).translate(0, 0.14, 0);
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const y = p.getY(i);
     const k = clamp01(y / 0.56);
-    const f = 1 - 0.5 * k * k + 0.08 * Math.sin(y * 40 + seed);
+    const f = 1 - 0.5 * k * k + 0.07 * Math.sin(y * 40 + seed);
     p.setXYZ(i, p.getX(i) * f + 0.03 * k * Math.sin(seed), y, p.getZ(i) * f);
   }
   g.computeVertexNormals();
-  return paintFaces(g, (c, n, i) => rockColor(c, n, i, seed, c.y / 0.56, 0.72));
+  return paintFaces(g, (c, n, i) => rockColor(c, n, i, seed, c.y / 0.56, { snowAt: 0.7, veins: true }));
 }
 
 function boulderGeo(seed, tone) {
-  const g = lumpy(new THREE.IcosahedronGeometry(0.05, 1), 0.014, seed, 30).scale(1, 0.75, 1).translate(0, 0.022, 0);
+  const g = crag(new THREE.IcosahedronGeometry(0.05, 2), seed, 0.25).scale(1, 0.75, 1).translate(0, 0.022, 0);
   if (tone) return paint(g, tone, { top: new THREE.Color(tone).multiplyScalar(1.25), ao: 0.35, vary: 0.18, seed });
-  return paintFaces(g, (c, n, i) => rockColor(c, n, i + 7, seed, 0.3 + c.y * 4, null));
+  return paintFaces(g, (c, n, i) => rockColor(c, n, i + 7, seed, 0.3 + c.y * 4));
 }
 
+// loose rock spilled at the foot of a slope
+function screeGeo(seed) {
+  const r = rng(seed);
+  const parts = [];
+  for (let k = 0; k < 16; k++) {
+    const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 0.085;
+    const size = 0.007 + r() * 0.014 * (1 - d * 6);
+    const g = lumpy(new THREE.IcosahedronGeometry(Math.max(0.006, size), 0), size * 0.3, seed + k, 60).translate(Math.cos(a) * d, size * 0.55 + (0.085 - d) * 0.25, Math.sin(a) * d);
+    parts.push(paintFaces(g, (c, n, i) => rockColor(c, n, i + k * 7, seed + k, 0.25 + n.y * 0.3)));
+  }
+  return merge(parts);
+}
+
+// gold nuggets (drawn with a polished metal material)
+function nuggetsGeo(seed) {
+  const r = rng(seed);
+  const parts = [];
+  for (let k = 0; k < 5; k++) {
+    const size = 0.006 + r() * 0.006;
+    parts.push(prep(lumpy(new THREE.IcosahedronGeometry(size, 1), size * 0.35, seed + k, 120).scale(1.2, 0.75, 1).translate((r() - 0.5) * 0.045, size * 0.5, (r() - 0.5) * 0.045)));
+  }
+  return merge(parts);
+}
+
+// a cluster of six-sided quartz crystals with pointed tips
+function crystalGeo(seed, base, tip) {
+  const r = rng(seed);
+  const parts = [];
+  for (let k = 0; k < 7; k++) {
+    const len = 0.03 + r() * 0.06 * (k ? 1 : 1.4);
+    const rad = 0.007 + r() * 0.006;
+    const tilt = k ? 0.25 + r() * 0.5 : 0.05;
+    const a = r() * Math.PI * 2;
+    const prism = merge([
+      prep(new THREE.CylinderGeometry(rad, rad * 1.08, len, 6).translate(0, len / 2, 0)),
+      prep(new THREE.ConeGeometry(rad, rad * 2.4, 6).translate(0, len + rad * 1.2, 0)),
+    ]);
+    prism.rotateZ(-tilt).rotateY(-a).translate((r() - 0.5) * 0.02, 0, (r() - 0.5) * 0.02);
+    parts.push(paint(prism, base, { top: tip, y0: 0, y1: 0.08, vary: 0.12, seed: seed + k }));
+  }
+  return merge(parts);
+}
+
+const MINE_CART_Z = 0.29;
 function mineGeo() {
   const wood = '#7a5532';
   const parts = [
-    paintFaces(lumpy(new THREE.IcosahedronGeometry(0.16, 1), 0.03, 11, 14).scale(1.15, 0.8, 0.9).translate(0, 0.05, 0), (c, n, i) => rockColor(c, n, i, 11, 0.25 + c.y * 3, null)),
+    paintFaces(crag(new THREE.IcosahedronGeometry(0.16, 4), 11, 0.7).scale(1.15, 0.8, 0.9).translate(0, 0.05, 0), (c, n, i) => rockColor(c, n, i, 11, 0.25 + c.y * 3, { veins: true })),
     paint(new THREE.BoxGeometry(0.072, 0.085, 0.04).translate(0, 0.0425, 0.133), '#0f0b08'),
     paint(new THREE.BoxGeometry(0.013, 0.095, 0.013).translate(-0.043, 0.0475, 0.156), wood, { vary: 0.1 }),
     paint(new THREE.BoxGeometry(0.013, 0.095, 0.013).translate(0.043, 0.0475, 0.156), wood, { vary: 0.1 }),
     paint(new THREE.BoxGeometry(0.11, 0.015, 0.016).translate(0, 0.1, 0.156), wood, { vary: 0.1 }),
+    // a hanging lantern (its flame is the glow mesh) and a pickaxe leaning on the post
+    paint(new THREE.CylinderGeometry(0.0012, 0.0012, 0.012, 3).translate(0.028, 0.086, 0.166), '#2a2522'),
+    paint(new THREE.ConeGeometry(0.009, 0.008, 6).translate(0.028, 0.079, 0.166), '#2a2522'),
+    paint(new THREE.CylinderGeometry(0.008, 0.008, 0.003, 6).translate(0.028, 0.06, 0.166), '#2a2522'),
+    paint(place(new THREE.CylinderGeometry(0.0025, 0.0025, 0.085, 5), 0.062, 0.04, 0.17, 0, 0, 0.28), '#8a6238'),
+    paint(place(new THREE.BoxGeometry(0.048, 0.006, 0.006), 0.05, 0.082, 0.17, 0, 0, 0.28 + 0.2), '#6f767e'),
   ];
   // rails out of the mine, on sleepers
   for (const x of [-0.019, 0.019]) parts.push(paint(new THREE.BoxGeometry(0.004, 0.005, 0.2).translate(x, 0.008, 0.255), '#5c6168'));
   for (let k = 0; k < 6; k++) parts.push(paint(new THREE.BoxGeometry(0.058, 0.005, 0.012).translate(0, 0.003, 0.17 + k * 0.034), '#5e4128', { vary: 0.12, seed: k }));
   // an ore cart heaped with rock, rust and gold
-  const cz = 0.29, metal = '#59606a';
+  const cz = MINE_CART_Z, metal = '#59606a';
   parts.push(paint(new THREE.BoxGeometry(0.052, 0.006, 0.072).translate(0, 0.024, cz), metal));
   for (const s of [-1, 1]) {
     parts.push(paint(new THREE.BoxGeometry(0.004, 0.032, 0.072).translate(s * 0.026, 0.04, cz), metal, { top: '#7a828c' }));
     parts.push(paint(new THREE.BoxGeometry(0.052, 0.032, 0.004).translate(0, 0.04, cz + s * 0.036), metal, { top: '#7a828c' }));
     for (const dz of [-0.022, 0.022]) parts.push(paint(new THREE.CylinderGeometry(0.011, 0.011, 0.006, 10).rotateZ(Math.PI / 2).translate(s * 0.028, 0.012, cz + dz), '#2e2a28'));
   }
-  const ores = ['#7e8790', '#6c747c', '#9a5a34', '#d6aa3c', '#8d959d', '#b06a3a'];
-  ores.forEach((c, k) => parts.push(paint(new THREE.IcosahedronGeometry(0.013, 0).translate(((k % 3) - 1) * 0.015, 0.058 + (k > 2 ? 0.008 : 0), cz + ((k % 2) - 0.5) * 0.026), c, { vary: 0.15, seed: k })));
+  const ores = ['#7e8790', '#6c747c', '#8a4b2a', '#8d959d', '#a0603a', '#5f676f'];
+  ores.forEach((c, k) => parts.push(paint(lumpy(new THREE.IcosahedronGeometry(0.013, 1), 0.004, k, 80).translate(((k % 3) - 1) * 0.015, 0.056 + (k > 2 ? 0.008 : 0), cz + ((k % 2) - 0.5) * 0.026), c, { vary: 0.18, seed: k })));
+  // a heap of broken ore beside the track
+  const r = rng(77);
+  for (let k = 0; k < 12; k++) {
+    const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 0.04;
+    const size = 0.008 + r() * 0.008;
+    parts.push(paint(lumpy(new THREE.IcosahedronGeometry(size, 0), size * 0.3, k, 70).translate(-0.075 + Math.cos(a) * d, size * 0.6 + (0.04 - d) * 0.4, 0.23 + Math.sin(a) * d), ores[k % ores.length], { vary: 0.2, seed: k }));
+  }
+  return merge(parts);
+}
+// the lantern flame, and gold showing in the cart and the heap
+function mineGlowGeo() {
+  return new THREE.SphereGeometry(0.0055, 8, 6).scale(1, 1.3, 1).translate(0.028, 0.069, 0.166);
+}
+function mineGoldGeo() {
+  const parts = [];
+  for (const [x, y, z, s] of [[0.006, 0.07, MINE_CART_Z + 0.006, 0.009], [-0.012, 0.064, MINE_CART_Z - 0.014, 0.007], [-0.07, 0.03, 0.235, 0.008], [-0.085, 0.018, 0.215, 0.006]])
+    parts.push(prep(lumpy(new THREE.IcosahedronGeometry(s, 1), s * 0.35, x * 1000, 120).translate(x, y, z)));
   return merge(parts);
 }
 
@@ -469,8 +651,13 @@ function cactusGeo(seed) {
 export function makeKit() {
   const vc = (extra = {}) => new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.88, metalness: 0, ...extra });
   const g = {
-    pines: [pineGeo(3, 4), pineGeo(17, 5), pineGeo(29, 4)],
-    leafy: [leafyGeo(5, '#244f20', '#5f9f3c'), leafyGeo(13, '#3d7a25', '#97c654'), leafyGeo(21, '#7d6a16', '#d8c445'), leafyGeo(37, '#93401a', '#ef9a35')],
+    pines: [pineGeo(3), pineGeo(17, { tiers: 7, height: 0.48 }), pineGeo(29, { per: 7, height: 0.4 })],
+    spruce: pineGeo(41, { tiers: 9, height: 0.52, spread: 0.78, dark: '#0e3226', light: '#3f8a68', per: 7 }),
+    oaks: [oakGeo(5, '#173f15', '#5e9e3a'), oakGeo(13, '#21561a', '#7fb646')],
+    autumn: [oakGeo(21, '#5e5010', '#e3cf4c'), oakGeo(37, '#6e2c12', '#f4a43c')],
+    birches: [birchGeo(2), birchGeo(8)],
+    ferns: [fernGeo(3), fernGeo(9)],
+    stump: stumpGeo(),
     bush: bushGeo(7, '#21521f', '#5c9a3a'),
     forestGrass: grassGeo(41, '#25521f', '#5f8f34', 7, 0.045),
     log: logGeo(),
@@ -492,7 +679,12 @@ export function makeKit() {
     kilnGlow: kilnGlowGeo(),
     peaks: [peakGeo(1), peakGeo(4), peakGeo(9)],
     boulders: [boulderGeo(2), boulderGeo(6)],
+    scree: [screeGeo(3), screeGeo(7)],
+    nuggets: nuggetsGeo(5),
+    crystals: [crystalGeo(4, '#a9cdef', '#f2f9ff'), crystalGeo(9, '#7b58b8', '#e0ccff')],
     mine: mineGeo(),
+    mineGlow: mineGlowGeo(),
+    mineGold: mineGoldGeo(),
     blocks: blocksGeo(5),
     dune: paint(new THREE.SphereGeometry(0.22, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.3, 0.28, 0.8), '#d9b67c', { top: '#f3dfb4', ao: 0.25 }),
     cacti: [cactusGeo(1), cactusGeo(2)],
@@ -503,6 +695,9 @@ export function makeKit() {
     smooth: vc({ roughness: 0.95 }),
     plant: vc({ side: THREE.DoubleSide, roughness: 0.8 }),
     glow: new THREE.MeshStandardMaterial({ color: '#000000', emissive: '#ff8a2a', emissiveIntensity: 2.4 }),
+    // polished gold: catches the sun and the sky in the environment light
+    gold: new THREE.MeshStandardMaterial({ color: '#f2c14e', metalness: 1, roughness: 0.28, flatShading: true }),
+    crystal: vc({ flatShading: true, roughness: 0.12, metalness: 0.1 }),
     water: new THREE.MeshStandardMaterial({ color: '#3d6b78', roughness: 0.05, metalness: 0.3 }),
   };
   return { g, m };
@@ -577,17 +772,25 @@ export function decorate(b, kit, type, hx, seed, top) {
   const tint = (w = 0.14) => new THREE.Color(1 + (r() - 0.5) * w, 1 + (r() - 0.5) * w, 1 + (r() - 0.5) * w * 0.7);
 
   if (type === 'forest') {
-    for (const [x, z] of scatter(r, 12, { minGap: 0.14, outer: 0.78 })) {
-      const s = 0.82 + r() * 0.42;
-      const leafy = r() < 0.32;
-      const geo = leafy ? (r() < 0.2 ? g.leafy[2 + Math.floor(r() * 2)] : g.leafy[Math.floor(r() * 2)]) : pick(g.pines);
+    // a mixed wood: mostly pines, a dark spruce or two, oaks (some turning) and birches
+    for (const [x, z] of scatter(r, 13, { minGap: 0.135, outer: 0.78 })) {
+      const s = 0.82 + r() * 0.4;
+      const k = r();
+      const geo = k < 0.45 ? pick(g.pines) : k < 0.58 ? g.spruce : k < 0.78 ? (r() < 0.25 ? pick(g.autumn) : pick(g.oaks)) : pick(g.birches);
       b.add(geo, m.flat, mat(X + x, y, Z + z, r() * 6, s, s * (0.92 + r() * 0.16)), tint());
     }
-    for (const [x, z] of scatter(r, 3, { inner: 0.3, outer: 0.8, minGap: 0.1 })) b.add(g.bush, m.flat, mat(X + x, y, Z + z, r() * 6, 0.8 + r() * 0.5), tint());
+    // the forest floor
+    for (const [x, z] of scatter(r, 5, { inner: 0.3, outer: 0.82, minGap: 0.08 })) b.add(pick(g.ferns), m.plant, mat(X + x, y, Z + z, r() * 6, 0.8 + r() * 0.5), tint(0.18));
+    for (const [x, z] of scatter(r, 2, { inner: 0.3, outer: 0.8, minGap: 0.1 })) b.add(g.bush, m.flat, mat(X + x, y, Z + z, r() * 6, 0.8 + r() * 0.5), tint());
     for (const [x, z] of scatter(r, 7, { inner: 0.3, outer: 0.82, minGap: 0.06 })) b.add(g.forestGrass, m.plant, mat(X + x, y, Z + z, r() * 6, 0.8 + r() * 0.5), tint(0.2));
+    for (const [x, z] of scatter(r, 2, { inner: 0.35, outer: 0.8, minGap: 0.1 })) b.add(pick(g.boulders), m.flat, mat(X + x, y, Z + z, r() * 6, 0.45 + r() * 0.3), new THREE.Color(0.85, 0.95, 0.8));
     if (r() < 0.6) {
       const [x, z] = scatter(r, 1, { inner: 0.45, outer: 0.7 })[0] || [0.5, 0.2];
       b.add(g.log, m.flat, mat(X + x, y, Z + z, r() * 6, 0.9 + r() * 0.2));
+    }
+    if (r() < 0.6) {
+      const [x, z] = scatter(r, 1, { inner: 0.4, outer: 0.75 })[0] || [-0.5, 0.2];
+      b.add(g.stump, m.flat, mat(X + x, y, Z + z, r() * 6, 0.9 + r() * 0.3));
     }
   } else if (type === 'pasture') {
     for (const [x, z] of scatter(r, 16, { inner: 0.3, outer: 0.84, minGap: 0.07 })) b.add(pick(g.grass), m.plant, mat(X + x, y, Z + z, r() * 6, 0.8 + r() * 0.5), tint(0.18));
@@ -657,11 +860,26 @@ export function decorate(b, kit, type, hx, seed, top) {
     spots.slice(0, 3).forEach(([x, z], i) => {
       const s = 0.85 + r() * 0.4 - i * 0.08;
       b.add(g.peaks[i % 3], m.flat, mat(X + x, y, Z + z, r() * 6, s, s * (0.9 + r() * 0.25)), tint(0.08));
+      // scree spilled at its foot, toward the players
+      const a = Math.PI / 2 + (r() - 0.5) * 1.6;
+      const sx = x + Math.cos(a) * 0.17 * s, sz = z + Math.sin(a) * 0.17 * s;
+      if (onTile(sx, sz)) b.add(pick(g.scree), m.flat, mat(X + sx, y, Z + sz, r() * 6, 0.9 + r() * 0.3), tint(0.06));
     });
-    // the mine faces the players, so its timbers and ore cart show
-    if (spots[3]) b.add(g.mine, m.flat, mat(X + spots[3][0], y, Z + spots[3][1], (r() - 0.5) * 0.8, 0.85));
+    // the mine faces the players, so its timbers, lantern and ore cart show
+    if (spots[3]) {
+      const mm = mat(X + spots[3][0], y, Z + spots[3][1], (r() - 0.5) * 0.8, 0.85);
+      b.add(g.mine, m.flat, mm);
+      b.add(g.mineGlow, m.glow, mm);
+      b.add(g.mineGold, m.gold, mm);
+    }
     if (spots[4]) b.add(g.blocks, m.flat, mat(X + spots[4][0], y, Z + spots[4][1], r() * 6, 0.9));
     for (const [x, z] of scatter(r, 7, { minGap: 0.08 })) b.add(pick(g.boulders), m.flat, mat(X + x, y, Z + z, r() * 6, 0.5 + r() * 0.8), tint(0.1));
+    // gold lying in the open, and a crystal cluster in a crevice
+    for (const [x, z] of scatter(r, 2, { inner: 0.32, outer: 0.78, minGap: 0.1 })) b.add(g.nuggets, m.gold, mat(X + x, y, Z + z, r() * 6, 0.9 + r() * 0.4));
+    if (r() < 0.7) {
+      const [x, z] = scatter(r, 1, { inner: 0.36, outer: 0.78 })[0] || [0.4, -0.3];
+      b.add(pick(g.crystals), m.crystal, mat(X + x, y, Z + z, r() * 6, 0.8 + r() * 0.4));
+    }
   } else if (type === 'desert') {
     for (const [x, z] of scatter(r, 3, { minGap: 0.3, inner: 0.3 })) b.add(g.dune, m.smooth, mat(X + x, y, Z + z, r() * 6, 0.8 + r() * 0.4));
     for (const [x, z] of scatter(r, 3, { minGap: 0.22, inner: 0.42 })) b.add(pick(g.cacti), m.flat, mat(X + x, y, Z + z, r() * 6, 0.8 + r() * 0.45), tint(0.1));
