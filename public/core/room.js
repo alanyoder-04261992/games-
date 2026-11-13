@@ -60,6 +60,7 @@ export class HostRoom extends Emitter {
     this.peer = null;
     this.status = online ? 'connecting' : 'offline';
     this.players = new Map();
+    this.rematchVotes = new Set(); // players who said "I'm in" for a rematch after the game ended
     this.chatLog = saved?.chat || [];
     this.timer = null;
     this.claim = null;
@@ -287,6 +288,8 @@ export class HostRoom extends Emitter {
           hostMuted: !!p.hostMuted,
         })),
       started: this.started,
+      // ids of players ready for a rematch (only after a game has ended)
+      rematch: [...this.rematchVotes].filter((id) => this.players.has(id) && !this.players.get(id).kicked && this.seatOf(id) != null),
     };
   }
 
@@ -375,6 +378,7 @@ export class HostRoom extends Emitter {
     for (let i = 0; i < this.seats.length; i++) if (this.seats[i].kind === 'open') this.seats[i] = this.#newBot(i);
     this.state = this.game.engine.setup({ seed: (Math.random() * 2 ** 32) >>> 0, options: this.options });
     this.started = true;
+    this.rematchVotes.clear();
     this.seq = 0;
     this.lastEvent = { type: 'start' };
     this.#broadcastLobby();
@@ -383,10 +387,25 @@ export class HostRoom extends Emitter {
     this.schedule();
   }
 
+  // Same table, same seats, same players, same room code: just a fresh deal. Anyone who
+  // dropped out keeps their seat (a computer player covers it until they come back).
   rematch() {
     this.started = false;
     this.claim = null;
     this.start();
+  }
+
+  // A seated player taps Rematch after the game ended. The host's tap starts the new game
+  // right away (the host's device runs the table). Anyone else's tap tells the table they are
+  // in: the host sees who is ready on their Rematch button, plus a toast and a chat line.
+  #rematchVote(p) {
+    if (!this.started || !this.state || !this.game.engine.isOver(this.state)) return;
+    if (p.isHost) return this.rematch();
+    if (this.seatOf(p.id) == null || this.rematchVotes.has(p.id)) return; // watchers don't get a say
+    this.rematchVotes.add(p.id);
+    this.#system(`${p.name} is in for a rematch`);
+    this.#send(this.players.get('host'), { t: 'toast', text: `${p.name} wants a rematch` });
+    this.#broadcastLobby();
   }
 
   handle(playerId, msg) {
@@ -448,7 +467,7 @@ export class HostRoom extends Emitter {
         this.#sendState(p, null);
         break;
       case 'rematch':
-        if (p.isHost && this.game.engine.isOver(this.state)) this.rematch();
+        this.#rematchVote(p);
         break;
       case 'rt': {
         // Real-time channel for action games (see docs/ADDING_A_GAME.md). Relayed to everyone

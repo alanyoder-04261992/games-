@@ -79,8 +79,9 @@ States, moves and views must be plain JSON (they are saved and sent over the net
 ```js
 export function mount(ctx) {
   // ctx.el       the element to draw into (fills the screen under the top bar)
-  // ctx.client   .on('state', msg => …), .act(move), .isHost, .send({ t: 'rematch' })
+  // ctx.client   .on('state', msg => …), .act(move), .isHost
   // ctx.prefs    .get(key) / .set(key, value) — saved per device
+  // ctx.rematch() the shared Rematch button: put it on your game-over screen
   // ctx.toast(text), ctx.leave()
   const off = ctx.client.on('state', (msg) => {
     // msg.view   what your engine's view() returned for this player
@@ -99,6 +100,15 @@ export function mount(ctx) {
 
 Send moves with `ctx.client.act(move)`. Never change the view yourself — wait for the next
 `state` message. That's what keeps every player's screen in sync.
+
+**When the game ends**, put `ctx.rematch()` on your game-over screen (next to a
+`Game Center` button that calls `ctx.leave()`). It is the same Rematch button every game
+uses: same players, same seats, same table options and room code. The host's tap starts the
+new game; anyone else's tap says "I'm in" and the host's button lists who's ready. Playing
+alone it reads "Play again". `ctx.rematch({ big: true })` gives a larger button. If your
+screen doesn't place one, the table shows it in a bar along the bottom once the game is over.
+A game in its own frame (Dogfight, Rally) marks its frame with `data-own-rematch` and gets
+the status through its bridge instead (see `public/games/rally/ui.js`).
 
 ## Real-time games
 

@@ -138,7 +138,7 @@ export function mount(ctx) {
         ? h(
             'div.f4-actions',
             h('button.btn.ghost', { onclick: () => ctx.leave() }, 'Game Center'),
-            ctx.client.isHost ? h('button.btn.gold', { onclick: () => ctx.client.send({ t: 'rematch' }) }, 'Play again') : h('small', 'Waiting for the host…'),
+            ctx.rematch(),
           )
         : null,
     );

@@ -22,6 +22,9 @@ home page, **Step-by-step guide** in the lobby, the **?** button at the table, o
 - **Refresh or reopen** the link to get back to your seat. The home page also shows
   **Rejoin table**.
 - **Late arrivals** can join mid-game: the host seats them from **Settings → Players**.
+- **Rematch** when a game ends: everyone keeps their seat and the same table code, so
+  nobody has to rejoin. The host taps **Rematch — same players** to start. Anyone else taps
+  **Rematch** to say they're in; the host's button then shows who's ready.
 
 ## Voice chat
 - Tap the **microphone** at the top of the table (or **Join voice** in the lobby) and allow

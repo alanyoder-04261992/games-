@@ -3,8 +3,11 @@
 // line here. Order here is the order of the tiles on the home page.
 export const GAME_MODULES = [
   () => import('./rook/index.js'),
+  () => import('./euchre/index.js'),
   () => import('./hexstead/index.js'),
   () => import('./broadside/index.js'),
+  () => import('./roofline/index.js'),
+  () => import('./shed-tycoon/index.js'),
   () => import('./escape-grind/index.js'),
   () => import('./four-in-a-row/index.js'),
   () => import('./chinese-checkers/index.js'),
