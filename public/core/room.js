@@ -376,6 +376,7 @@ export class HostRoom extends Emitter {
     this.state = this.game.engine.setup({ seed: (Math.random() * 2 ** 32) >>> 0, options: this.options });
     this.started = true;
     this.seq = 0;
+    this.due = null;
     this.lastEvent = { type: 'start' };
     this.#broadcastLobby();
     this.#broadcastState(this.lastEvent);
@@ -473,6 +474,7 @@ export class HostRoom extends Emitter {
     this.seq++;
     this.lastEvent = { seat, action, seq: this.seq };
     this.prevState = prev;
+    if (this.due) delete this.due[seat]; // real-time games: this seat starts a fresh clock
     if (this.claim != null && !this.game.engine.claimActive(this.state, this.claim)) this.claim = null;
     this.#broadcastState(this.lastEvent);
     this.#persist();
@@ -526,20 +528,32 @@ export class HostRoom extends Emitter {
 
     const speed = SPEEDS[this.settings.speed]?.factor ?? 1;
     const actors = engine.actors(this.state);
+    // pace's 4th argument says who is about to move, so a game can time each seat differently
+    const pace = (seat, level) => (this.game.pace ? this.game.pace(this.state, this.lastEvent, this.prevState, { seat, level }) : 700);
+    // Real-time games (manifest `realtime: true`, where several seats act at once): each seat
+    // keeps its own clock from when it could first act, so one quick player doesn't keep
+    // restarting the computer's reaction time.
+    const now = Date.now();
+    if (this.game.realtime) for (const seat of Object.keys(this.due || {})) if (!actors.includes(+seat)) delete this.due[seat];
     let pick = null;
     let wait = Infinity;
     for (const seat of actors) {
       const s = this.seats[seat];
       let delay = null;
       if (this.claim != null) delay = 380;
-      else if (s.kind === 'bot') delay = this.game.pace ? this.game.pace(this.state, this.lastEvent, this.prevState) : 700;
+      else if (s.kind === 'bot') delay = pace(seat, s.level);
       else if (s.kind === 'human') {
         const p = this.players.get(s.playerId);
-        if (p?.autopilot) delay = this.game.pace ? this.game.pace(this.state, this.lastEvent, this.prevState) : 700;
+        if (p?.autopilot) delay = pace(seat, this.settings.botLevel);
         else if (!p?.connected) delay = 9000; // give a dropped player a moment, then the computer covers
       }
       if (delay == null) continue;
       delay *= this.claim != null ? Math.min(speed, 1) : speed;
+      if (this.game.realtime) {
+        this.due ??= {};
+        this.due[seat] ??= now + delay;
+        delay = Math.max(0, this.due[seat] - now);
+      }
       if (delay < wait) [pick, wait] = [seat, delay];
     }
     if (pick == null) return;
