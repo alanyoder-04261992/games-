@@ -53,7 +53,7 @@ const tile = `<svg viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg" role
 
 export default {
   id: 'dogfight',
-  version: '1.8', // shown on the home tile; bump it whenever you improve the game
+  version: '1.9', // shown on the home tile; bump it whenever you improve the game
   name: 'Coastal Dogfight',
   tagline: '1940s fighters over a 20 km coastline. Fly together against raiders, or shoot each other down.',
   description:
