@@ -242,20 +242,28 @@ function showHome() {
               'div.gc-continue-row',
               saves.map(({ g, s }) =>
                 h(
-                  'button.gc-resume',
-                  { onclick: () => resumeHost(g, s) },
-                  h('span.gc-resume-art', { html: g.tile }),
-                  h('span.gc-resume-text', h('strong', g.name), h('small', `${s.online ? 'Online table ' + s.code : 'vs computer'} · saved ${ago(s.savedAt)}`)),
-                  h('span.gc-resume-go', 'Continue'),
+                  'div.gc-resume-item',
+                  h(
+                    'button.gc-resume',
+                    { onclick: () => resumeHost(g, s) },
+                    h('span.gc-resume-art', { html: g.tile }),
+                    h('span.gc-resume-text', h('strong', g.name), h('small', `${s.online ? 'Online table ' + s.code : 'vs computer'} · saved ${ago(s.savedAt)}`)),
+                    h('span.gc-resume-go', 'Continue'),
+                  ),
+                  removeButton(`Remove your saved ${g.name} game`, () => discardSave(g, s)),
                 ),
               ),
               guest && Date.now() - guest.at < 6 * 3600e3
                 ? h(
-                    'button.gc-resume',
-                    { onclick: () => go(`#/join/${guest.code}`) },
-                    h('span.gc-resume-art.code', guest.code),
-                    h('span.gc-resume-text', h('strong', 'Rejoin table'), h('small', `${GAMES.get(guest.gameId)?.name || 'Game'} · ${ago(guest.at)}`)),
-                    h('span.gc-resume-go', 'Rejoin'),
+                    'div.gc-resume-item',
+                    h(
+                      'button.gc-resume',
+                      { onclick: () => go(`#/join/${guest.code}`) },
+                      h('span.gc-resume-art.code', guest.code),
+                      h('span.gc-resume-text', h('strong', 'Rejoin table'), h('small', `${GAMES.get(guest.gameId)?.name || 'Game'} · ${ago(guest.at)}`)),
+                      h('span.gc-resume-go', 'Rejoin'),
+                    ),
+                    removeButton('Forget this table', () => forgetGuestTable(guest)),
                   )
                 : null,
             ),
@@ -378,7 +386,13 @@ function showSetup(game) {
             h('button.btn.gold.big', { onclick: () => needName(() => startSolo(game, options, settings)) }, 'Single player'),
             h('button.btn.ghost.big', { onclick: () => needName(() => hostOnline(game, options, settings)) }, h('span', { html: ICON.people }), 'Multiplayer'),
           ),
-          save && !save.over ? h('button.btn.text', { onclick: () => resumeHost(game, save) }, `Continue your saved game (${ago(save.savedAt)})`) : null,
+          save && !save.over
+            ? h(
+                'div.gc-saved-line',
+                h('button.btn.text', { onclick: () => resumeHost(game, save) }, `Continue your saved game (${ago(save.savedAt)})`),
+                h('button.btn.text.gc-discard', { onclick: () => discardSave(game, save, () => showSetup(game)) }, 'Discard it'),
+              )
+            : null,
         ),
       ),
     ),
@@ -409,6 +423,37 @@ function hostOnline(game, options, settings) {
   const room = new HostRoom({ game, profile: { ...profile(), name: displayName() }, online: true, options, settings });
   current = { game, room, client: room.local, mode: 'host' };
   go('#/lobby');
+}
+
+// ---------- dropping a saved game you don't want to finish ----------
+function removeButton(label, onclick) {
+  return h('button.gc-resume-x', { type: 'button', title: label, 'aria-label': label, onclick }, '×');
+}
+
+// Removes the save at once and offers Undo for a few seconds (no "are you sure?" dialog).
+function discardSave(game, save, after = showHome) {
+  const key = `gc.save.${game.id}`;
+  store.del(key);
+  after();
+  undoToast(`${game.name} game removed`, () => {
+    if (!store.get(key)) store.set(key, save); // a new game started meanwhile wins
+    after();
+  });
+}
+
+function forgetGuestTable(guest) {
+  store.del('gc.guest');
+  showHome();
+  undoToast('Table removed from the list', () => {
+    if (!store.get('gc.guest')) store.set('gc.guest', guest);
+    showHome();
+  });
+}
+
+function undoToast(text, undo) {
+  let done = false;
+  const btn = h('button.toast-undo', { type: 'button', onclick: () => !done && ((done = true), btn.closest('.toast')?.remove(), undo()) }, 'Undo');
+  toast(h('span.toast-row', h('span', text), btn), { ms: 6000 });
 }
 
 function resumeHost(game, save) {
