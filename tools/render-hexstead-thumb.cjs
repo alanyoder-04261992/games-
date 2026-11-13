@@ -46,7 +46,8 @@ const BASE = process.env.BASE || 'http://localhost:8080';
     { base: BASE, seed: SEED, actions: ACTIONS },
   );
   await page.evaluate(() => window.__ready);
-  await page.screenshot({ path: OUT, type: 'jpeg', quality: 84 });
+  // software rendering (no GPU) can take well over the default 30 s for one frame of the full board
+  await page.screenshot({ path: OUT, type: 'jpeg', quality: 84, timeout: 240000 });
   console.log('saved', OUT);
   await browser.close();
 })();

@@ -1,7 +1,7 @@
 // Hexstead 3D board (three.js). Everything is modelled in code — no image or model files:
-// beveled terrain tiles with painted tops, pine forests, sheep pastures, wheat fields, clay pits
-// with brick stacks, snowy quarry peaks, harbors with piers and sailboats, painted wooden
+// beveled terrain tiles with painted tops, harbors with piers and sailboats, painted wooden
 // homesteads, barns with silos, trails, a bandit in a wide-brim hat, and dice that tumble.
+// The scenery on the tiles (trees, sheep, wheat, kilns, quarries…) comes from props.js.
 import * as THREE from '../../vendor/three/three.webgpu.min.js';
 import { context, renderOutput, vec3, vec4, mix, texture, screenUV, uniform, rangeFogFactor } from '../../vendor/three/three.tsl.min.js';
 import { OrbitControls } from '../../vendor/three/addons/controls/OrbitControls.js';
@@ -9,18 +9,22 @@ import { RoomEnvironment } from '../../vendor/three/addons/environments/RoomEnvi
 import { RoundedBoxGeometry } from '../../vendor/three/addons/geometries/RoundedBoxGeometry.js';
 import { board as islandGeometry, PIPS } from './geometry.js';
 import { SEAT_COLORS, RES_ICON, RES_COLORS, svgUrl } from './art.js';
+import { makeKit, decorate, Batcher } from './props.js';
 
 const BASE = 0.12; // top of the sandy island
 const TILE_H = 0.16;
 const BEVEL = 0.035;
 const TOP = BASE + TILE_H + BEVEL; // walking surface of a tile
+// base, dark, light. Picked so every terrain reads apart at a glance: deep woodland green vs
+// bright spring pasture, golden-amber wheat that no longer melts into the beach, warm terracotta
+// clay, cool blue-slate quarry, and pale dune desert.
 const TERRAIN_COLORS = {
-  forest: ['#2f5d2a', '#24481f', '#3c7034'],
-  pasture: ['#79b947', '#5f9c36', '#93cc5c'],
-  fields: ['#d8b04a', '#c49a34', '#e7c564'],
-  clay: ['#bf6a3d', '#a3532c', '#d07e50'],
-  quarry: ['#8a8f95', '#6f747a', '#a1a6ab'],
-  desert: ['#e2c68e', '#d1b077', '#efd8a6'],
+  forest: ['#2b5f36', '#1d4628', '#3d7a45'],
+  pasture: ['#84c24c', '#69a83a', '#a3d76a'],
+  fields: ['#e2a930', '#c58a1a', '#f2c65a'],
+  clay: ['#c8623a', '#a24726', '#de7d50'],
+  quarry: ['#86909c', '#69727e', '#a6afba'],
+  desert: ['#ecd5a6', '#dcbd86', '#f6e6c2'],
 };
 
 // ---------------------------------------------------------------------
@@ -293,31 +297,68 @@ function dieFace(value, red) {
   });
 }
 
+// A round harbor sign: parchment face, a thick ring in the resource's colour (navy for the 3:1
+// "any" harbors), the resource icon, and the rate on a dark ribbon so it reads from across the
+// board. Drawn at 256px; the icon is painted in once its SVG has loaded.
 function harborSign(type) {
-  return canvasTexture(256, 256, (g, w) => {
-    const c = w / 2;
-    g.fillStyle = 'rgba(0,0,0,0)';
-    g.clearRect(0, 0, w, w);
-    g.fillStyle = '#f6edd6';
-    g.strokeStyle = '#6d4524';
-    g.lineWidth = 10;
+  const S = 256, c = S / 2;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const g = cv.getContext('2d');
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  const ring = type === 'any' ? '#2b4f7a' : RES_COLORS[type][0];
+  // drop shadow, ring, face
+  g.fillStyle = 'rgba(0,0,0,0.28)';
+  g.beginPath();
+  g.arc(c + 3, c + 6, c - 8, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#ffffff';
+  g.beginPath();
+  g.arc(c, c, c - 8, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = ring;
+  g.beginPath();
+  g.arc(c, c, c - 15, 0, Math.PI * 2);
+  g.fill();
+  const face = g.createRadialGradient(c - 20, c - 30, 10, c, c, c - 34);
+  face.addColorStop(0, '#fffaf0');
+  face.addColorStop(1, '#efe2c2');
+  g.fillStyle = face;
+  g.beginPath();
+  g.arc(c, c, c - 34, 0, Math.PI * 2);
+  g.fill();
+  const ribbon = (text, y, h, size) => {
+    g.fillStyle = '#21180f';
     g.beginPath();
-    g.arc(c, c, c - 10, 0, Math.PI * 2);
+    g.roundRect(c - 70, y - h / 2, 140, h, h / 2);
     g.fill();
-    g.stroke();
-    g.fillStyle = '#3b2412';
+    g.fillStyle = '#ffffff';
+    g.font = `900 ${size}px "Roboto Slab", Georgia, serif`;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    if (type === 'any') {
-      g.font = '900 92px "Roboto Slab", Georgia, serif';
-      g.fillText('3:1', c, c - 4);
-      g.font = '700 30px Inter, sans-serif';
-      g.fillText('ANY', c, c + 62);
-    } else {
-      g.font = '900 64px "Roboto Slab", Georgia, serif';
-      g.fillText('2:1', c, c + 72);
-    }
-  });
+    g.fillText(text, c, y + 3);
+  };
+  if (type === 'any') {
+    g.fillStyle = '#21180f';
+    g.font = '900 96px "Roboto Slab", Georgia, serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('3:1', c, c - 24);
+    g.fillStyle = ring;
+    g.font = '900 40px Inter, system-ui, sans-serif';
+    g.fillText('ANY', c, c + 50);
+  } else {
+    ribbon('2:1', c + 56, 58, 48);
+    const img = new Image();
+    img.onload = () => {
+      g.drawImage(img, c - 54, c - 88, 108, 108);
+      t.needsUpdate = true;
+    };
+    img.src = svgUrl(RES_ICON[type]);
+  }
+  return t;
 }
 
 // draw an SVG icon onto a sprite texture once it has loaded
@@ -346,193 +387,7 @@ function iconTexture(svg, ring) {
   return t;
 }
 
-// ---------------------------------------------------------------------
-// shared geometry for the decorations (instanced)
-// ---------------------------------------------------------------------
-function makeKit() {
-  const g = {
-    trunk: new THREE.CylinderGeometry(0.022, 0.032, 0.12, 6).translate(0, 0.06, 0),
-    cone1: new THREE.ConeGeometry(0.13, 0.22, 7).translate(0, 0.19, 0),
-    cone2: new THREE.ConeGeometry(0.1, 0.18, 7).translate(0, 0.28, 0),
-    cone3: new THREE.ConeGeometry(0.065, 0.14, 7).translate(0, 0.36, 0),
-    sheepBody: new THREE.SphereGeometry(0.07, 12, 9).scale(1.35, 0.95, 1).translate(0, 0.085, 0),
-    sheepHead: new THREE.SphereGeometry(0.036, 10, 8).scale(1.2, 1, 0.9).translate(0.098, 0.1, 0),
-    sheepLeg: new THREE.CylinderGeometry(0.011, 0.011, 0.06, 5).translate(0, 0.03, 0),
-    stalk: new THREE.ConeGeometry(0.022, 0.13, 5).translate(0, 0.065, 0),
-    bale: new THREE.CylinderGeometry(0.06, 0.06, 0.1, 14).rotateZ(Math.PI / 2).translate(0, 0.06, 0),
-    mound: new THREE.SphereGeometry(0.15, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.45, 1),
-    brick: new THREE.BoxGeometry(0.06, 0.028, 0.03).translate(0, 0.014, 0),
-    kiln: new THREE.CylinderGeometry(0.07, 0.09, 0.14, 12).translate(0, 0.07, 0),
-    kilnTop: new THREE.ConeGeometry(0.075, 0.08, 12).translate(0, 0.18, 0),
-    peak: new THREE.IcosahedronGeometry(0.24, 0).scale(1, 1.55, 1).translate(0, 0.12, 0),
-    snow: new THREE.IcosahedronGeometry(0.105, 0).scale(1, 1.1, 1),
-    boulder: new THREE.DodecahedronGeometry(0.05, 0),
-    block: new THREE.BoxGeometry(0.07, 0.05, 0.05).translate(0, 0.025, 0),
-    dune: new THREE.SphereGeometry(0.22, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.3, 0.28, 0.8),
-    cactus: new THREE.CylinderGeometry(0.024, 0.028, 0.2, 8).translate(0, 0.1, 0),
-    cactusArm: new THREE.CylinderGeometry(0.016, 0.016, 0.08, 7).translate(0, 0.04, 0),
-    bush: new THREE.IcosahedronGeometry(0.045, 1),
-    post: new THREE.BoxGeometry(0.014, 0.07, 0.014).translate(0, 0.035, 0),
-  };
-  const m = {
-    trunk: std('#6b4423'),
-    pine1: std('#2d6a33', { flatShading: true }),
-    pine2: std('#245a2b', { flatShading: true }),
-    pine3: std('#3a7d3c', { flatShading: true }),
-    wool: std('#f5f1e6', { roughness: 1 }),
-    sheepDark: std('#2e2824'),
-    wheat: std('#e6be4f', { roughness: 0.7 }),
-    bale: std('#d6b35d'),
-    clay: std('#b4532e', { roughness: 0.95 }),
-    brick: std('#a8432a', { roughness: 0.85 }),
-    kiln: std('#8f5a3b'),
-    kilnTop: std('#4a3328'),
-    rock: std('#8d9298', { flatShading: true, roughness: 0.9 }),
-    rockDark: std('#6c7177', { flatShading: true, roughness: 0.9 }),
-    snow: std('#f7fafc', { flatShading: true, roughness: 0.6 }),
-    block: std('#b9bec4'),
-    sand: std('#e4c78c', { roughness: 1 }),
-    cactus: std('#4f8a43', { roughness: 0.7 }),
-    redRock: std('#b46a43', { flatShading: true }),
-    bush: std('#4a8f3a', { flatShading: true }),
-    wood: std('#8a5b30', { roughness: 0.85 }),
-  };
-  return { g, m };
-}
-
-class Batcher {
-  constructor() {
-    this.sets = new Map();
-  }
-  add(geo, mat, matrix) {
-    const key = geo.uuid + mat.uuid;
-    if (!this.sets.has(key)) this.sets.set(key, { geo, mat, list: [] });
-    this.sets.get(key).list.push(matrix.clone());
-  }
-  build(parent) {
-    for (const { geo, mat, list } of this.sets.values()) {
-      const mesh = new THREE.InstancedMesh(geo, mat, list.length);
-      list.forEach((mx, i) => mesh.setMatrixAt(i, mx));
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      parent.add(mesh);
-    }
-  }
-}
-
-const M4 = new THREE.Matrix4();
-const Q = new THREE.Quaternion();
-const V = new THREE.Vector3();
-const S3 = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
-function mat(x, y, z, rotY = 0, s = 1, sy = s) {
-  Q.setFromAxisAngle(UP, rotY);
-  return M4.compose(V.set(x, y, z), Q, S3.set(s, sy, s));
-}
-
-// spots on a hex away from the number token
-function scatter(rand, n, { inner = 0.36, outer = 0.74, minGap = 0.15 } = {}) {
-  const out = [];
-  for (let tries = 0; out.length < n && tries < n * 40; tries++) {
-    const a = rand() * Math.PI * 2;
-    const d = inner + Math.sqrt(rand()) * (outer - inner);
-    const x = Math.cos(a) * d;
-    const z = Math.sin(a) * d;
-    // stay inside the hexagon
-    const ang = Math.abs((((Math.atan2(z, x) * 180) / Math.PI + 360) % 60) - 30);
-    const limit = (0.86 * Math.cos(Math.PI / 6)) / Math.cos((ang * Math.PI) / 180);
-    if (Math.hypot(x, z) > limit) continue;
-    if (out.some((p) => Math.hypot(p[0] - x, p[1] - z) < minGap)) continue;
-    out.push([x, z]);
-  }
-  return out;
-}
-
-function decorate(b, kit, type, hx, seed) {
-  const { g, m } = kit;
-  const r = seeded(seed);
-  const X = hx.x;
-  const Z = hx.z;
-  const y = TOP - 0.005;
-  if (type === 'forest') {
-    for (const [x, z] of scatter(r, 9, { minGap: 0.17 })) {
-      const s = 0.8 + r() * 0.45;
-      const rot = r() * 6;
-      b.add(g.trunk, m.trunk, mat(X + x, y, Z + z, rot, s));
-      const pm = [m.pine1, m.pine2, m.pine3][Math.floor(r() * 3)];
-      b.add(g.cone1, pm, mat(X + x, y, Z + z, rot, s));
-      b.add(g.cone2, pm, mat(X + x, y, Z + z, rot, s));
-      b.add(g.cone3, pm, mat(X + x, y, Z + z, rot, s));
-    }
-  } else if (type === 'pasture') {
-    for (const [x, z] of scatter(r, 4, { minGap: 0.22 })) {
-      const rot = r() * 6;
-      const s = 0.9 + r() * 0.25;
-      b.add(g.sheepBody, m.wool, mat(X + x, y, Z + z, rot, s));
-      b.add(g.sheepHead, m.sheepDark, mat(X + x, y, Z + z, rot, s));
-      for (const [lx, lz] of [[0.05, 0.035], [0.05, -0.035], [-0.05, 0.035], [-0.05, -0.035]]) {
-        const c = Math.cos(rot), sn = Math.sin(rot);
-        b.add(g.sheepLeg, m.sheepDark, mat(X + x + (lx * c + lz * sn) * s, y, Z + z + (-lx * sn + lz * c) * s, rot, s));
-      }
-    }
-    for (const [x, z] of scatter(r, 5, { minGap: 0.1 })) b.add(g.bush, m.bush, mat(X + x, y + 0.02, Z + z, r() * 6, 0.7 + r() * 0.6));
-    // a short fence
-    const fa = r() * Math.PI * 2;
-    for (let i = 0; i < 5; i++) {
-      const a = fa + i * 0.16;
-      b.add(g.post, m.wood, mat(X + Math.cos(a) * 0.7, y, Z + Math.sin(a) * 0.7, -a));
-    }
-  } else if (type === 'fields') {
-    const rot = 0.35;
-    const c = Math.cos(rot), sn = Math.sin(rot);
-    for (let i = -6; i <= 6; i++)
-      for (let j = -6; j <= 6; j++) {
-        const u = i * 0.11, w = j * 0.07;
-        const x = u * c - w * sn + (r() - 0.5) * 0.02;
-        const z = u * sn + w * c + (r() - 0.5) * 0.02;
-        const d = Math.hypot(x, z);
-        if (d < 0.36 || d > 0.72) continue;
-        b.add(g.stalk, m.wheat, mat(X + x, y, Z + z, r() * 6, 0.8 + r() * 0.5));
-      }
-    for (const [x, z] of scatter(r, 2, { inner: 0.45, outer: 0.7, minGap: 0.3 })) b.add(g.bale, m.bale, mat(X + x, y, Z + z, r() * 6));
-  } else if (type === 'clay') {
-    for (const [x, z] of scatter(r, 3, { minGap: 0.28 })) b.add(g.mound, m.clay, mat(X + x, y, Z + z, r() * 6, 0.8 + r() * 0.5));
-    // brick stacks
-    for (const [x, z] of scatter(r, 2, { inner: 0.4, outer: 0.65, minGap: 0.3 })) {
-      const rot = r() * 3;
-      const c = Math.cos(rot), sn = Math.sin(rot);
-      for (let lv = 0; lv < 3; lv++)
-        for (let k = 0; k < 2; k++)
-          for (let q = 0; q < 2; q++) {
-            const lx = (k - 0.5) * 0.065, lz = (q - 0.5) * 0.034;
-            b.add(g.brick, m.brick, mat(X + x + lx * c + lz * sn, y + lv * 0.03, Z + z - lx * sn + lz * c, -rot));
-          }
-    }
-    const [kx, kz] = scatter(r, 1, { inner: 0.45, outer: 0.65 })[0] || [0.5, 0];
-    b.add(g.kiln, m.kiln, mat(X + kx, y, Z + kz));
-    b.add(g.kilnTop, m.kilnTop, mat(X + kx, y, Z + kz));
-  } else if (type === 'quarry') {
-    const peaks = scatter(r, 3, { inner: 0.42, outer: 0.62, minGap: 0.36 });
-    peaks.forEach(([x, z], i) => {
-      const s = 0.85 + r() * 0.4 - i * 0.08;
-      const rot = r() * 6;
-      b.add(g.peak, i % 2 ? m.rockDark : m.rock, mat(X + x, y, Z + z, rot, s));
-      b.add(g.snow, m.snow, mat(X + x, y + 0.12 + 0.24 * 1.55 * s - 0.09 * s, Z + z, rot, s));
-    });
-    for (const [x, z] of scatter(r, 6, { minGap: 0.08 })) b.add(g.boulder, m.rockDark, mat(X + x, y + 0.02, Z + z, r() * 6, 0.6 + r() * 0.8));
-    for (let i = 0; i < 3; i++) b.add(g.block, m.block, mat(X - 0.42 + i * 0.075, y, Z + 0.45, 0.1));
-  } else if (type === 'desert') {
-    for (const [x, z] of scatter(r, 3, { minGap: 0.3, inner: 0.3 })) b.add(g.dune, m.sand, mat(X + x, y, Z + z, r() * 6, 0.8 + r() * 0.4));
-    for (const [x, z] of scatter(r, 2, { minGap: 0.3, inner: 0.45 })) {
-      b.add(g.cactus, m.cactus, mat(X + x, y, Z + z));
-      Q.setFromAxisAngle(new THREE.Vector3(0, 0, 1), -0.9);
-      b.add(g.cactusArm, m.cactus, M4.compose(V.set(X + x + 0.02, y + 0.09, Z + z), Q, S3.set(1, 1, 1)));
-      Q.setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.9);
-      b.add(g.cactusArm, m.cactus, M4.compose(V.set(X + x - 0.02, y + 0.12, Z + z), Q, S3.set(1, 1, 1)));
-    }
-    for (const [x, z] of scatter(r, 4, { minGap: 0.1 })) b.add(g.boulder, m.redRock, mat(X + x, y + 0.015, Z + z, r() * 6, 0.7 + r() * 0.5));
-  }
-}
 
 // ---------------------------------------------------------------------
 // player pieces
@@ -693,16 +548,24 @@ export function createScene(container, { onPick, onHover } = {}) {
   controls.target.set(0, 0, 0.9);
 
   // lights
-  scene.add(new THREE.HemisphereLight('#d6ecff', '#6b5a3a', 0.85));
-  const sun = new THREE.DirectionalLight('#fff0d4', 2.6);
-  sun.position.set(-6, 12, 6);
+  // a warm late-morning sun, a little lower than overhead so trees, sheep and peaks throw
+  // longer shadows that show their shape; sky-blue from above, earthy bounce from below
+  const SUN_AT = new THREE.Vector3(-7, 10.5, 5.5);
+  scene.add(new THREE.HemisphereLight('#d2e8ff', '#6e5d3c', 0.8));
+  const sun = new THREE.DirectionalLight('#ffe8c2', 2.75);
+  sun.position.copy(SUN_AT);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, { left: -7.5, right: 7.5, top: 7.5, bottom: -7.5, near: 2, far: 30 });
+  sun.shadow.mapSize.set(3072, 3072);
+  Object.assign(sun.shadow.camera, { left: -6.4, right: 6.4, top: 6.4, bottom: -6.4, near: 2, far: 30 });
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.02;
-  sun.shadow.radius = 1.7; // same penumbra width as the old PCFSoftShadowMap
+  sun.shadow.radius = 1.4; // soft edges, but tight enough for a sheep's or a stalk's shadow
   scene.add(sun);
+  // a soft, cool fill from the far side so the shaded faces of peaks, trees and barns keep
+  // their colour instead of going muddy (no shadows: it only lifts)
+  const fill = new THREE.DirectionalLight('#bcd8ff', 0.55);
+  fill.position.set(7, 5, -6);
+  scene.add(fill);
 
   // ocean
   const normals = waterNormals();
@@ -718,8 +581,8 @@ export function createScene(container, { onPick, onHover } = {}) {
     new THREE.MeshBasicMaterial({
       map: canvasTexture(512, 8, (g, w) => {
         const gr = g.createLinearGradient(0, 0, w, 0);
-        gr.addColorStop(0, 'rgba(120,225,215,0.75)');
-        gr.addColorStop(0.35, 'rgba(70,190,200,0.35)');
+        gr.addColorStop(0, 'rgba(110,232,214,0.82)');
+        gr.addColorStop(0.35, 'rgba(60,196,206,0.4)');
         gr.addColorStop(1, 'rgba(40,140,180,0)');
         g.fillStyle = gr;
         g.fillRect(0, 0, w, 8);
@@ -766,6 +629,24 @@ export function createScene(container, { onPick, onHover } = {}) {
   scene.add(fx);
 
   const kit = makeKit();
+  // kiln smoke: a few soft puffs per chimney, cycling up and drifting with the breeze
+  const smokeTex = canvasTexture(64, 64, (g, w) => {
+    const gr = g.createRadialGradient(w / 2, w / 2, 2, w / 2, w / 2, w / 2);
+    gr.addColorStop(0, 'rgba(255,255,255,0.9)');
+    gr.addColorStop(0.5, 'rgba(255,255,255,0.45)');
+    gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, w, w);
+  });
+  let smoke = [];
+  function addSmoke([x, y, z]) {
+    const ph = Math.random();
+    for (let i = 0; i < 6; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: '#ece7df', transparent: true, depthWrite: false, opacity: 0 }));
+      board.add(sp);
+      smoke.push({ sp, x, y, z, ph: ph + i / 6 });
+    }
+  }
   const pieceGeos = makePieceGeos();
   const seatMats = SEAT_COLORS.map(pieceMaterials);
   const hexShape = new THREE.Shape();
@@ -803,6 +684,7 @@ export function createScene(container, { onPick, onHover } = {}) {
     ({ HEXES, VERTS, EDGES, HARBOR_SLOTS } = g);
     fitIsland(g);
     board.clear();
+    smoke = [];
     tiles = [];
     tokens = [];
     boats = [];
@@ -825,9 +707,11 @@ export function createScene(container, { onPick, onHover } = {}) {
       tile.userData = { kind: 'hex', id: i };
       board.add(tile);
       tiles.push(tile);
-      decorate(batch, kit, h.t, hx, i * 97 + 13);
+      for (const p of decorate(batch, kit, h.t, hx, i * 97 + 13, TOP).smoke) addSmoke(p);
       if (h.n) {
-        const tok = new THREE.Mesh(tokenGeo, [tokenSide, std('#ffffff', { map: tokenTexture(h.n), roughness: 0.55 }), tokenSide]);
+        // a little self-light keeps the numbers crisp and cream-white under the tone mapping
+        const face = tokenTexture(h.n);
+        const tok = new THREE.Mesh(tokenGeo, [tokenSide, std('#ffffff', { map: face, emissive: '#ffffff', emissiveMap: face, emissiveIntensity: 0.28, roughness: 0.55 }), tokenSide]);
         tok.position.set(hx.x, TOP + 0.022, hx.z);
         tok.rotation.y = Math.PI / 2;
         tok.castShadow = true;
@@ -870,17 +754,18 @@ export function createScene(container, { onPick, onHover } = {}) {
         g.castShadow = g.receiveShadow = true;
         board.add(g);
       }
-      const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: harborSign(hb.type), depthWrite: false }));
-      sign.scale.set(0.5, 0.5, 1);
-      sign.position.set(slot.x + slot.nx * 0.95, 0.55, slot.z + slot.nz * 0.95);
+      // shown in its own colours (no tone mapping) and never faded by the haze, so the far
+      // harbors' rates stay as readable as the near ones
+      const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: harborSign(hb.type), depthWrite: false, toneMapped: false, fog: false }));
+      sign.scale.set(0.66, 0.66, 1);
+      sign.position.set(slot.x + slot.nx * 0.95, 0.62, slot.z + slot.nz * 0.95);
+      sign.renderOrder = 2;
       board.add(sign);
-      if (hb.type !== 'any') {
-        const icon = new THREE.Sprite(new THREE.SpriteMaterial({ map: iconTexture(RES_ICON[hb.type]), depthWrite: false }));
-        icon.scale.set(0.26, 0.26, 1);
-        icon.position.copy(sign.position).add(new THREE.Vector3(0, 0.07, 0));
-        icon.renderOrder = 2;
-        board.add(icon);
-      }
+      // a post holding the sign up from the water
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.018, 0.34, 6), postMat);
+      pole.position.set(sign.position.x, 0.13, sign.position.z);
+      pole.castShadow = true;
+      board.add(pole);
       const boat = buildBoat(r);
       boat.position.set(slot.x + slot.nx * 1.35 + slot.nz * 0.35, 0, slot.z + slot.nz * 1.35 - slot.nx * 0.35);
       boat.rotation.y = -ang + Math.PI / 2 + (r() - 0.5);
@@ -1143,11 +1028,11 @@ export function createScene(container, { onPick, onHover } = {}) {
     dice.forEach((d, i) => d.position.copy(DICE_REST[i]));
     const next = Math.max(rx, rz);
     const cam = sun.shadow.camera;
-    Object.assign(cam, { left: -7.5 * next, right: 7.5 * next, top: 7.5 * next, bottom: -7.5 * next, far: 30 * next });
+    Object.assign(cam, { left: -6.4 * next, right: 6.4 * next, top: 6.4 * next, bottom: -6.4 * next, far: 30 * next });
     cam.updateProjectionMatrix();
-    sun.position.set(-6, 12, 6).multiplyScalar(Math.max(1, next));
+    sun.position.copy(SUN_AT).multiplyScalar(Math.max(1, next));
     // the WebGPU shadow node resizes its map to mapSize on the next frame
-    sun.shadow.mapSize.set(next > 1.1 ? 3072 : 2048, next > 1.1 ? 3072 : 2048);
+    sun.shadow.mapSize.set(next > 1.1 ? 4096 : 3072, next > 1.1 ? 4096 : 3072);
     controls.maxDistance = 24 * next;
     fogNear.value = 22 * next;
     fogFar.value = 52 * next;
@@ -1268,6 +1153,13 @@ export function createScene(container, { onPick, onHover } = {}) {
     const t = timer.update(now).getElapsed();
     normals.offset.set(t * 0.012, t * 0.007);
     foam.material.opacity = 0.35 + Math.sin(t * 1.3) * 0.15;
+    for (const s of smoke) {
+      const a = (t * 0.16 + s.ph) % 1;
+      s.sp.position.set(s.x + a * 0.14, s.y + a * 0.55, s.z - a * 0.05);
+      const sc = 0.045 + a * 0.17;
+      s.sp.scale.set(sc, sc, 1);
+      s.sp.material.opacity = Math.sin(Math.PI * Math.sqrt(a)) * 0.42 * (1 - a * 0.5);
+    }
     for (const b of boats) {
       b.position.y = Math.sin(t * 1.4 + b.userData.phase) * 0.025;
       b.rotation.z = Math.sin(t * 1.1 + b.userData.phase) * 0.06;
