@@ -7,7 +7,7 @@ import { ROOK_TILE as TILE } from './tile.js';
 
 export default {
   id: 'rook',
-  version: '1.5', // shown on the home tile; bump it whenever you improve the game
+  version: '2.0', // shown on the home tile; bump it whenever you improve the game (2.0: the 3D table)
   name: 'Rook',
   tagline: 'The classic trick-taking bidding game for four.',
   description:
