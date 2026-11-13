@@ -359,7 +359,7 @@ export function mount(ctx) {
         h('div.eg-prompt.win', h('strong', w === me() ? 'You win!' : `${name(w)} wins!`), h('span', `${name(w)} ${w === me() ? fixYou(view.winReason) : view.winReason}.`)),
         h(
           'div.eg-actions',
-          ctx.client.isHost ? btn('Play again', () => ctx.client.send({ t: 'rematch' }), { primary: true }) : h('small.eg-wait', 'Waiting for the host…'),
+          ctx.rematch(),
           btn('Game Center', () => ctx.leave(), { back: true }),
           btn('Statements', () => openStatement(me() ?? w)),
         ),

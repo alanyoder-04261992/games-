@@ -9,6 +9,7 @@ export function mount(ctx) {
   frame.allow = 'fullscreen; gamepad; autoplay';
   frame.setAttribute('allowfullscreen', '');
   frame.src = new URL('./play.html?embed=1', import.meta.url).href;
+  frame.dataset.ownRematch = '1'; // the game's results screen has the Rematch button (fed below)
   ctx.el.append(frame);
 
   let ready = false;
@@ -23,7 +24,10 @@ export function mount(ctx) {
   const init = (type = 'init') => {
     if (!ready || !last) return;
     post({ type, seat: last.seat, isHost: ctx.client.isHost, roster: roster(last.seats), options: last.view.options });
-    if (last.view.over) post({ type: 'over', results: last.view.results });
+    if (last.view.over) {
+      post({ type: 'over', results: last.view.results });
+      rematchStatus();
+    }
     wasOver = !!last.view.over;
   };
 
@@ -34,11 +38,22 @@ export function mount(ctx) {
     if (!prev) return init();
     if (msg.event?.type === 'start') return init(); // a new round (rematch) resets the game
     post({ type: 'roster', roster: roster(msg.seats), seat: msg.seat });
-    if (msg.view.over && !wasOver) post({ type: 'over', results: msg.view.results });
+    if (msg.view.over && !wasOver) {
+      post({ type: 'over', results: msg.view.results });
+      rematchStatus();
+    }
     wasOver = !!msg.view.over;
   });
   // seat changes and players dropping in and out arrive with the lobby
+  // who is in for a rematch (core/rematch.js does the same for games outside a frame)
+  const rematchStatus = () => {
+    const lobby = ctx.client.lobby || {};
+    const ready = new Set(lobby.rematch || []);
+    const players = lobby.players || [];
+    post({ type: 'rematch', ready: players.filter((p) => ready.has(p.id)).map((p) => p.name), mine: ready.has(ctx.client.playerId), host: players.find((p) => p.isHost)?.name || 'the host', solo: !lobby.online || players.filter((p) => p.seat != null).length <= 1 });
+  };
   const offLobby = ctx.client.on('lobby', (lobby) => {
+    if (ready && last?.view?.over) rematchStatus();
     if (ready && last && lobby?.started) post({ type: 'roster', roster: roster(lobby.seats), seat: mySeat(lobby.seats, last.seat) });
   });
   const offRt = ctx.client.on('rt', (m) => ready && post({ type: 'rt', from: m.from, data: m.data }));
@@ -51,7 +66,7 @@ export function mount(ctx) {
       init();
     } else if (d.type === 'rt') ctx.client.send({ t: 'rt', data: d.data });
     else if (d.type === 'finish' && ctx.client.isHost) ctx.client.act({ type: 'finish', results: d.results });
-    else if (d.type === 'rematch' && ctx.client.isHost) ctx.client.send({ t: 'rematch' });
+    else if (d.type === 'rematch') ctx.client.send({ t: 'rematch' }); // host: start now; others: "I'm in"
     else if (d.type === 'leave') ctx.leave();
   };
   window.addEventListener('message', onMessage);

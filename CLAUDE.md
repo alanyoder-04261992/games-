@@ -45,5 +45,6 @@ Games plug in as folders under `public/games/` — read `docs/ADDING_A_GAME.md` 
 ## Other house rules
 
 - Games register with one line in `public/games/index.js`; online play, chat, voice,
-  computer players and saving come from `public/core/`.
+  computer players, saving and the Rematch button (`ctx.rematch()` on the game-over
+  screen; same players, seats and room code) come from `public/core/`.
 - Run `npm test` before pushing. Rules engines need bot-vs-bot tests that play full games.

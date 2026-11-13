@@ -2248,6 +2248,7 @@ addEventListener('message', e => {
   else if (d.type === 'roster') netRoster(d);
   else if (d.type === 'rt') handleNet(d.from, d.data);
   else if (d.type === 'over') showNetDebrief(d.results);
+  else if (d.type === 'rematch') { NET.rm = d; rematchButton(); }
 });
 function normOpts(o = {}) {
   return { mode: o.mode === 'versus' ? 'versus' : 'coop', difficulty: DIFF[o.difficulty] ? o.difficulty : 'normal', enemies: o.enemies ?? 'normal', waves: Number(o.waves) || 3, kills: Number(o.kills) || 5, wingmen: o.wingmen === 'on' ? 'on' : 'off' };
@@ -2438,7 +2439,7 @@ function showNetDebrief(r) {
   const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   $('dbBoard').hidden = false;
   $('dbBoard').innerHTML = `<table><thead><tr><th>Pilot</th><th>Kills</th><th>Down</th></tr></thead><tbody>${board.map(b => `<tr${b.seat === NET.seat ? ' class="me"' : ''}><td>${esc(b.name)}${b.bot ? ' <small>computer</small>' : ''}</td><td>${b.kills}</td><td>${b.deaths}</td></tr>`).join('')}</tbody></table>`;
-  $('btnAgain').textContent = NET.host ? 'New round for everyone' : 'Waiting for the host…'; $('btnAgain').disabled = !NET.host;
+  NET.rmSent = false; NET.rm = null; rematchButton(); // fresh status follows from the Game Center
   $('btnMenu').textContent = 'Leave table';
   G.state = 'debrief'; showScreen('debrief'); $('touch').hidden = true;
   if (document.pointerLockElement) document.exitPointerLock();
@@ -3075,7 +3076,16 @@ $('btnEnd').addEventListener('click', () => {
   if (NET.on) { if (NET.host) { G.state = 'play'; showScreen(null); NET.w.done = true; finishNet('ended'); } else post({ type: 'leave' }); return; }
   G.state = 'play'; endMission(false);
 });
-$('btnAgain').addEventListener('click', () => { if (NET.on) { if (NET.host) post({ type: 'rematch' }); return; } startMission(G.mission ? G.mission.mode : 'sortie'); });
+$('btnAgain').addEventListener('click', () => { if (NET.on) { post({ type: 'rematch' }); if (!NET.host) { NET.rmSent = true; rematchButton(); } return; } startMission(G.mission ? G.mission.mode : 'sortie'); });
+// The Game Center's shared rematch: the host's tap starts a new round for everyone at the table
+// (same pilots, same room code); anyone else's tap says "I'm in" and the host sees who is ready.
+function rematchButton() {
+  const b = $('btnAgain'), rm = NET.rm || { ready: [], mine: false, host: 'the host' };
+  if (!NET.on) return;
+  if (NET.host) { b.textContent = rm.solo ? 'Fly again' : rm.ready.length ? `Rematch — ${rm.ready.join(', ')} ${rm.ready.length === 1 ? 'is' : 'are'} in` : 'Rematch — same pilots'; b.disabled = false; }
+  else if (rm.mine || NET.rmSent) { b.textContent = `You're in ✓ — waiting for ${rm.host}`; b.disabled = true; }
+  else { b.textContent = "Rematch — I'm in"; b.disabled = false; }
+}
 $('btnMenu').addEventListener('click', () => { if (NET.on) { post({ type: 'leave' }); return; } G.state = 'menu'; clearWorldPlanes(); G.player = null; G.mission = null; showScreen('menu'); });
 function setPhoneMode(v) {
   settings.phone = v; isTouch = v === 'on' || (v !== 'off' && touchDevice);
