@@ -907,7 +907,7 @@ function chooseBid(view, legalActions, cfg, rnd) {
   if (partnerBids.some((e) => e.amount > 100)) limit += 10;
   if (partnerBids.some((e) => e.amount >= 170)) limit += 10;
   if (oppBids.some((e) => e.amount >= 170)) limit -= 10;
-  if (cfg.noise) limit += Math.round((rnd() - 0.5) * 20);
+  if (cfg.noise) limit += 5 * Math.round((rnd() - 0.5) * 4); // ±10 in steps of 5, so bids stay legal
 
   // near the finish, defend unless the bid is very safe
   const need = view.options.winScore - view.scores[myTeam];
@@ -934,7 +934,7 @@ function chooseBid(view, legalActions, cfg, rnd) {
   if (partnerHigh && (oppsOut || limit < high.amount + 20) && canPass) return { type: 'pass' };
 
   const minNext = high ? high.amount + 5 : MIN_BID;
-  if (!canPass) return { type: 'bid', amount: Math.max(MIN_BID, Math.min(limit, 200)) };
+  if (!canPass) return { type: 'bid', amount: Math.max(minNext, Math.min(Math.floor(limit / 5) * 5, 200)) };
   if (limit < minNext || minNext > 200) return { type: 'pass' };
 
   // opening jumps say "I'm strong" to partner
