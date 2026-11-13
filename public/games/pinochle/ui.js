@@ -834,7 +834,7 @@ class PinochleTable {
         ? h(
             'div.pn-sheet-actions',
             h('button.btn.ghost', { onclick: () => this.ctx.leave() }, 'Game Center'),
-            this.client.isHost ? h('button.btn.gold', { onclick: () => this.client.send({ t: 'rematch' }) }, 'Play again') : h('small', 'Waiting for the host…'),
+            this.ctx.rematch ? this.ctx.rematch() : this.client.isHost ? h('button.btn.gold', { onclick: () => this.client.send({ t: 'rematch' }) }, 'Play again') : null,
           )
         : me == null
           ? null

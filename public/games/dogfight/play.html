@@ -46,6 +46,16 @@ p{margin:0;line-height:1.4;max-width:62ch}
 .pcard[aria-checked="true"]{border-color:var(--amber);background:rgba(234,165,60,.1)}
 .pcard b{font-family:var(--f-display);font-size:1.6rem;font-weight:800;letter-spacing:.02em}
 .pcard small{color:var(--ink-dim);font-size:.9rem}
+.planes h4{grid-column:1/-1;margin:8px 0 -2px;font-family:var(--f-data);font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim)}
+.pcard b{font-size:1.35rem}
+.pcard .ph{display:grid;grid-template-columns:128px 1fr;gap:10px;align-items:center}
+.pcard .ph > div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pcard img{display:block;width:128px;height:64px;object-fit:cover;border-radius:4px;background:#5d7686}
+.pcard .spec{font-family:var(--f-data);font-size:.72rem;letter-spacing:.04em;color:var(--amber)}
+.pcard .facts{margin:2px 0 0;padding:0 0 0 1.05em;font-size:.8rem;line-height:1.35;color:var(--ink-dim)}
+.pcard .facts li{margin:2px 0}
+.pcard .facts::before{content:'Did you know?';display:block;margin:0 0 2px -1.05em;font-family:var(--f-data);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink)}
+@media (max-width:560px){.planes{grid-template-columns:1fr}}
 .stat{display:grid;grid-template-columns:4.2em 1fr;align-items:center;gap:8px;font-family:var(--f-data);font-size:.7rem;color:var(--ink-dim);text-transform:uppercase}
 .bar{height:5px;background:rgba(241,232,210,.12);position:relative}
 .bar i{position:absolute;inset:0 auto 0 0;background:var(--ink)}
@@ -125,22 +135,7 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
     <h1>Coastal Dogfight</h1>
     <p class="lede">Take off from the airfield behind the cliffs, meet three waves of raiders coming in off the sea, then bring your fighter home and land it.</p>
     <h3>Choose your aircraft</h3>
-    <div class="planes" role="radiogroup" aria-label="Aircraft">
-      <button class="pcard" id="pickKestrel" role="radio" aria-checked="true">
-        <b>Kestrel Mk IX</b><small>Elliptical wing, tight turns, six guns</small>
-        <div class="stat">Turn<div class="bar"><i style="width:92%"></i></div></div>
-        <div class="stat">Speed<div class="bar"><i style="width:66%"></i></div></div>
-        <div class="stat">Climb<div class="bar"><i style="width:62%"></i></div></div>
-        <div class="stat">Guns<div class="bar"><i style="width:90%"></i></div></div>
-      </button>
-      <button class="pcard" id="pickFalke" role="radio" aria-checked="false">
-        <b>Falke G-6</b><small>Small wing, fast climb, nose cannon</small>
-        <div class="stat">Turn<div class="bar"><i style="width:60%"></i></div></div>
-        <div class="stat">Speed<div class="bar"><i style="width:84%"></i></div></div>
-        <div class="stat">Climb<div class="bar"><i style="width:90%"></i></div></div>
-        <div class="stat">Guns<div class="bar"><i style="width:68%"></i></div></div>
-      </button>
-    </div>
+    <div class="planes" id="planeList" role="radiogroup" aria-label="Aircraft"></div>
     <div class="settings" id="soloSetup">
       <label for="optDiff" id="optDiffL">Difficulty
         <select id="optDiff"><option value="easy">Easy · forgiving</option><option value="normal">Normal</option><option value="hard">Hard · enemies carry missiles</option><option value="ace">Ace · deadly</option></select>
@@ -263,7 +258,7 @@ import * as THREE from 'three/webgpu';
 import {
   Fn, If, Discard, uniform, texture, attribute, uv as tslUv, float, vec2, vec3, vec4, normalize, mix, pow, clamp as tslClamp, max, dot, abs, length, exp, cos, sin,
   smoothstep, reflect, select, vertexStage, positionLocal, positionWorld, cameraPosition, cameraProjectionMatrix, modelViewMatrix, normalGeometry,
-  materialColor, instancedDynamicBufferAttribute, screenDPR, pass, densityFogFactor, context, renderOutput, fwidth, mx_noise_float, mx_fractal_noise_float,
+  materialColor, instancedDynamicBufferAttribute, screenDPR, pass, densityFogFactor, context, renderOutput, fwidth, mx_noise_float, mx_fractal_noise_float, normalView, positionViewDirection,
 } from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -731,8 +726,8 @@ async function buildWorld() {
   buildTrees(Q.trees);
   progress('Seeding clouds…', 0.94); await nextFrame();
   buildClouds(Q.clouds);
-  smokeFX = new Particles(3200, false);
-  fireFX = new Particles(1800, true);
+  smokeFX = new Particles(4600, false);
+  fireFX = new Particles(2800, true);
   buildTracers();
   buildEnv();
 }
@@ -1003,6 +998,9 @@ const SPECS = {
     guns: [{ x: -2.15, y: -0.28, z: -1.0, t: 'c' }, { x: 2.15, y: -0.28, z: -1.0, t: 'c' }, { x: -3.0, y: -0.25, z: -0.75, t: 'm' }, { x: 3.0, y: -0.25, z: -0.75, t: 'm' }, { x: -3.45, y: -0.24, z: -0.7, t: 'm' }, { x: 3.45, y: -0.24, z: -0.7, t: 'm' }],
     ammo: { m: 1400, c: 240 }, span: 11.2, length: 9.5, noseZ: -4.15, R: 1.0,
     camoA: '#4a5833', camoB: '#7b6744', bottom: '#b8c2a9', spinner: '#d6cfb4', blades: 4,
+    era: 'prop', side: 'blue', card: ['Elliptical wing, tight turns, six guns', 92, 66, 62, 90], top: 340, facts: ["Its elliptical wing spreads lift almost perfectly evenly from root to tip, which is why it turns so tightly.", "All six guns are angled to meet at one point 300 m ahead of the nose."],
+    look: { prof: [[0, 0.05], [0.04, 0.16], [0.14, 0.28], [0.34, 0.44], [0.52, 0.56], [0.66, 0.62], [0.8, 0.6], [0.9, 0.55], [0.97, 0.44], [1, 0.3]], wing: { shape: 'ellipse', root: 2.55 }, band: [2.49, 2.81], bandCol: 0xcfc6a6, scoops: [[1.3, -0.6, -0.15, 0.15, 0.85, 1.35], [-1.3, -0.6, -0.15, 0.13, 0.7, 1.35]],
+      exh: 6, hoops: [-0.62, 0.38], gearX: 0.95, camoSeed: 4, insignia: 'roundel' },
   },
   falke: {
     name: 'Falke', full: 'Falke G-6', mass: 3150, S: 16.2, AR: 6.1, e: 0.8, CL0: 0.12, CLa: 5.0, stallA: 0.26, CD0: 0.0195,
@@ -1011,15 +1009,71 @@ const SPECS = {
     guns: [{ x: -0.26, y: 0.52, z: -2.7, t: 'm' }, { x: 0.26, y: 0.52, z: -2.7, t: 'm' }, { x: 0, y: 0.0, z: -4.2, t: 'c' }],
     ammo: { m: 1200, c: 150 }, span: 9.9, length: 9.0, noseZ: -4.0, R: 0.93,
     camoA: '#6d777b', camoB: '#8d9594', bottom: '#a8bbca', spinner: '#d4ab2e', blades: 3,
+    era: 'prop', side: 'red', card: ['Small wing, fast climb, nose cannon', 60, 84, 90, 68], top: 370, facts: ["Its nose cannon fires through the hollow hub of the propeller, straight down the middle.", "Small wing, big engine: it out-climbs every other 1940s fighter here."],
+    look: { prof: [[0, 0.05], [0.04, 0.15], [0.14, 0.26], [0.34, 0.42], [0.52, 0.53], [0.66, 0.58], [0.8, 0.57], [0.9, 0.53], [0.97, 0.45], [1, 0.33]], wing: { shape: 'taper', root: 2.1, tip: 1.15, tipC: 0.62, from: 0.92, sweep: 0.18, round: 0.86 }, band: [-3.75, -2.65], bandCol: 0xd4ab2e, aceBand: true,
+      scoops: [[0, -0.66, -2.8, 0.15, 0.4, 1.6], [1.7, -0.6, -0.45, 0.11, 0.7, 1.5], [-1.7, -0.6, -0.45, 0.11, 0.7, 1.5]], exh: 6, hoops: [-0.66, -0.25, 0.18, 0.55], diag: true,
+      cowlGuns: true, spinnerGun: true, gearX: 0.62, tailY: 0.02, camoSeed: 9, mottled: true, insignia: 'cross' },
+  },
+  // a long-range escort fighter in bare metal: laminar wing, belly radiator, six heavy machine guns
+  ranger: {
+    name: 'Ranger', full: 'Ranger D-20', mass: 4150, S: 21.8, AR: 5.9, e: 0.85, CL0: 0.12, CLa: 5.1, stallA: 0.25, CD0: 0.0172,
+    power: 1270e3, Tstatic: 17200, Ke: 3.1, Cma: 9.2, Cmq: 3.5, Ka: 8.4, Clp: 5.0, rollFadeV: 165, Kr: 1.5, Cnb: 6.2, Cnr: 3.2, trimA: 0.03,
+    hp: { engine: 100, wingL: 115, wingR: 115, tail: 90, fuel: 75, pilot: 45, fuse: 165 }, fuel: 520,
+    guns: [{ x: -2.35, y: -0.3, z: -0.85, t: 'h' }, { x: 2.35, y: -0.3, z: -0.85, t: 'h' }, { x: -2.75, y: -0.28, z: -0.8, t: 'h' }, { x: 2.75, y: -0.28, z: -0.8, t: 'h' }, { x: -3.15, y: -0.26, z: -0.75, t: 'h' }, { x: 3.15, y: -0.26, z: -0.75, t: 'h' }],
+    ammo: { h: 1800 }, span: 11.3, length: 9.8, noseZ: -4.3, R: 0.95,
+    camoA: '#a9afb3', camoB: '#9fa5a9', bottom: '#aab0b4', spinner: '#b8322a', blades: 4,
+    era: 'prop', side: 'blue', card: ['Fast escort in bare metal, six heavy guns', 72, 92, 70, 86], top: 365, facts: ["The air its belly radiator heats rushes out the back and gives a little thrust back.", "Left in bare metal to save the weight of paint, it carries more fuel than any other propeller fighter here."],
+    look: { prof: [[0, 0.05], [0.04, 0.15], [0.14, 0.27], [0.34, 0.42], [0.52, 0.54], [0.66, 0.6], [0.8, 0.6], [0.9, 0.56], [0.97, 0.46], [1, 0.3]],
+      wing: { shape: 'taper', root: 2.75, tip: 1.35, tipC: 0.9, from: 0.93, sweep: 0.1, round: 0.9 }, band: [-4.15, -3.7], bandCol: 0xb8322a,
+      scoops: [[0, -0.72, 0.95, 0.3, 1.9, 1.15]], exh: 6, hoops: [-0.62], gearX: 1.6, camoSeed: 12, insignia: 'star', metal: 0.62, rough: 0.3 },
+  },
+  // a feather-light carrier fighter with a radial engine: out-turns anything, but it does not take punishment
+  swift: {
+    name: 'Swift', full: 'Swift A6', mass: 2450, S: 22.4, AR: 6.4, e: 0.9, CL0: 0.16, CLa: 5.3, stallA: 0.28, CD0: 0.0215,
+    power: 840e3, Tstatic: 13200, Ke: 3.6, Cma: 8.5, Cmq: 3.8, Ka: 9.0, Clp: 4.8, rollFadeV: 128, Kr: 1.7, Cnb: 5.8, Cnr: 3.2, trimA: 0.03,
+    hp: { engine: 80, wingL: 82, wingR: 82, tail: 70, fuel: 42, pilot: 40, fuse: 110 }, fuel: 450,
+    guns: [{ x: -0.24, y: 0.5, z: -2.6, t: 'm' }, { x: 0.24, y: 0.5, z: -2.6, t: 'm' }, { x: -2.7, y: -0.25, z: -0.9, t: 'c' }, { x: 2.7, y: -0.25, z: -0.9, t: 'c' }],
+    ammo: { m: 1400, c: 120 }, span: 12.0, length: 9.1, noseZ: -3.9, R: 1.0,
+    camoA: '#a3a690', camoB: '#979a84', bottom: '#b4b5a2', spinner: '#bdb69a', blades: 3,
+    era: 'prop', side: 'red', card: ['Feather-light, out-turns anything, fragile', 100, 56, 78, 62], top: 305, facts: ["It weighs about 60% of a Ranger: no armour plate and no self-sealing tanks.", "Slowest stall here, around 75 mph, so it can turn inside anything that chases it."],
+    look: { prof: [[0, 0.05], [0.05, 0.15], [0.15, 0.27], [0.35, 0.42], [0.55, 0.55], [0.72, 0.6], [0.85, 0.62], [0.93, 0.63], [0.98, 0.61], [1, 0.55]],
+      wing: { shape: 'taper', root: 2.6, tip: 1.4, tipC: 0.8, from: 0.9, sweep: 0.12, round: 0.82 }, band: [-3.85, -2.75], bandCol: 0x26282a, radial: true, spinnerR: 0.22,
+      scoops: [[0, -0.66, -2.3, 0.12, 0.45, 1.5]], exh: 2, hoops: [-0.66, -0.3, 0.05, 0.4, 0.75], diag: true, cowlGuns: true, gearX: 1.5, camoSeed: 21, insignia: 'disc' },
+  },
+  // ---- modern jets: afterburning turbofans, fly-by-wire with a 9 g limit, a rotary cannon and more missiles
+  lancer: {
+    name: 'Lancer', full: 'Lancer F-2', mass: 9200, S: 28, AR: 3.2, e: 0.8, CL0: 0.04, CLa: 3.7, stallA: 0.42, CD0: 0.019,
+    power: 1e12, Tstatic: 74000, boostK: 1.62, Ke: 2.6, Cma: 6.0, Cmq: 2.6, Ka: 6.5, Clp: 3.4, rollFadeV: 290, Kr: 1.2, Cnb: 5.0, Cnr: 2.6, trimA: 0.03,
+    jet: true, tri: true, gLimit: 9, vne: 430, compV: 320, mdd: 0.88, gearV: 150, cruise: 230, ride: 1.62, fuelK: 2.4, mslBonus: 2, flareBonus: 4,
+    hp: { engine: 140, wingL: 150, wingR: 150, tail: 110, fuel: 100, pilot: 50, fuse: 220 }, fuel: 1500,
+    guns: [{ x: -0.85, y: 0.38, z: -3.7, t: 'r' }], ammo: { r: 510 }, span: 9.5, length: 15, noseZ: -7.6, R: 0.62, exhZ: 7.7, eye: [0, 0.9, -4.1], cockpitZ: -4.05,
+    camoA: '#8c959b', camoB: '#9aa2a7', bottom: '#b7bec2', spinner: '#777', blades: 0,
+    era: 'jet', side: 'blue', card: ['Single-engine jet: quick roll, afterburner, rotary cannon', 88, 92, 95, 80], top: 740, facts: ["Fly-by-wire: pull the stick right back and the computer gives you 9 g, never more.", "Its rotary cannon fires 50 rounds a second, enough to empty it in about ten seconds."],
+    look: { jet: 'lancer', camoSeed: 31, insignia: 'lowvis', metal: 0.25, rough: 0.5 },
+  },
+  talon: {
+    name: 'Talon', full: 'Talon T-27', mass: 13500, S: 38, AR: 3.5, e: 0.82, CL0: 0.05, CLa: 3.8, stallA: 0.45, CD0: 0.021,
+    power: 1e12, Tstatic: 104000, boostK: 1.55, Ke: 2.5, Cma: 5.6, Cmq: 2.8, Ka: 6.0, Clp: 3.4, rollFadeV: 280, Kr: 1.3, Cnb: 5.4, Cnr: 2.8, trimA: 0.03,
+    jet: true, tri: true, gLimit: 9, vne: 430, compV: 315, mdd: 0.87, gearV: 150, cruise: 225, ride: 1.75, fuelK: 3.2, mslBonus: 2, flareBonus: 4,
+    hp: { engine: 170, wingL: 170, wingR: 170, tail: 130, fuel: 120, pilot: 50, fuse: 260 }, fuel: 2400,
+    guns: [{ x: 1.05, y: 0.4, z: -4.6, t: 'r' }], ammo: { r: 400 }, span: 12.4, length: 17, noseZ: -8.6, R: 0.7, exhZ: 8.5, eye: [0, 0.95, -4.9], cockpitZ: -4.85,
+    camoA: '#8199ac', camoB: '#9fb2c0', bottom: '#c2ced5', spinner: '#777', blades: 0,
+    era: 'jet', side: 'red', card: ['Twin-engine heavy jet: big wing, long legs, tough', 84, 95, 90, 78], top: 730, facts: ["Its twin fins lean outward so the rudders keep working with the nose pitched up high.", "It carries 2,400 litres of fuel, more than six Kestrels' worth."],
+    look: { jet: 'talon', camoSeed: 37, insignia: 'redstar', metal: 0.25, rough: 0.5 },
   },
 };
-const GUN = { m: { v: 860, rate: 15, dmg: 9, spread: 0.0022 }, c: { v: 760, rate: 10, dmg: 42, spread: 0.003 } };
+const GUN = { m: { v: 860, rate: 15, dmg: 9, spread: 0.0022 }, h: { v: 880, rate: 13, dmg: 13, spread: 0.0024 }, c: { v: 760, rate: 10, dmg: 42, spread: 0.003 }, r: { v: 1030, rate: 50, dmg: 24, spread: 0.0018 } };
+const GUN_LABEL = { m: 'MG', h: 'HMG', c: 'CN', r: 'GUN' }, GUN_NAME = { m: 'MG', h: 'heavy MG', c: 'cannon', r: 'rotary cannon' };
+// which planes the other side flies against you: same era, other side
+const ERA_NAME = { prop: '1940s fighters', jet: 'Modern jets' };
+function opposingTypes(key) { const me = SPECS[key] || SPECS.kestrel, l = Object.keys(SPECS).filter(k => SPECS[k].era === me.era && SPECS[k].side !== me.side); return l.length ? l : [key]; }
 for (const k in SPECS) { const s = SPECS[k]; s.gunDirs = s.guns.map(g => new V3(-g.x, -g.y, -300 - g.z).normalize()); }
-const HIT_ZONES = (span) => {
-  const k = span / 11.2;
+const HIT_ZONES = (s) => {
+  const k = s.span / 11.2, kl = s.length / 9.5, kr = Math.sqrt(kl);
   return [
-    { part: 'engine', x: 0, y: 0, z: -3.0, r: 0.95 }, { part: 'fuel', x: 0, y: -0.1, z: -1.4, r: 0.75 }, { part: 'pilot', x: 0, y: 0.5, z: -0.3, r: 0.45 },
-    { part: 'fuse', x: 0, y: 0.1, z: 1.7, r: 0.8 }, { part: 'tail', x: 0, y: 0.55, z: 4.6, r: 1.3 },
+    s.jet ? { part: 'engine', x: 0, y: 0, z: s.length * 0.3, r: 1.2 * kr } : { part: 'engine', x: 0, y: 0, z: -3.0, r: 0.95 },
+    { part: 'fuel', x: 0, y: -0.1, z: -1.4 * kl + (s.jet ? 2 : 0), r: 0.75 * kr }, { part: 'pilot', x: 0, y: s.jet ? 0.7 : 0.5, z: s.cockpitZ ?? -0.3, r: 0.45 },
+    { part: 'fuse', x: 0, y: 0.1, z: 1.7 * kl, r: 0.8 * kr }, { part: 'tail', x: 0, y: 0.55 * kr, z: 4.6 * kl, r: 1.3 * kr },
     { part: 'wingL', x: -2.2 * k, y: -0.3, z: -0.4, r: 1.25 }, { part: 'wingL', x: -4.2 * k, y: -0.2, z: -0.3, r: 1.0 },
     { part: 'wingR', x: 2.2 * k, y: -0.3, z: -0.4, r: 1.25 }, { part: 'wingR', x: 4.2 * k, y: -0.2, z: -0.3, r: 1.0 },
   ];
@@ -1050,7 +1104,13 @@ function camoTexture(a, b, seed, mottled) {
 }
 function insigniaTexture(kind) {
   const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
-  if (kind === 'kestrel') { for (const [r, col] of [[62, '#d8c35a'], [56, '#2b3f6e'], [36, '#ece6d6'], [18, '#a9302b']]) { x.fillStyle = col; x.beginPath(); x.arc(64, 64, r, 0, 6.283); x.fill(); } }
+  const disc = (rings) => { for (const [r, col] of rings) { x.fillStyle = col; x.beginPath(); x.arc(64, 64, r, 0, 6.283); x.fill(); } };
+  const star = (r, col) => { x.fillStyle = col; x.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.4 : r; x.lineTo(64 + Math.cos(a) * rr, 64 + Math.sin(a) * rr); } x.fill(); };
+  if (kind === 'roundel') disc([[62, '#d8c35a'], [56, '#2b3f6e'], [36, '#ece6d6'], [18, '#a9302b']]);
+  else if (kind === 'star') { disc([[50, '#22335c']]); star(46, '#ece6d6'); }
+  else if (kind === 'disc') disc([[60, '#ece6d6'], [54, '#b0261e']]);
+  else if (kind === 'lowvis') disc([[60, '#6f777c'], [40, '#9aa2a6'], [20, '#6f777c']]);
+  else if (kind === 'redstar') { star(62, '#ece6d6'); star(52, '#b0261e'); }
   else { x.fillStyle = '#ece6d6'; x.beginPath(); x.moveTo(64, 4); x.lineTo(124, 64); x.lineTo(64, 124); x.lineTo(4, 64); x.fill(); x.fillStyle = '#1b1d1f'; x.beginPath(); x.moveTo(64, 20); x.lineTo(108, 64); x.lineTo(64, 108); x.lineTo(20, 64); x.fill(); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
@@ -1077,8 +1137,8 @@ function panelNormalTexture(rows, cols, seed) {
   x.putImageData(out, 0, 0);
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(0.33, 0.33); t.anisotropy = 4; return t;
 }
-function planeMaterial(tex, normal, bottomHex) {
-  const m = pbr({ map: tex, normalMap: normal, normalScale: new THREE.Vector2(0.45, 0.45), roughness: 0.58, metalness: 0.12, envMapIntensity: 0.8 });
+function planeMaterial(tex, normal, bottomHex, metal = 0.12, rough = 0.58) {
+  const m = pbr({ map: tex, normalMap: normal, normalScale: new THREE.Vector2(0.45, 0.45), roughness: rough, metalness: metal, envMapIntensity: metal > 0.3 ? 1.1 : 0.8 });
   const bottom = new THREE.Color(bottomHex);
   // underside paint: blend to the bottom colour where the object-space normal points down
   const c = materialColor.mul(vec4(1)); // map x colour as a vec4
@@ -1179,8 +1239,8 @@ function sharedMats(key, ace) {
   const id = key + (ace ? 'ace' : '');
   if (MAT_CACHE[id]) return MAT_CACHE[id];
   const s = SPECS[key];
-  const camo = camoTexture(s.camoA, s.camoB, key === 'kestrel' ? 4 : 9, key === 'falke');
-  const body = planeMaterial(camo.map, camo.normal, s.bottom);
+  const lk = s.look, camo = camoTexture(s.camoA, s.camoB, lk.camoSeed, !!lk.mottled);
+  const body = planeMaterial(camo.map, camo.normal, s.bottom, lk.metal, lk.rough);
   const M = {
     body, spinner: pbr({ color: ace ? 0xb02a22 : s.spinner, roughness: 0.34, metalness: 0.25 }),
     dark: pbr({ color: 0x1d1f1d, roughness: 0.62, metalness: 0.25 }), metal: pbr({ color: 0x8a8d90, roughness: 0.32, metalness: 0.85 }),
@@ -1189,8 +1249,13 @@ function sharedMats(key, ace) {
     glass: pbr({ color: 0xb4cde0, roughness: 0.03, metalness: 0.1, transparent: true, opacity: 0.26, envMapIntensity: 2.4, depthWrite: false }),
     tip: pbr({ color: 0xd9a92a, roughness: 0.5 }),
     disc: new THREE.MeshBasicNodeMaterial({ map: propDiscTexture(0xd9a92a), transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide }),
-    insignia: pbr({ map: insigniaTexture(key), transparent: true, roughness: 0.62, metalness: 0.1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }),
-    band: pbr({ color: key === 'kestrel' ? 0xcfc6a6 : (ace ? 0xb02a22 : 0xd4ab2e), roughness: 0.5, metalness: 0.15 }), pilot: lam(0x5a4330), suit: lam(0x4a4a36),
+    insignia: pbr({ map: insigniaTexture(lk.insignia), transparent: true, roughness: 0.62, metalness: 0.1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }),
+    band: pbr({ color: ace && lk.aceBand ? 0xb02a22 : (lk.bandCol ?? 0x777777), roughness: 0.5, metalness: 0.15 }), pilot: lam(0x5a4330), suit: lam(0x4a4a36), helmet: lam(0xd9dad2),
+    nozzle: pbr({ color: 0x45403b, roughness: 0.42, metalness: 0.85 }), radome: pbr({ color: 0x6d7276, roughness: 0.55, metalness: 0.1 }),
+    canopyJet: pbr({ color: 0xd8c27a, roughness: 0.03, metalness: 0.3, transparent: true, opacity: 0.32, envMapIntensity: 2.6, depthWrite: false }),
+    glow: new THREE.MeshBasicNodeMaterial({ color: 0xff7a2a, transparent: true, opacity: 0.4, depthWrite: false }),
+    ab: new THREE.MeshBasicNodeMaterial({ color: 0xff9a3c, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }),
+    abCore: new THREE.MeshBasicNodeMaterial({ color: 0xbcd2ff, transparent: true, opacity: 0.75, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }),
     navR: new THREE.MeshBasicNodeMaterial({ color: 0xff2a1a }), navG: new THREE.MeshBasicNodeMaterial({ color: 0x2aff66 }),
     interior: new THREE.MeshLambertNodeMaterial({ color: 0x2c2f2a, side: THREE.BackSide }),
   };
@@ -1199,20 +1264,17 @@ function sharedMats(key, ace) {
 
 // The fuselage: a smoothed radius profile turned on a lathe. t runs from the tail (0) to the nose (1).
 function fuselageShape(key) {
-  const s = SPECS[key], L = s.length, R = s.R;
-  const prof = key === 'kestrel'
-    ? [[0, 0.05], [0.04, 0.16], [0.14, 0.28], [0.34, 0.44], [0.52, 0.56], [0.66, 0.62], [0.8, 0.6], [0.9, 0.55], [0.97, 0.44], [1, 0.3]]
-    : [[0, 0.05], [0.04, 0.15], [0.14, 0.26], [0.34, 0.42], [0.52, 0.53], [0.66, 0.58], [0.8, 0.57], [0.9, 0.53], [0.97, 0.45], [1, 0.33]];
+  const s = SPECS[key], L = s.length, R = s.R, prof = s.look.prof, fx = s.look.fx ?? 0.86, rise = s.look.lift ?? 0.06;
   const pts = new THREE.SplineCurve(prof.map(([t, r]) => new THREE.Vector2(t, r))).getPoints(120);
   const rAt = t => { t = clamp(t, 0, 1); let i = 1; while (i < pts.length - 1 && pts[i].x < t) i++; const a = pts[i - 1], b = pts[i]; return lerp(a.y, b.y, clamp((t - a.x) / Math.max(1e-6, b.x - a.x), 0, 1)) * R; };
-  const tAt = z => (L + s.noseZ - z) / L, lift = z => z > 1.5 ? (z - 1.5) * 0.06 : 0;
+  const tAt = z => (L + s.noseZ - z) / L, lift = z => z > 1.5 ? (z - 1.5) * rise : 0;
   // world-space point on the skin at fuselage station z and angle a (0 = right side, PI/2 = top)
-  const at = (z, a, grow = 1) => { const r = rAt(tAt(z)) * grow; return new V3(Math.cos(a) * r * 0.86, Math.sin(a) * r + lift(z), z); };
+  const at = (z, a, grow = 1) => { const r = rAt(tAt(z)) * grow; return new V3(Math.cos(a) * r * fx, Math.sin(a) * r + lift(z), z); };
   const lathe = (t0, t1, n, grow = 1, seg = 36) => {
     const prof2 = []; for (let i = 0; i <= n; i++) { const t = lerp(t0, t1, i / n); prof2.push(new THREE.Vector2(Math.max(0.001, rAt(t) * grow), t * L)); }
     const g = new THREE.LatheGeometry(prof2, seg);
     const uv = g.attributes.uv, p = g.attributes.position; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 3.5, p.getY(i));
-    g.rotateX(-Math.PI / 2); g.translate(0, 0, L + s.noseZ); g.scale(0.86, 1, 1);
+    g.rotateX(-Math.PI / 2); g.translate(0, 0, L + s.noseZ); g.scale(fx, 1, 1);
     for (let i = 0; i < p.count; i++) p.setY(i, p.getY(i) + lift(p.getZ(i)));
     g.computeVertexNormals(); return g;
   };
@@ -1221,20 +1283,205 @@ function fuselageShape(key) {
 
 // The aircraft is built once per type as a template, then cloned for every plane that flies it.
 const PLANE_TEMPLATES = {};
-const MODEL_PARTS = ['wingL', 'wingR', 'ailL', 'ailR', 'elev', 'rud', 'canopy', 'head', 'prop', 'blades', 'disc', 'gearL', 'gearR', 'pylonL', 'pylonR'];
+const MODEL_PARTS = ['wingL', 'wingR', 'ailL', 'ailR', 'elev', 'rud', 'rud2', 'canopy', 'head', 'prop', 'blades', 'disc', 'gearL', 'gearR', 'gearN', 'ab', 'glow'];
 let gaugeCanvas = null;
 function makePlaneModel(key, opts) {
   const id = key + (opts.ace ? '.ace' : '') + (opts.cockpit ? '.ck' : '');
-  const T = PLANE_TEMPLATES[id] || (PLANE_TEMPLATES[id] = buildPlaneTemplate(key, opts));
+  const T = PLANE_TEMPLATES[id] || (PLANE_TEMPLATES[id] = SPECS[key].jet ? buildJetTemplate(key, opts) : buildPlaneTemplate(key, opts));
   const g = T.clone(true), parts = {};
-  for (const n of MODEL_PARTS) parts[n] = g.getObjectByName(n);
-  parts.pylons = [parts.pylonL, parts.pylonR];
+  for (const n of MODEL_PARTS) parts[n] = g.getObjectByName(n) || null;
+  parts.pylons = []; for (let i = 0; ; i++) { const o = g.getObjectByName('pylon' + i); if (!o) break; parts.pylons.push(o); }
+  if (parts.glow) parts.glow.traverse(o => { if (o.material) o.material = o.material.clone(); }); // each jet glows by its own throttle
   return { group: g, parts, key,
-    setGear(t) { const a = (1 - t) * Math.PI / 2; parts.gearL.rotation.z = -a; parts.gearR.rotation.z = a; parts.gearL.visible = parts.gearR.visible = t > 0.02; },
+    setGear(t) {
+      const a = (1 - t) * Math.PI / 2; parts.gearL.rotation.z = -a; parts.gearR.rotation.z = a; parts.gearL.visible = parts.gearR.visible = t > 0.02;
+      if (parts.gearN) { parts.gearN.rotation.x = -a; parts.gearN.visible = t > 0.02; }
+    },
   };
 }
+// radiator / oil-cooler bath or jet intake: an open lip at the front with a dark face inside, tapering to the back
+function scoopGeo(put, g, M, x, y, z, r, len, sx = 1.35, sy = 0.82) {
+  const pr = [[0.78, 0], [0.97, 0.05], [1, 0.16], [1, 0.62], [0.82, 0.86], [0.5, 1]].map(([a, b]) => new THREE.Vector2(a * r, b * len));
+  put(g, M.body, new THREE.LatheGeometry(pr, 16).rotateX(Math.PI / 2).scale(sx, sy, 1).translate(x, y, z - len / 2));
+  put(g, M.dark, new THREE.CircleGeometry(r * 0.8, 16).rotateY(Math.PI).scale(sx, sy, 1).translate(x, y, z - len / 2 + 0.07));
+  put(g, M.dark, new THREE.CircleGeometry(r * 0.5, 16).scale(sx, sy, 1).translate(x, y, z + len / 2));
+}
+// missiles hang where the type carries them; the last ones listed are fired first
+function addPylons(g, s, named) {
+  const pts = s.look.pylons || [[-2.3, -0.78, -0.3], [2.3, -0.78, -0.3]];
+  pts.forEach((q, i) => { const mm = named(makeMissileMesh(), 'pylon' + i); mm.rotation.y = Math.PI; mm.position.set(q[0], q[1], q[2]); mm.visible = false; g.add(mm); });
+}
+// a control surface hinged along a line in a vertical plane (rudders on swept fins): its group's y axis runs up the hinge
+function hingedV(geo, p0, p1, name) {
+  const th = Math.atan2(p1.z - p0.z, p1.y - p0.y);
+  geo.translate(-p0.x, -p0.y, -p0.z); geo.rotateX(-th);
+  const h = new THREE.Group(); h.name = name; h.position.copy(p0); h.rotation.set(th, 0, 0, 'XYZ'); return h;
+}
+const JET_LOOK = {
+  lancer: {
+    prof: [[0, 0.66], [0.04, 0.74], [0.1, 0.86], [0.25, 0.98], [0.45, 1.0], [0.6, 0.98], [0.7, 0.9], [0.8, 0.74], [0.88, 0.55], [0.95, 0.32], [1, 0.04]], fx: 0.95,
+    wing: { x: 0.55, y: -0.12, z: 0.6, half: 4.2, le0: -2.3, sweep: 0.86, root: 4.5, tip: 1.05, tc: 0.045, dih: 0, flap: [0.06, 0.6] },
+    lerx: { z0: -4.9, w: 0.55, y: -0.12 },
+    stab: { x: 0.42, y: -0.05, z: 5.4, half: 2.3, root: 2.1, tip: 0.75, sweep: 0.75 },
+    fins: [{ x: 0, base: 0.38, z0: 3.3, H: 2.55, root: 3.2, tip: 1.0, sweep: 0.9 }],
+    nozzles: [0], nozR: 0.42, nozZ: 6.9,
+    intakes: [[0, -0.6, -2.7, 0.52, 4.4, 1.2, 0.9]],
+    canopy: { y: 0.5, z: -4.05, a: 0.44, b: 0.48, c: 1.55 },
+    gear: { noseZ: -4.6, mainZ: 0.95, mainX: 1.05 },
+    pylons: [[-4.85, -0.05, 2.6], [4.85, -0.05, 2.6], [-3.55, -0.5, 1.6], [3.55, -0.5, 1.6], [-2.45, -0.55, 1.0], [2.45, -0.55, 1.0]],
+  },
+  talon: {
+    prof: [[0, 0.42], [0.06, 0.52], [0.15, 0.72], [0.3, 0.92], [0.45, 1.0], [0.6, 0.98], [0.7, 0.88], [0.8, 0.72], [0.88, 0.55], [0.95, 0.32], [1, 0.04]], fx: 1.15,
+    nacelles: { x: 0.8, r: 0.52, z0: -1.4, z1: 7.4 },
+    wing: { x: 1.25, y: -0.08, z: 0.9, half: 4.95, le0: -2.6, sweep: 0.9, root: 5.0, tip: 1.2, tc: 0.045, dih: -0.03, flap: [0.06, 0.62] },
+    lerx: { z0: -5.8, w: 0.75, y: -0.08 },
+    stab: { x: 1.35, y: -0.12, z: 6.3, half: 2.6, root: 2.4, tip: 0.85, sweep: 0.8 },
+    fins: [{ x: -1.35, base: 0.3, z0: 4.1, H: 2.45, root: 3.0, tip: 1.1, sweep: 0.85 }, { x: 1.35, base: 0.3, z0: 4.1, H: 2.45, root: 3.0, tip: 1.1, sweep: 0.85 }],
+    nozzles: [-0.8, 0.8], nozR: 0.44, nozZ: 7.4,
+    intakes: [[-0.82, -0.62, -0.7, 0.5, 4.2, 0.95, 1.05], [0.82, -0.62, -0.7, 0.5, 4.2, 0.95, 1.05]],
+    canopy: { y: 0.55, z: -4.85, a: 0.46, b: 0.48, c: 1.6 },
+    gear: { noseZ: -5.6, mainZ: 1.25, mainX: 2.0 },
+    pylons: [[-6.15, -0.08, 2.7], [6.15, -0.08, 2.7], [-4.4, -0.55, 1.8], [4.4, -0.55, 1.8], [-2.95, -0.6, 1.2], [2.95, -0.6, 1.2]],
+  },
+};
+// copy each jet's fuselage shape into its spec so fuselageShape() can read it
+for (const k in SPECS) if (SPECS[k].look.jet) { const J = JET_LOOK[SPECS[k].look.jet]; Object.assign(SPECS[k].look, { prof: J.prof, fx: J.fx, lift: 0, pylons: J.pylons }); }
+
+function buildJetTemplate(key, opts) {
+  const s = SPECS[key], M = sharedMats(key, opts.ace), g = new THREE.Group(), J = JET_LOOK[s.look.jet];
+  const L = s.length, R = s.R, F = fuselageShape(key);
+  const lists = new Map();
+  const put = (parent, mat, geo) => { const k = parent.uuid + mat.uuid; if (!lists.has(k)) lists.set(k, { parent, mat, geos: [] }); lists.get(k).geos.push(geo); };
+  const named = (o, n) => { o.name = n; return o; };
+
+  // ---- fuselage, radome, engine nacelles, intakes
+  put(g, M.body, F.lathe(0, F.tAt(s.noseZ + 1.7), 70));
+  put(g, M.radome, F.lathe(F.tAt(s.noseZ + 1.7), 1, 14));
+  put(g, M.metal, rodGeo(new V3(0, 0, s.noseZ + 0.05), new V3(0, 0, s.noseZ - 0.75), 0.025, 0.012)); // pitot
+  if (J.nacelles) for (const sx of [-1, 1]) {
+    const N = J.nacelles, pr = [];
+    for (let i = 0; i <= 12; i++) { const f = i / 12; pr.push(new THREE.Vector2(N.r * (f < 0.12 ? 0.85 + f * 1.25 : 1) * (f > 0.85 ? 1 - (f - 0.85) * 0.9 : 1), f * (N.z1 - N.z0))); }
+    put(g, M.body, new THREE.LatheGeometry(pr, 22).rotateX(Math.PI / 2).scale(1, 0.9, 1).translate(sx * N.x, -0.12, N.z0));
+  }
+  for (const it of J.intakes) scoopGeo(put, g, M, ...it);
+
+  // ---- nozzles: a metal can, a dark throat, a glow that follows the throttle, and the afterburner plume
+  const nzR = J.nozR, ab = named(new THREE.Group(), 'ab'), glow = named(new THREE.Group(), 'glow'); ab.visible = false; g.add(ab, glow);
+  for (const nx of J.nozzles) {
+    const ny = J.nacelles ? -0.12 : 0, z0 = J.nozZ;
+    const pr = [[nzR * 1.08, 0], [nzR * 1.02, 0.35], [nzR * 0.96, 0.8], [nzR * 0.93, 0.95]].map(([a, b]) => new THREE.Vector2(a, b));
+    put(g, M.nozzle, new THREE.LatheGeometry(pr, 22).rotateX(Math.PI / 2).translate(nx, ny, z0));
+    put(g, M.dark, new THREE.CircleGeometry(nzR * 0.92, 20).translate(nx, ny, z0 + 0.6));
+    const gd = new THREE.Mesh(new THREE.CircleGeometry(nzR * 0.78, 20), M.glow); gd.position.set(nx, ny, z0 + 0.62); glow.add(gd);
+    const cone = (r, h, mat) => { const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, 18, 1, true).rotateX(Math.PI / 2).translate(0, 0, h / 2), mat); m.position.set(nx, ny, z0 + 0.9); return m; };
+    ab.add(cone(nzR * 0.86, 3.6, M.ab), cone(nzR * 0.5, 1.7, M.abCore));
+  }
+
+  // ---- wings (cropped delta / swept), each with its flaperon, roundel, light and missile rail
+  const W = J.wing, half = W.half;
+  const wsec = t => { const c = lerp(W.root, W.tip, t); return { s: half * t, le: W.le0 + half * t * W.sweep, c, tc: W.tc, k: tipRound(t, 0.97), cam: 0.01 }; };
+  const [fa, fb] = W.flap, fu = () => 0.78;
+  const wingGeoR = cutSurface(18, wsec, fa, fb, fu, { M: 22 });
+  const g0 = 0.03 / half, flapGeoR = surfaceGeo(stations(8, fa + g0, fb - g0), wsec, { ua: fu, capStart: true, capEnd: true, M: 22 });
+  const hz = t => { const S = wsec(t); return S.le + 0.78 * S.c; };
+  for (const side of [-1, 1]) {
+    const wg = named(new THREE.Group(), side < 0 ? 'wingL' : 'wingR'); wg.position.set(side * W.x, W.y, W.z); wg.rotation.z = side * W.dih; g.add(wg);
+    const mir = geo => side < 0 ? mirrorX(geo) : geo;
+    const wm = new THREE.Mesh(mir(wingGeoR), M.body); wm.castShadow = true; wg.add(wm);
+    const ta = side < 0 ? fb - g0 : fa + g0, tb = side < 0 ? fa + g0 : fb - g0;
+    // flaperon, hinged along the straight line through its two ends
+    const fg = mir(flapGeoR.clone()), hg = hinged(fg, new V3(side * half * ta, 0.005, hz(ta)), new V3(side * half * tb, 0.005, hz(tb)), side < 0 ? 'ailL' : 'ailR');
+    const flap = new THREE.Mesh(fg, M.body); flap.castShadow = true; hg.add(flap); wg.add(hg);
+    // roundel on top and underneath
+    for (const upper of [true, false]) {
+      const dg = new THREE.PlaneGeometry(0.95, 0.95, 6, 6), p = dg.attributes.position, cx = half * 0.6, S0 = wsec(0.6), cz = S0.le + S0.c * 0.45;
+      for (let i = 0; i < p.count; i++) {
+        const px = p.getX(i), py = p.getY(i), x = cx + px, z = upper ? cz - py : cz + py, S = wsec(x / half);
+        p.setXYZ(i, x, afY((z - S.le) / S.c, upper, S.tc, S.cam) * S.c * S.k + (upper ? 0.012 : -0.012), z);
+      }
+      dg.computeVertexNormals(); wg.add(new THREE.Mesh(side < 0 ? mirrorX(dg) : dg, M.insignia));
+    }
+    const tS = wsec(0.99);
+    const nl = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), side < 0 ? M.navR : M.navG); nl.position.set(side * half * 0.99, 0.04, tS.le + 0.25); wg.add(nl);
+    // wingtip launch rail
+    put(wg, M.metal, new THREE.BoxGeometry(0.08, 0.1, 2.0).translate(side * (half + 0.02), -0.02, tS.le + tS.c * 0.5));
+  }
+  // leading-edge root extensions, blending the wing into the nose
+  const LX = J.lerx, wr = wsec(0), rootLE = W.z + wr.le;
+  const lsec = t => { const c = lerp(rootLE - LX.z0 + wr.c * 0.5, 0.25, t); return { s: LX.w * t, le: lerp(LX.z0, rootLE + 0.2, Math.sqrt(t)), c, tc: 0.03, k: tipRound(t, 0.8), cam: 0 }; };
+  const lxR = surfaceGeo(stations(8), lsec, { M: 16 }).translate((J.nacelles ? J.nacelles.x + J.nacelles.r * 0.7 : R * (J.fx || 1) * 0.8), LX.y, 0);
+  put(g, M.body, lxR); put(g, M.body, mirrorX(lxR));
+
+  // ---- all-moving tailplanes (the elevator group turns as one)
+  const ST = J.stab, ssec = t => { const c = lerp(ST.root, ST.tip, t); return { s: ST.half * t, le: -ST.root * 0.45 + ST.half * t * ST.sweep, c, tc: 0.04, k: tipRound(t, 0.95), cam: 0 }; };
+  const elev = named(new THREE.Group(), 'elev'); elev.position.set(0, ST.y, ST.z); g.add(elev);
+  const stR = surfaceGeo(stations(10), ssec, { M: 18 }).translate(ST.x, 0, 0);
+  for (const sg of [stR, mirrorX(stR)]) { const m = new THREE.Mesh(sg, M.body); m.castShadow = true; elev.add(m); }
+
+  // ---- fins with rudders (two canted fins on the twin)
+  J.fins.forEach((FN, i) => {
+    const fg = new THREE.Group(); fg.position.set(FN.x, 0, 0); fg.rotation.z = FN.x ? -Math.sign(FN.x) * 0.22 : 0; g.add(fg);
+    const fsec = t => { const c = lerp(FN.root, FN.tip, t); return { s: FN.base + FN.H * t, le: FN.z0 + FN.H * t * FN.sweep, c, tc: 0.05, k: tipRound(t, 0.96), cam: 0 }; };
+    const ra = 0.08, rb = 0.84, ru = () => 0.72;
+    put(fg, M.body, cutSurface(16, fsec, ra, rb, ru, { vertical: true, M: 18 }));
+    const pt = t => { const S = fsec(t); return new V3(0, S.s, S.le + 0.72 * S.c); };
+    const rgeo = surfaceGeo(stations(8, ra + 0.01, rb - 0.01), fsec, { ua: ru, vertical: true, M: 18, capStart: true, capEnd: true });
+    const rh = hingedV(rgeo, pt(ra + 0.01), pt(rb - 0.01), i ? 'rud2' : 'rud');
+    const rm = new THREE.Mesh(rgeo, M.body); rm.castShadow = true; rh.add(rm); fg.add(rh);
+    if (i === 0 || J.fins.length === 1) { const S = fsec(0.6); const ig = new THREE.PlaneGeometry(0.75, 0.75); for (const sx of [-1, 1]) { const m = new THREE.Mesh(ig, M.insignia); m.position.set(sx * 0.1, S.s, S.le + S.c * 0.4); m.rotation.y = sx * Math.PI / 2; fg.add(m); } }
+  });
+
+  // ---- canopy, ejection seat, pilot with a white helmet
+  const C = J.canopy;
+  const can = named(new THREE.Mesh(new THREE.SphereGeometry(1, 28, 16, 0, Math.PI * 2, 0, Math.PI * 0.6), M.canopyJet), 'canopy');
+  can.scale.set(C.a, C.b, C.c); can.position.set(0, C.y, C.z); can.renderOrder = 4; g.add(can);
+  const hoop = dz => { const f = Math.sqrt(Math.max(0, 1 - (dz / C.c) ** 2)); return new THREE.TorusGeometry(1, 0.045, 5, 22, Math.PI).scale(C.a * f * 1.02, C.b * f * 1.02, 1).translate(0, C.y, C.z + dz); };
+  put(g, M.frame, hoop(-C.c * 0.55));
+  put(g, M.dark, new THREE.BoxGeometry(0.42, 0.62, 0.12).translate(0, C.y + 0.1, C.z + 0.55));
+  if (!opts.cockpit) put(g, M.dark, new THREE.BoxGeometry(0.7, 0.14, 1.9).translate(0, C.y - 0.06, C.z));
+  const pilot = named(new THREE.Group(), 'head'); g.add(pilot);
+  const helm = new THREE.Mesh(new THREE.SphereGeometry(0.17, 14, 10), M.helmet); helm.position.set(0, C.y + 0.33, C.z + 0.2); pilot.add(helm);
+  const visor = new THREE.Mesh(new THREE.SphereGeometry(0.172, 14, 8, -Math.PI * 0.35, Math.PI * 0.7, Math.PI * 0.35, Math.PI * 0.3).rotateY(Math.PI), M.frame); visor.position.copy(helm.position); pilot.add(visor);
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, 0.14, 3, 10).rotateZ(Math.PI / 2).scale(1, 0.9, 0.75), M.suit); torso.position.set(0, C.y + 0.08, C.z + 0.25); pilot.add(torso);
+  if (opts.cockpit) {
+    const tub = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.6, 2.2), M.interior); tub.position.set(0, C.y - 0.42, C.z + 0.1); g.add(tub);
+    if (!gaugeCanvas) { gaugeCanvas = document.createElement('canvas'); gaugeCanvas.width = 512; gaugeCanvas.height = 224; }
+  }
+  // fuselage insignia near the tail
+  for (const side of [-1, 1]) {
+    const dg = new THREE.PlaneGeometry(0.7, 0.7, 6, 6), p = dg.attributes.position, zc = L * 0.2;
+    for (let i = 0; i < p.count; i++) { const px = p.getX(i), py = p.getY(i), z = zc - px, a = py / Math.max(0.2, F.rAt(F.tAt(z))), q = F.at(z, a, 1.012); p.setXYZ(i, q.x, q.y, z); }
+    dg.computeVertexNormals(); g.add(new THREE.Mesh(side < 0 ? mirrorX(dg) : dg, M.insignia));
+  }
+  // gun port
+  for (const gn of s.guns) put(g, M.dark, rodGeo(new V3(gn.x, gn.y, gn.z + 0.6), new V3(gn.x, gn.y, gn.z - 0.05), 0.05, 0.05, 8));
+
+  // ---- tricycle landing gear: the wheels sit s.ride below the aircraft's origin
+  const GR = J.gear, wheel = (rad, side) => [
+    [new THREE.TorusGeometry(rad * 0.73, rad * 0.27, 8, 20).rotateY(Math.PI / 2).translate(side * 0.05, 0, 0), M.tyre],
+    [new THREE.CylinderGeometry(rad * 0.5, rad * 0.5, rad * 0.45, 14).rotateZ(Math.PI / 2).translate(side * 0.05, 0, 0), M.metal],
+  ];
+  const leg = (gg, len, rad, side) => {
+    for (const [geo, mat] of [[new THREE.CylinderGeometry(0.075, 0.085, len * 0.55, 8).translate(0, -len * 0.275, 0), M.metal], [new THREE.CylinderGeometry(0.05, 0.05, len * 0.5, 8).translate(0, -len * 0.72, 0), M.chrome]]) { const m = new THREE.Mesh(geo, mat); m.castShadow = true; gg.add(m); }
+    for (const [geo, mat] of wheel(rad, side)) { const m = new THREE.Mesh(geo, mat); m.position.y = -len; m.castShadow = true; gg.add(m); }
+  };
+  for (const side of [-1, 1]) {
+    const top = -R * 0.7, gg = named(new THREE.Group(), side < 0 ? 'gearL' : 'gearR'); gg.position.set(side * GR.mainX, top, GR.mainZ);
+    leg(gg, s.ride - 0.34 + top, 0.34, side); g.add(gg);
+  }
+  { const top = -R * 0.75, gn = named(new THREE.Group(), 'gearN'); gn.position.set(0, top, GR.noseZ); leg(gn, s.ride - 0.25 + top, 0.25, 0); g.add(gn); }
+  addPylons(g, s, named);
+
+  const shadowless = new Set([M.frame, M.dark, M.tyre, M.metal, M.insignia, M.nozzle]);
+  for (const { parent, mat, geos } of lists.values()) {
+    const m = new THREE.Mesh(geos.length > 1 ? mergeGeometries(geos) : geos[0], mat);
+    m.castShadow = mat === M.body || (!shadowless.has(mat) && mat !== M.glass && mat !== M.canopyJet); parent.add(m);
+  }
+  return g;
+}
+
 function buildPlaneTemplate(key, opts) {
-  const s = SPECS[key], M = sharedMats(key, opts.ace), g = new THREE.Group(), kes = key === 'kestrel';
+  const s = SPECS[key], M = sharedMats(key, opts.ace), g = new THREE.Group(), lk = s.look;
   const L = s.length, R = s.R, half = s.span / 2, F = fuselageShape(key);
   // static pieces are merged into one mesh per material (and per moving group) to keep draw calls down
   const lists = new Map();
@@ -1243,30 +1490,29 @@ function buildPlaneTemplate(key, opts) {
 
   // ---- fuselage, cowl band / fuselage band, radiators
   put(g, M.body, F.lathe(0, 1, 70));
-  const bz = kes ? [2.49, 2.81] : [s.noseZ + 0.25, s.noseZ + 1.35];
-  put(g, M.band, F.lathe(F.tAt(bz[1]), F.tAt(bz[0]), 6, 1.006));
+  if (lk.band) put(g, M.band, F.lathe(F.tAt(lk.band[1]), F.tAt(lk.band[0]), 6, 1.006));
   // radiator / oil-cooler bath: an open lip at the front with a dark matrix inside, tapering to the exit flap
-  const scoop = (x, y, z, r, len, sx = 1.35) => {
-    const pr = [[0.78, 0], [0.97, 0.05], [1, 0.16], [1, 0.62], [0.82, 0.86], [0.5, 1]].map(([a, b]) => new THREE.Vector2(a * r, b * len));
-    put(g, M.body, new THREE.LatheGeometry(pr, 16).rotateX(Math.PI / 2).scale(sx, 0.82, 1).translate(x, y, z - len / 2));
-    put(g, M.dark, new THREE.CircleGeometry(r * 0.8, 16).rotateY(Math.PI).scale(sx, 0.82, 1).translate(x, y, z - len / 2 + 0.07));
-    put(g, M.dark, new THREE.CircleGeometry(r * 0.5, 16).scale(sx, 0.82, 1).translate(x, y, z + len / 2));
-  };
-  if (kes) { scoop(1.3, -0.6, -0.15, 0.15, 0.85); scoop(-1.3, -0.6, -0.15, 0.13, 0.7); }
-  else { scoop(0, -0.66, s.noseZ + 1.2, 0.15, 0.4, 1.6); scoop(1.7, -0.6, -0.45, 0.11, 0.7, 1.5); scoop(-1.7, -0.6, -0.45, 0.11, 0.7, 1.5); }
+  const scoop = (x, y, z, r, len, sx = 1.35) => scoopGeo(put, g, M, x, y, z, r, len, sx);
+  for (const sc of lk.scoops || []) scoop(...sc);
+  // a radial engine: dark cowl face with the cylinder heads round it
+  if (lk.radial) {
+    const fz = s.noseZ + 0.05, fr = F.rAt(1) * 0.92;
+    put(g, M.dark, new THREE.CircleGeometry(fr, 24).rotateY(Math.PI).scale(F.at(s.noseZ, 0).x / F.rAt(1), 1, 1).translate(0, 0, fz));
+    for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2; put(g, M.metal, new THREE.CylinderGeometry(0.075, 0.09, 0.22, 8).rotateX(Math.PI / 2).translate(Math.cos(a) * fr * 0.66 * 0.86, Math.sin(a) * fr * 0.66, fz - 0.06)); }
+  }
   // exhaust stacks along both sides of the cowling
-  for (const sx of [-1, 1]) for (let i = 0; i < 6; i++) {
+  for (const sx of [-1, 1]) for (let i = 0; i < (lk.exh ?? 6); i++) {
     // short fishtail stubs lying along the skin, angled a little outward at the back
-    const z = s.noseZ + 0.95 + i * 0.22, p = F.at(z, 0.3);
+    const z = s.noseZ + (lk.radial ? 1.2 + i * 0.3 : 0.95 + i * 0.22), p = F.at(z, lk.radial ? -0.35 : 0.3);
     const st = new THREE.CylinderGeometry(0.04, 0.05, 0.17, 7).rotateX(Math.PI / 2).scale(0.75, 1, 1).rotateY(sx * 0.32).translate(sx * (Math.abs(p.x) + 0.015), p.y, z);
     put(g, M.exhaust, st);
   }
-  if (!kes) for (const sx of [-1, 1]) { const z0 = -2.45, z1 = -2.88, x = sx * 0.26, y = F.at(z0, Math.PI / 2).y * 0.82 + 0.02; put(g, M.dark, rodGeo(new V3(x, y, z0), new V3(x, y, z1), 0.026)); }
+  if (lk.cowlGuns) for (const sx of [-1, 1]) { const z0 = -2.45, z1 = -2.88, x = sx * 0.26, y = F.at(z0, Math.PI / 2).y * 0.82 + 0.02; put(g, M.dark, rodGeo(new V3(x, y, z0), new V3(x, y, z1), 0.026)); }
 
   // ---- main wings: a group per side so a wing shot off takes its aileron, guns and lights with it
-  const wsec = kes
-    ? t => { const c = 2.55 * Math.sqrt(Math.max(0.03, 1 - t * t)); return { s: half * t, le: -0.3 * c, c, tc: lerp(0.15, 0.1, t), k: tipRound(t, 0.9), cam: 0.02 }; }
-    : t => { const c = t > 0.92 ? lerp(1.15, 0.62, (t - 0.92) / 0.08) : lerp(2.1, 1.15, t / 0.92); return { s: half * t, le: 0.18 * t - 0.3 * c, c, tc: lerp(0.15, 0.1, t), k: tipRound(t, 0.86), cam: 0.02 }; };
+  const W = lk.wing, wsec = W.shape === 'ellipse'
+    ? t => { const c = W.root * Math.sqrt(Math.max(0.03, 1 - t * t)); return { s: half * t, le: -0.3 * c, c, tc: lerp(0.15, 0.1, t), k: tipRound(t, 0.9), cam: 0.02 }; }
+    : t => { const c = t > W.from ? lerp(W.tip, W.tipC, (t - W.from) / (1 - W.from)) : lerp(W.root, W.tip, t / W.from); return { s: half * t, le: W.sweep * t - 0.3 * c, c, tc: lerp(0.15, 0.1, t), k: tipRound(t, W.round), cam: 0.02 }; };
   const tA = 0.48, tB = 0.86, ail = t => { const S = wsec(t); return { S, z: S.le + 0.75 * S.c }; };
   const hA = ail(tA), hB = ail(tB);
   const hingeZ = t => lerp(hA.z, hB.z, (t - tA) / (tB - tA)), hingeU = t => { const S = wsec(t); return clamp((hingeZ(t) - S.le) / S.c, 0.5, 0.95); };
@@ -1297,8 +1543,8 @@ function buildPlaneTemplate(key, opts) {
     // gun muzzles poking out of the leading edge
     for (const gn of s.guns) {
       if (Math.sign(gn.x) !== side || Math.abs(gn.x) < 1) continue;
-      const lp = wingLocal(side, gn.x, gn.y, gn.z), S = wsec(Math.abs(lp.x) / half), le = S.le, cannon = gn.t === 'c';
-      put(wg, M.dark, rodGeo(new V3(lp.x, lp.y + 0.04, le + 0.25), new V3(lp.x, lp.y + 0.04, le - (cannon ? 0.62 : 0.14)), cannon ? 0.05 : 0.022, cannon ? 0.042 : 0.02, 8));
+      const lp = wingLocal(side, gn.x, gn.y, gn.z), S = wsec(Math.abs(lp.x) / half), le = S.le, cannon = gn.t === 'c', heavy = gn.t === 'h';
+      put(wg, M.dark, rodGeo(new V3(lp.x, lp.y + 0.04, le + 0.25), new V3(lp.x, lp.y + 0.04, le - (cannon ? 0.62 : heavy ? 0.2 : 0.14)), cannon ? 0.05 : heavy ? 0.03 : 0.022, cannon ? 0.042 : heavy ? 0.027 : 0.02, 8));
       if (cannon) put(wg, M.body, new THREE.CapsuleGeometry(0.075, 0.35, 3, 8).rotateX(Math.PI / 2).translate(lp.x, lp.y + 0.04, le - 0.05));
     }
     // navigation light at the tip; pitot tube on the left wing
@@ -1332,10 +1578,10 @@ function buildPlaneTemplate(key, opts) {
   const can = named(new THREE.Mesh(new THREE.SphereGeometry(1, 28, 16, 0, Math.PI * 2, 0, Math.PI * 0.62), M.glass), 'canopy');
   can.scale.set(ca, cb, cc); can.rotation.x = 0; can.position.set(0, cy, cz); can.renderOrder = 4; g.add(can);
   const hoop = dz => { const f = Math.sqrt(Math.max(0, 1 - (dz / cc) ** 2)); return new THREE.TorusGeometry(1, 0.05, 5, 22, Math.PI).scale(ca * f * 1.02, cb * f * 1.02, 1).translate(0, cy, cz + dz); };
-  for (const dz of kes ? [-0.62, 0.38] : [-0.66, -0.25, 0.18, 0.55]) put(g, M.frame, hoop(dz));
+  for (const dz of lk.hoops) put(g, M.frame, hoop(dz));
   // the spine along the top (not in your own cockpit, where it would stand in front of the gunsight)
   if (!opts.cockpit) put(g, M.frame, new THREE.TorusGeometry(1, 0.035, 4, 30, Math.PI).rotateY(Math.PI / 2).scale(1, cb * 1.02, cc * 1.02).translate(0, cy, cz));
-  if (!kes && !opts.cockpit) for (const r of [-0.62, 0.62]) put(g, M.frame, new THREE.TorusGeometry(1, 0.03, 4, 30, Math.PI).rotateY(Math.PI / 2).rotateZ(r).scale(ca * 1.02, cb * 1.02, cc * 1.02).translate(0, cy, cz));
+  if (lk.diag && !opts.cockpit) for (const r of [-0.62, 0.62]) put(g, M.frame, new THREE.TorusGeometry(1, 0.03, 4, 30, Math.PI).rotateY(Math.PI / 2).rotateZ(r).scale(ca * 1.02, cb * 1.02, cc * 1.02).translate(0, cy, cz));
   put(g, M.dark, new THREE.BoxGeometry(0.34, 0.36, 0.05).translate(0, cy + 0.12, cz + 0.62));
   if (!opts.cockpit) put(g, M.dark, new THREE.BoxGeometry(0.6, 0.12, 1.5).translate(0, 0.5, -0.2)); // cockpit floor seen through the glass
   const pilot = named(new THREE.Group(), 'head'); g.add(pilot);
@@ -1349,10 +1595,10 @@ function buildPlaneTemplate(key, opts) {
 
   // ---- propeller: spinner, twisted aerofoil blades with painted tips, and the disc shown at speed
   const prop = named(new THREE.Group(), 'prop'); prop.position.set(0, 0, s.noseZ - 0.12); g.add(prop);
-  const sr = R * 0.31, sl = 0.82, sp = []; for (let i = 0; i <= 14; i++) { const f = i / 14; sp.push(new THREE.Vector2(Math.max(0.002, sr * (1 - f ** 2.1) ** 0.62), f * sl)); }
+  const sr = R * (lk.spinnerR ?? 0.31), sl = lk.radial ? 0.55 : 0.82, sp = []; for (let i = 0; i <= 14; i++) { const f = i / 14; sp.push(new THREE.Vector2(Math.max(0.002, sr * (1 - f ** 2.1) ** 0.62), f * sl)); }
   const spin = new THREE.Mesh(new THREE.LatheGeometry(sp, 22).rotateX(-Math.PI / 2).translate(0, 0, 0.19), M.spinner); spin.castShadow = true; prop.add(spin);
   prop.add(new THREE.Mesh(new THREE.CylinderGeometry(sr * 1.03, sr * 1.06, 0.06, 22).rotateX(Math.PI / 2).translate(0, 0, 0.2), M.dark));
-  if (!kes) prop.add(new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.1, 8).rotateX(Math.PI / 2).translate(0, 0, 0.19 - sl), M.dark));
+  if (lk.spinnerGun) prop.add(new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.1, 8).rotateX(Math.PI / 2).translate(0, 0, 0.19 - sl), M.dark));
   const blades = named(new THREE.Group(), 'blades'); prop.add(blades);
   const bladeGeo = (t0, t1, n) => {
     const ts = []; for (let i = 0; i <= n; i++) ts.push(lerp(t0, t1, i / n));
@@ -1371,7 +1617,7 @@ function buildPlaneTemplate(key, opts) {
   const disc = named(new THREE.Mesh(new THREE.CircleGeometry(1.72, 40), M.disc), 'disc'); disc.position.z = -0.05; disc.visible = false; prop.add(disc);
 
   // ---- landing gear: painted leg, chrome oleo, tyre and hub, gear door
-  const gx = kes ? 0.95 : 0.62;
+  const gx = lk.gearX;
   for (const side of [-1, 1]) {
     const gg = named(new THREE.Group(), side < 0 ? 'gearL' : 'gearR'); gg.position.set(side * gx, -0.55, -0.6);
     const parts = [
@@ -1384,7 +1630,7 @@ function buildPlaneTemplate(key, opts) {
     for (const [geo, mat] of parts) { const m = new THREE.Mesh(geo, mat); m.castShadow = true; gg.add(m); }
     g.add(gg);
   }
-  const tw = new THREE.Group(); tw.position.set(0, -0.4 + (kes ? 0 : 0.02), 5.0); g.add(tw);
+  const tw = new THREE.Group(); tw.position.set(0, -0.4 + (lk.tailY || 0), 5.0); g.add(tw);
   put(tw, M.metal, new THREE.CylinderGeometry(0.04, 0.04, 0.3, 6).translate(0, -0.15, 0));
   put(tw, M.tyre, new THREE.TorusGeometry(0.1, 0.045, 6, 14).rotateY(Math.PI / 2).translate(0, -0.31, 0));
 
@@ -1403,7 +1649,7 @@ function buildPlaneTemplate(key, opts) {
     if (!gaugeCanvas) { gaugeCanvas = document.createElement('canvas'); gaugeCanvas.width = 512; gaugeCanvas.height = 224; }
     for (const sx of [-1, 1]) { const rail = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 1.3), M.dark); rail.position.set(sx * 0.37, 0.56, -0.2); g.add(rail); }
   }
-  for (const side of [-1, 1]) { const mm = named(makeMissileMesh(), side < 0 ? 'pylonL' : 'pylonR'); mm.rotation.y = Math.PI; mm.position.set(side * 2.3, -0.78, -0.3); mm.visible = false; g.add(mm); }
+  addPylons(g, s, named);
 
   const shadowless = new Set([M.frame, M.dark, M.exhaust, M.tyre, M.metal, M.insignia]);
   for (const { parent, mat, geos } of lists.values()) {
@@ -1473,12 +1719,14 @@ function msg(text, kind = 'info', dur = 3.6) { G.msgs.push({ text, kind, t: dur,
 const _vl = new V3(), _vd = new V3(), _ld = new V3(), _F = new V3(), _ax = new V3(), _hf = new V3(), _tmp = new V3(), _tmp2 = new V3();
 const _dq = new Q4(), _E = new THREE.Euler();
 const TAIL = 0.192;
+// height of the aircraft's origin above the ground on its wheels, at a given pitch
+function rideH(s, pitch) { return s.tri ? s.ride : 1.95 * Math.cos(pitch) - 0.6 * Math.sin(pitch); }
 let PLANE_SEQ = 0;
 class Plane {
   constructor(key, o = {}) {
     this.key = key; this.spec = SPECS[key]; this.player = !!o.player; this.skill = o.skill || null; this.ace = !!o.ace;
     this.model = makePlaneModel(key, { cockpit: this.player, ace: this.ace }); scene.add(this.model.group);
-    this.zones = HIT_ZONES(this.spec.span);
+    this.zones = HIT_ZONES(this.spec);
     this.pos = new V3(); this.vel = new V3(); this.q = new Q4(); this.w = new V3(); this.invQ = new Q4();
     this.fwd = new V3(0, 0, -1); this.up = new V3(0, 1, 0); this.right = new V3(1, 0, 0);
     this.throttle = 0.9; this.gear = 0; this.gearT = 0; this.flaps = 0; this.flapT = 0; this.brake = 0;
@@ -1527,7 +1775,7 @@ class Plane {
     this.stall = stall;
     const wingF = 0.5 * (fL + fR); CL *= wingF;
     const k = 1 / (Math.PI * s.e * s.AR);
-    const CD = s.CD0 + k * Math.min(CL * CL, 2.6) + 0.9 * Math.max(0, Math.sin(aa) ** 2 - Math.sin(as) ** 2) + 0.45 * beta * beta + this.flapT * 0.04 + this.gearT * 0.022 + (1 - wingF) * 0.03 + (this.engineOn ? 0 : 0.008);
+    const CD = s.CD0 + k * Math.min(CL * CL, 2.6) + 0.9 * Math.max(0, Math.sin(aa) ** 2 - Math.sin(as) ** 2) + 0.45 * beta * beta + this.flapT * 0.04 + this.gearT * 0.022 + (1 - wingF) * 0.03 + (this.engineOn ? 0 : 0.008) + (s.mdd ? 0.1 * smooth(s.mdd, s.mdd + 0.3, V / 340) : 0); // transonic drag rise
     _F.set(0, 0, 0);
     if (V > 0.5) {
       _vd.copy(this.vel).multiplyScalar(1 / V);
@@ -1538,8 +1786,9 @@ class Plane {
     const engF = this.engineOn ? 0.3 + 0.7 * clamp(this.hp.engine / s.hp.engine, 0, 1) : 0;
     const altF = this.pos.y < 5500 ? 1 : Math.exp(-(this.pos.y - 5500) / 7000);
     const thr = this.fuel > 0 ? this.throttle : 0;
-    const boost = this.boosting && this.engineOn ? 1.32 : 1;
-    const T = Math.min(s.Tstatic * engF * thr * boost, s.power * engF * altF * thr * boost * 0.82 / Math.max(V, 20));
+    const boost = this.boosting && this.engineOn ? (s.boostK || 1.32) : 1;
+    // a jet's thrust barely changes with speed and falls off with air density; a propeller's is limited by power
+    const T = s.jet ? s.Tstatic * engF * thr * boost * (rho / 1.225) ** 0.7 : Math.min(s.Tstatic * engF * thr * boost, s.power * engF * altF * thr * boost * 0.82 / Math.max(V, 20));
     _F.addScaledVector(this.fwd, T);
     this.g = this.onGround ? 1 : _F.dot(this.up) / (s.mass * 9.81);
     this.gs += (this.g - this.gs) * Math.min(1, dt * 4);
@@ -1547,8 +1796,11 @@ class Plane {
     this.vel.addScaledVector(_F, dt / s.mass);
     // rotational dynamics (body rates: x = pitch up, y = yaw left, z = roll left)
     const tailF = this.hp.tail > 0 ? 0.35 + 0.65 * clamp(this.hp.tail / s.hp.tail, 0, 1) : 0;
-    const comp = V > 205 ? clamp(1 - (V - 205) / 70, 0.25, 1) : 1;
-    let pA = qn * (s.Ke * this.ctrl.pitch * tailF * comp * (1 - 0.5 * stall) - s.Cma * (alpha - s.trimA)) - s.Cmq * this.w.x * sq;
+    const cv = s.compV || 205, comp = V > cv ? clamp(1 - (V - cv) / (s.jet ? 120 : 70), 0.25, 1) : 1;
+    // fly-by-wire: hold the stick back and a jet pulls to its g limit, no further
+    let pc = this.ctrl.pitch;
+    if (s.gLimit && V > 30 && this.alive) { const aMax = (s.gLimit * s.mass * 9.81 / Math.max(1, qd * s.S) - s.CL0) / s.CLa; const lim = Math.max(0.05, (aMax - s.trimA) * s.Cma / (s.Ke * Math.max(0.2, tailF * comp))); pc = clamp(pc, -lim * 0.45, lim); }
+    let pA = qn * (s.Ke * pc * tailF * comp * (1 - 0.5 * stall) - s.Cma * (alpha - s.trimA)) - s.Cmq * this.w.x * sq;
     const rollFade = V > s.rollFadeV ? clamp(1 - (V - s.rollFadeV) / 130, 0.35, 1) : 1;
     let rA = -qn * s.Ka * rollFade * comp * this.ctrl.roll - s.Clp * this.w.z * sq + qn * 3.0 * (fR - fL) * clamp(CL, -1.5, 1.5);
     let yA = qn * (-s.Kr * this.ctrl.yaw * tailF - s.Cnb * beta) - s.Cnr * this.w.y * sq;
@@ -1559,14 +1811,14 @@ class Plane {
     if (wl > 1e-7) { _ax.copy(this.w).multiplyScalar(1 / wl); _dq.setFromAxisAngle(_ax, wl * dt); this.q.multiply(_dq).normalize(); }
     this.pos.addScaledVector(this.vel, dt);
     // fuel, engine
-    if (this.engineOn && this.fuel > 0) this.fuel = Math.max(0, this.fuel - (0.04 + 0.26 * thr) * dt);
+    if (this.engineOn && this.fuel > 0) this.fuel = Math.max(0, this.fuel - (0.04 + 0.26 * thr) * (s.fuelK || 1) * (s.jet && this.boosting ? 3 : 1) * dt);
     if (this.leak > 0) this.fuel = Math.max(0, this.fuel - this.leak * dt);
     const rpmT = this.engineOn && this.fuel > 0 ? 750 + 2150 * thr + V * 2 : V * 6;
     this.rpm += (rpmT - this.rpm) * Math.min(1, dt * 2.5);
     // structural
     if (this.alive && !this.onGround) {
       if (this.g > 11.5 || this.g < -5.5) { this.overstress += dt; if (this.overstress > 0.25) { this.overstress = 0; damage(this, Math.random() < 0.5 ? 'wingL' : 'wingR', 35, null); if (this.player) msg('Airframe overstressed!', 'warn'); } } else this.overstress = 0;
-      if (V > 255) { damage(this, 'tail', 60 * dt, null); damage(this, 'wingL', 40 * dt, null); }
+      if (V > (s.vne || 255)) { damage(this, 'tail', 60 * dt, null); damage(this, 'wingL', 40 * dt, null); }
       if (this.onFire) { this.hp.fuse -= 5 * dt; this.hp.fuel -= 3 * dt; this.hp.engine -= 4 * dt; if (this.hp.fuse <= 0 || this.hp.fuel <= -20) destroy(this, 'burned', this.lastAttacker, true); }
     }
     this.groundContact(dt);
@@ -1576,7 +1828,7 @@ class Plane {
     const gh = groundH(this.pos.x, this.pos.z);
     _E.setFromQuaternion(this.q, 'YXZ'); let pitch = _E.x; const yaw = _E.y; let roll = _E.z;
     const gearOK = this.gearT > 0.92;
-    const ride = gearOK ? 1.95 * Math.cos(pitch) - 0.6 * Math.sin(pitch) : 0.95;
+    const s = this.spec, ride = gearOK ? rideH(s, pitch) : 0.95;
     const wl = waterLevelAt(this.pos.x, this.pos.z);
     if (this.pos.y - (gearOK ? ride : 0.95) > Math.max(gh, wl) + 0.05) { this.onGround = false; return; }
     if (this.wreck) { impact(this); return; }
@@ -1597,9 +1849,11 @@ class Plane {
     if (this.vel.y < 0) this.vel.y = 0;
     if (Math.abs(roll) > 0.4 && hSpeed > 12) { crash(this, 'cartwheeled'); return; }
     roll *= Math.max(0, 1 - dt * 8);
-    if (pitch > TAIL) { pitch = TAIL; if (this.w.x > 0) this.w.x = 0; }
+    const pMax = s.tri ? 0.24 : TAIL;
+    if (pitch > pMax) { pitch = pMax; if (this.w.x > 0) this.w.x = 0; }
     if (pitch < -0.03) { pitch = -0.03; if (this.w.x < 0) this.w.x = 0; }
-    this.w.x += dt * 2.2 * Math.max(0, 1 - this.V / 42);
+    if (s.tri) { if (pitch > 0.004) this.w.x -= dt * 1.6 * Math.max(0.2, 1 - this.V / (this.stallSpeed() * 1.05)); } // the nose wheel settles back down
+    else this.w.x += dt * 2.2 * Math.max(0, 1 - this.V / 42); // a tail-dragger sits back on its tail wheel
     this.w.z = 0;
     const steer = -this.ctrl.yaw * 0.5 * clamp(1 - this.V / 70, 0.15, 1);
     this.w.y = lerp(this.w.y, steer, Math.min(1, dt * 6));
@@ -1632,17 +1886,22 @@ class Plane {
   visuals(dt) {
     const m = this.model, p = m.parts;
     m.group.position.copy(this.pos); m.group.quaternion.copy(this.q);
-    const spin = this.rpm / 60 * Math.PI * 2 * 0.48;
-    p.prop.rotation.z += spin * dt;
-    const fast = this.rpm > 500;
-    p.blades.visible = !fast || G.cam.mode === 'cockpit' && this.player ? !fast : true;
-    if (fast) { p.blades.visible = false; p.disc.visible = true; } else { p.blades.visible = true; p.disc.visible = false; }
+    if (p.prop) {
+      p.prop.rotation.z += this.rpm / 60 * Math.PI * 2 * 0.48 * dt;
+      const fast = this.rpm > 500; p.blades.visible = !fast; p.disc.visible = fast;
+    }
+    if (p.ab) { // afterburner plume, flickering
+      const on = this.boosting && this.engineOn && this.alive; p.ab.visible = on;
+      if (on) p.ab.scale.set(1, 1, 0.82 + Math.random() * 0.3);
+    }
+    if (p.glow) p.glow.traverse(o => { if (o.material) o.material.opacity = this.engineOn && this.alive ? 0.12 + 0.5 * this.throttle * (this.boosting ? 1.6 : 1) : 0; });
+    if (p.rud2) p.rud2.rotation.y = this.ctrl.yaw * 0.4;
     p.ailL.rotation.x = this.ctrl.roll * 0.35; p.ailR.rotation.x = -this.ctrl.roll * 0.35;
     p.elev.rotation.x = -this.ctrl.pitch * 0.4; p.rud.rotation.y = this.ctrl.yaw * 0.4;
     m.setGear(this.gearT);
     p.wingL.visible = this.hp.wingL > -999; p.wingR.visible = this.hp.wingR > -999;
     if (this.player) { const ck = G.cam.mode === 'cockpit'; p.canopy.visible = !ck; p.head.visible = !ck; }
-    p.pylons[0].visible = this.missiles >= 1 && !this.wreck; p.pylons[1].visible = this.missiles >= 2 && !this.wreck;
+    for (let i = 0; i < p.pylons.length; i++) p.pylons[i].visible = this.missiles > i && !this.wreck;
   }
 }
 
@@ -1787,7 +2046,7 @@ function destroy(p, cause, attacker, explode) {
   p.alive = false; p.wreck = true; p.onFire = true; p.engineOn = false; p.firing = false;
   if (!p.wreckSpin) p.wreckSpin = (Math.random() - 0.5) * 1.2;
   p.inp.pitch = rand(-0.4, 0.2); p.inp.roll = rand(-1, 1); p.inp.yaw = rand(-0.5, 0.5); p.ctrl = { ...p.inp };
-  if (explode) { explosion(p.pos, p.vel, 1.2); debris(p.pos, p.vel, 18); p.gone = true; p.model.group.visible = false; }
+  if (explode) { explosion(p.pos, p.vel, 1.2, 'air'); debris(p.pos, p.vel, 18); p.gone = true; p.model.group.visible = false; }
   const killer = killerOf(p, attacker);
   if (p.player) playerDown(cause, killer);
   announceDown(p, killer, cause);
@@ -1796,16 +2055,81 @@ function crash(p, cause) {
   if (p.gone) return;
   const wasAlive = p.alive;
   p.alive = false; p.wreck = true; p.gone = true; p.model.group.visible = false;
-  explosion(p.pos, _a.set(0, 0, 0), 1.4); debris(p.pos, _b.copy(p.vel).multiplyScalar(0.25), 14);
+  explosion(p.pos, _a.set(0, 0, 0), 1.4, cause.includes('water') ? 'water' : 'ground'); debris(p.pos, _b.copy(p.vel).multiplyScalar(0.25), 14);
   G.crashSites.push({ x: p.pos.x, y: Math.max(p.pos.y, 0), z: p.pos.z, t: 45, water: cause.includes('water') });
   if (wasAlive) { const killer = killerOf(p, null); if (p.player) playerDown(cause, killer); announceDown(p, killer, cause); }
 }
 function impact(p) { crash(p, 'impact'); }
-function explosion(pos, vel, scale) {
-  for (let i = 0; i < 46 * scale; i++) { const s = rand(8, 40) * scale; fireFX.spawn(pos.x, pos.y, pos.z, vel.x * 0.3 + rand(-s, s), vel.y * 0.3 + rand(-s, s), vel.z * 0.3 + rand(-s, s), rand(0.4, 1.2), rand(3, 7) * scale, 6, 1, 0.75, 0.35, 1, 2.2, -1, 1); }
-  for (let i = 0; i < 26 * scale; i++) { const s = rand(4, 18) * scale; smokeFX.spawn(pos.x, pos.y, pos.z, vel.x * 0.25 + rand(-s, s), vel.y * 0.25 + rand(-s, s * 0.6) + 3, vel.z * 0.25 + rand(-s, s), rand(2.5, 5.5), rand(5, 9) * scale, 6, 0.12, 0.11, 0.1, 0.8, 0.9, -1, 0); }
-  flash.position.copy(pos); flash.intensity = 6;
-  Sfx.boom(pos);
+// An explosion: a white-hot flash, a rolling fireball, a shock shell racing out, sparks arcing down, burning
+// wreckage trailing smoke, and dark smoke that billows and rises. kind: 'air' (an aircraft), 'missile',
+// 'ground' (adds a dirt plume) or 'water' (adds a spray column).
+const _rv = new V3();
+const rndDir = (k) => _rv.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(k);
+function explosion(pos, vel, scale, kind = 'air') {
+  const mis = kind === 'missile';
+  // flash
+  for (let i = 0; i < 5; i++) fireFX.spawn(pos.x, pos.y, pos.z, vel.x * 0.3, vel.y * 0.3, vel.z * 0.3, rand(0.12, 0.22), rand(10, 16) * scale, 45 * scale, 1, 0.97, 0.88, 1, 0, 0, 1);
+  // fireball: a dense core that swells, then flame tongues pushed outward
+  for (let i = 0; i < 38 * scale; i++) { const d = rndDir(rand(2, 12) * scale); fireFX.spawn(pos.x + d.x * 0.3, pos.y + d.y * 0.3, pos.z + d.z * 0.3, vel.x * 0.3 + d.x, vel.y * 0.3 + d.y + 2, vel.z * 0.3 + d.z, rand(0.9, 2.1), rand(5, 9) * scale, 6 * scale, 1, rand(0.6, 0.78), 0.28, 1, 2.2, -3, 1); }
+  for (let i = 0; i < 22 * scale; i++) { const d = rndDir(rand(18, 42) * scale); fireFX.spawn(pos.x, pos.y, pos.z, vel.x * 0.3 + d.x, vel.y * 0.3 + d.y, vel.z * 0.3 + d.z, rand(0.35, 0.8), rand(2, 4) * scale, 3, 1, 0.7, 0.32, 1, 3.5, -1, 1); }
+  // sparks and hot fragments falling away
+  for (let i = 0; i < (mis ? 46 : 34) * scale; i++) { const d = rndDir(rand(28, 85)); fireFX.spawn(pos.x, pos.y, pos.z, vel.x * 0.5 + d.x, vel.y * 0.5 + d.y + 6, vel.z * 0.5 + d.z, rand(0.6, 1.8), rand(0.45, 0.9), 0, 1, 0.82, 0.45, 1, 0.7, 9.8, 1); }
+  // smoke: dark billows that grow, slow and rise
+  for (let i = 0; i < 28 * scale; i++) { const d = rndDir(rand(3, 15) * scale), sh = rand(0.06, 0.2); smokeFX.spawn(pos.x + d.x * 0.3, pos.y + d.y * 0.3, pos.z + d.z * 0.3, vel.x * 0.25 + d.x * 1.2, vel.y * 0.25 + d.y * 0.5 + rand(3, 9), vel.z * 0.25 + d.z * 1.2, rand(5, 10), rand(4, 8) * scale, 6.5, sh, sh * 0.96, sh * 0.92, rand(0.55, 0.85), 0.9, -2, 0); }
+  for (let i = 0; i < 12 * scale; i++) { const d = rndDir(rand(2, 7) * scale), sh = rand(0.18, 0.32); smokeFX.spawn(pos.x + d.x, pos.y + d.y, pos.z + d.z, d.x, d.y + rand(6, 12), d.z, rand(8, 13), rand(7, 11) * scale, 4.5, sh, sh * 0.97, sh * 0.95, 0.45, 0.6, -2.8, 0); }
+  if (kind === 'ground') for (let i = 0; i < 26 * scale; i++) { const a = rand(0, 6.28), sp = rand(6, 26); smokeFX.spawn(pos.x, pos.y + 1, pos.z, Math.cos(a) * sp, rand(10, 38), Math.sin(a) * sp, rand(3, 7), rand(3, 7) * scale, 5, 0.36, 0.29, 0.21, 0.8, 1.2, 4, 0); }
+  if (kind === 'water') for (let i = 0; i < 40 * scale; i++) { const a = rand(0, 6.28), sp = rand(2, 16); smokeFX.spawn(pos.x, pos.y + 0.5, pos.z, Math.cos(a) * sp, rand(18, 55), Math.sin(a) * sp, rand(1.5, 3.5), rand(2, 5) * scale, 4, 0.9, 0.93, 0.95, 0.85, 0.4, 9.8, 0); }
+  shockwave(pos, (mis ? 22 : 30) * scale);
+  if (!mis) fireChunks(pos, vel, Math.round(rand(5, 8) * scale), kind === 'water');
+  flash.position.copy(pos); flash.intensity = 10 * Math.min(1.5, scale);
+  const d = pos.distanceTo(camera.position); if (d < 700 * scale) G.cam.shake = Math.min(1.4, G.cam.shake + (1 - d / (700 * scale)) * 1.1 * scale);
+  Sfx.boom(pos, scale, kind);
+}
+// a bright shell racing out from the blast and fading
+const SHOCKS = [];
+const shockGeo = new THREE.SphereGeometry(1, 24, 14);
+function shockwave(pos, rmax) {
+  let s = SHOCKS.find(x => x.t >= x.dur);
+  if (!s) {
+    if (SHOCKS.length >= 6) return;
+    // only the rim of the shell shows, so it reads as a ring of compressed air racing outward
+    const mat = new THREE.MeshBasicNodeMaterial({ color: 0xfff0d2, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }), op = uniform(0);
+    mat.opacityNode = op.mul(pow(abs(dot(normalView, positionViewDirection)).oneMinus(), 3)); mat.userData.op = op;
+    const mesh = new THREE.Mesh(shockGeo, mat); mesh.renderOrder = 6; mesh.visible = false; scene.add(mesh); s = { mesh, t: 1, dur: 1 }; SHOCKS.push(s); }
+  s.t = 0; s.dur = 0.38; s.rmax = rmax; s.mesh.position.copy(pos); s.mesh.visible = true;
+}
+// burning pieces of wreckage that tumble away trailing fire and smoke
+const CHUNKS = [], chunkMat = pbr({ color: 0x2a2724, roughness: 0.8, metalness: 0.3 });
+const chunkGeos = [new THREE.BoxGeometry(1, 0.15, 0.6), new THREE.BoxGeometry(0.5, 0.4, 0.8), new THREE.TetrahedronGeometry(0.6)];
+function fireChunks(pos, vel, n, water) {
+  for (let i = 0; i < n; i++) {
+    let c = CHUNKS.find(x => x.life <= 0);
+    if (!c) { if (CHUNKS.length >= 36) return; const mesh = new THREE.Mesh(chunkGeos[CHUNKS.length % 3], chunkMat); mesh.castShadow = true; mesh.visible = false; scene.add(mesh); c = { mesh, pos: new V3(), vel: new V3(), spin: new V3(), life: 0 }; CHUNKS.push(c); }
+    c.pos.copy(pos); c.vel.copy(vel).multiplyScalar(0.4).add(rndDir(rand(18, 48))); c.vel.y += rand(4, 16);
+    c.spin.set(rand(-9, 9), rand(-9, 9), rand(-9, 9)); c.life = rand(2.2, 4.2); c.max = c.life; c.emit = 0; c.water = water;
+    c.mesh.scale.setScalar(rand(0.6, 1.4)); c.mesh.visible = true; c.mesh.position.copy(pos);
+  }
+}
+function updateBlastFX(dt) {
+  for (const s of SHOCKS) {
+    if (s.t >= s.dur) continue;
+    s.t += dt; const k = Math.min(1, s.t / s.dur), e = 1 - (1 - k) ** 3;
+    s.mesh.scale.setScalar(Math.max(0.1, s.rmax * e)); s.mesh.material.userData.op.value = 0.75 * (1 - k) ** 2;
+    if (s.t >= s.dur) s.mesh.visible = false;
+  }
+  for (const c of CHUNKS) {
+    if (c.life <= 0) continue;
+    c.life -= dt; c.vel.multiplyScalar(1 - 0.25 * dt); c.vel.y -= 9.81 * dt; c.pos.addScaledVector(c.vel, dt);
+    c.mesh.position.copy(c.pos); c.mesh.rotation.x += c.spin.x * dt; c.mesh.rotation.y += c.spin.y * dt; c.mesh.rotation.z += c.spin.z * dt;
+    c.emit -= dt;
+    if (c.emit <= 0) {
+      c.emit = 0.035; const burn = c.life / c.max;
+      if (burn > 0.35 && !c.water) fireFX.spawn(c.pos.x, c.pos.y, c.pos.z, c.vel.x * 0.1, c.vel.y * 0.1, c.vel.z * 0.1, rand(0.25, 0.45), rand(1.4, 2.4) * burn, 2, 1, 0.68, 0.3, 0.95, 1.5, -1, 1);
+      smokeFX.spawn(c.pos.x, c.pos.y, c.pos.z, c.vel.x * 0.05, c.vel.y * 0.05 + 1, c.vel.z * 0.05, rand(2, 4), 1.4, 3.2, 0.12, 0.11, 0.1, 0.55 * burn + 0.15, 0.6, -0.6, 0);
+    }
+    const gh = Math.max(groundH(c.pos.x, c.pos.z), waterLevelAt(c.pos.x, c.pos.z));
+    if (c.pos.y < gh || c.life <= 0) { c.life = 0; c.mesh.visible = false; if (c.pos.y < gh + 2) smokeFX.spawn(c.pos.x, gh + 0.5, c.pos.z, 0, 3, 0, 2.5, 3, 4, 0.3, 0.27, 0.22, 0.5, 1, -0.5, 0); }
+  }
 }
 function debris(pos, vel, n) { for (let i = 0; i < n; i++) smokeFX.spawn(pos.x, pos.y, pos.z, vel.x + rand(-30, 30), vel.y + rand(-10, 35), vel.z + rand(-30, 30), rand(2, 4.5), rand(0.4, 0.9), 0, 0.1, 0.1, 0.09, 1, 0.25, 9.8, 3); }
 // A hit on an aircraft another device flies goes to that device; it applies the damage itself.
@@ -1837,10 +2161,10 @@ function launchMissile(p, target, o = {}) {
   p.mslSide = -(p.mslSide || 1);
   const m = { id: o.id || `${p.id}:m${++MSL_SEQ}`, owner: p, target: target || null, vis: !!o.vis, life: 14, burn: 3.2, age: 0, pos: new V3(), vel: new V3(), mesh: makeMissileMesh() };
   if (o.pos) { m.pos.fromArray(o.pos); m.vel.fromArray(o.vel); }
-  else { m.pos.set(p.mslSide * 2.3, -0.78, -0.3).applyQuaternion(p.q).add(p.pos); m.vel.copy(p.vel).addScaledVector(p.fwd, 20).addScaledVector(p.up, -4); }
+  else { const py = p.model.parts.pylons[p.missiles]; if (py) m.pos.copy(py.position); else m.pos.set(p.mslSide * 2.3, -0.78, -0.3); m.pos.applyQuaternion(p.q).add(p.pos); m.vel.copy(p.vel).addScaledVector(p.fwd, 20).addScaledVector(p.up, -4); }
   m.mesh.position.copy(m.pos); scene.add(m.mesh); MSL.push(m);
   if (!m.vis && NET.on) netSend({ k: 'msl', id: m.id, o: p.id, t: m.target ? m.target.id : null, pos: m.pos.toArray().map(r1), vel: m.vel.toArray().map(r1) });
-  Sfx.launch(m.pos);
+  Sfx.launch(m.pos, p.player); Sfx.motorStart(m);
   if (p.player) msg(m.target ? 'Missile away · locked on' : 'Missile away · no lock', m.target ? 'good' : 'info', 2.2);
   return m;
 }
@@ -1891,7 +2215,7 @@ function updateMissiles(dt) {
 function detonate(m, idx) {
   if (idx == null) idx = MSL.indexOf(m); if (idx < 0) return;
   MSL.splice(idx, 1); scene.remove(m.mesh);
-  explosion(m.pos, _a.copy(m.vel).multiplyScalar(0.15), 0.6);
+  explosion(m.pos, _a.copy(m.vel).multiplyScalar(0.15), 0.6, 'missile'); Sfx.motorStop(m);
   if (m.vis) return;
   for (const p of G.planes) {
     if (p.gone || !p.alive || p === m.owner || (m.owner && p.team === m.owner.team) || p.pos.distanceTo(m.pos) > 32) continue;
@@ -1952,7 +2276,7 @@ function playerFlares() { const p = G.player; if (!p || G.state !== 'play') retu
 function rearm(p) {
   const d = diff();
   p.hp = { ...p.spec.hp }; p.onFire = false; p.leak = 0; p.engineOn = true; p.fuel = p.spec.fuel; p.ammo = { ...p.spec.ammo };
-  p.missiles = d.playerMsl; p.flares = d.flares; p.wep = 1;
+  p.missiles = d.playerMsl + (p.spec.mslBonus || 0); p.flares = d.flares + (p.spec.flareBonus || 0); p.wep = 1;
   msg('Rearmed, refuelled and repaired', 'good', 4); Sfx.chime();
 }
 
@@ -1960,7 +2284,7 @@ function emitTrails(p, dt) {
   if (p.gone) return;
   p.emitT -= dt; if (p.emitT > 0) return; p.emitT = 0.035;
   const s = p.spec, f = p.hp.engine / s.hp.engine;
-  _a.set(0, 0.1, s.noseZ + 1.5).applyQuaternion(p.q).add(p.pos);
+  if (s.jet) _a.set(0, 0, s.exhZ); else _a.set(0, 0.1, s.noseZ + 1.5); _a.applyQuaternion(p.q).add(p.pos);
   const vx = p.vel.x * 0.15, vy = p.vel.y * 0.15, vz = p.vel.z * 0.15;
   if (p.onFire || p.wreck) {
     fireFX.spawn(_a.x, _a.y, _a.z, vx + rand(-2, 2), vy + rand(-2, 2), vz + rand(-2, 2), rand(0.25, 0.5), p.wreck ? 3.2 : 2.2, 3, 1, 0.7, 0.3, 0.95, 1.5, 0, 1);
@@ -1972,9 +2296,10 @@ function emitTrails(p, dt) {
   if (p.leak > 0 && p.fuel > 0) { _b.set(-0.8, -0.3, -0.5).applyQuaternion(p.q).add(p.pos); smokeFX.spawn(_b.x, _b.y, _b.z, vx, vy, vz, 1.6, 0.8, 2.5, 0.95, 0.96, 0.97, 0.35, 0.7, 0, 0); }
   if (p.alive && p.pos.y > 2700 && p.V > 90) {
     const a = 0.32 * smooth(2700, 3500, p.pos.y);
-    for (const sx of [-1, 1]) { _b.set(sx * s.span * 0.42, -0.1, 0.2).applyQuaternion(p.q).add(p.pos); smokeFX.spawn(_b.x, _b.y, _b.z, 0, 0, 0, 9, 1.2, 2.2, 0.97, 0.97, 0.98, a, 0, -0.05, 0); }
+    for (const sx of [-1, 1]) { if (s.jet) _b.set(sx * (s.look.jet === 'talon' ? 0.75 : 0.1), 0, s.exhZ + 2); else _b.set(sx * s.span * 0.42, -0.1, 0.2); _b.applyQuaternion(p.q).add(p.pos); smokeFX.spawn(_b.x, _b.y, _b.z, 0, 0, 0, 9, s.jet ? 1.6 : 1.2, 2.2, 0.97, 0.97, 0.98, a, 0, -0.05, 0); }
   }
-  if (p.boosting && p.alive) {
+  if (p.boosting && p.alive && s.jet) { for (const sx of s.look.jet === 'talon' ? [-0.75, 0.75] : [0]) { _b.set(sx, 0, s.exhZ + 1.2).applyQuaternion(p.q).add(p.pos); fireFX.spawn(_b.x, _b.y, _b.z, p.vel.x * 0.8 - p.fwd.x * 30, p.vel.y * 0.8 - p.fwd.y * 30, p.vel.z * 0.8 - p.fwd.z * 30, 0.09, 1.3, 4, 1, 0.6, 0.3, 0.7, 0, 0, 1); } }
+  else if (p.boosting && p.alive) {
     for (const sx of [-1, 1]) { _b.set(sx * 0.52 * s.R, 0.16, s.noseZ + 1.5).applyQuaternion(p.q).add(p.pos); fireFX.spawn(_b.x, _b.y, _b.z, p.vel.x * 0.9 - p.fwd.x * 8 + sx * p.right.x * 3, p.vel.y * 0.9 - p.fwd.y * 8, p.vel.z * 0.9 - p.fwd.z * 8 + sx * p.right.z * 3, 0.07, 0.9, 3, 1, 0.55, 0.25, 0.9, 0, 0, 1); }
   }
   if (p.alive && Math.abs(p.gs) > 4.2 && p.V > 80) {
@@ -2147,7 +2472,7 @@ function startMission(mode) {
   WAVES = buildWaves(NET.on ? NET.opts.enemies : settings.enemies, NET.on ? NET.opts.waves : settings.waves);
   G.stats = { shots: 0, hits: 0, kills: 0, deaths: 0, score: 0, dmgTaken: 0, killList: [], start: 0 };
   G.time = 0; G.timeScale = 1; G.cam.mode = 'chase'; G.cam.kill = null; G.hitFlash = 0; G.respawnT = null; G.popups = []; G.streak = 0; G.lastKillT = -99; G.rearmT = 0;
-  for (const m of MSL) scene.remove(m.mesh); MSL.length = 0; FLARES.length = 0; LOCK.target = null;
+  for (const m of MSL) { scene.remove(m.mesh); Sfx.motorStop(m); } MSL.length = 0; FLARES.length = 0; LOCK.target = null;
   camera.near = 1; camera.updateProjectionMatrix();
   const pl = spawnPlayer(mode);
   if (!NET.on) {
@@ -2175,21 +2500,22 @@ function spawnPlayer(mode) {
   const pl = new Plane(settings.plane, { player: true, id: NET.on ? `p${s}.${NET.life}` : 'me', team: myTeam(), seat: NET.on ? s : null, label: NET.on ? NET.name : '' });
   G.player = pl; G.planes.push(pl);
   if (mode === 'sortie') {
-    pl.place(AF.x + (NET.on ? (s % 2 ? 9 : -9) : 0), 0, AF.z + AF.len * 0.5 - 50 - (NET.on ? s * 130 : 0), 0, TAIL, 0); pl.pos.y = AF.h + 1.95 * Math.cos(TAIL) - 0.6 * Math.sin(TAIL);
+    const gp = pl.spec.tri ? 0 : TAIL;
+    pl.place(AF.x + (NET.on ? (s % 2 ? 9 : -9) : 0), 0, AF.z + AF.len * 0.5 - 50 - (NET.on ? s * 130 : 0), 0, gp, 0); pl.pos.y = AF.h + rideH(pl.spec, gp);
     pl.gear = pl.gearT = 1; pl.throttle = 0; pl.onGround = true; pl.brake = 1;
   } else if (NET.on && NET.opts.mode === 'versus') {
     const a = (s / 4) * Math.PI * 2 + rand(-0.4, 0.4), x = Math.cos(a) * 3600, z = 1000 + Math.sin(a) * 3600;
-    pl.place(x, 1400 + rand(0, 300), z, Math.atan2(x, z - 1000), 0.02, 125); pl.gear = pl.gearT = 0; pl.throttle = 0.9;
+    pl.place(x, 1400 + rand(0, 300), z, Math.atan2(x, z - 1000), 0.02, (pl.spec.cruise || 130) * 0.96); pl.gear = pl.gearT = 0; pl.throttle = 0.9;
   } else {
-    pl.place(AF.x + 1500 + s * 90, 1300 + s * 40, AF.z - 2500 + s * 60, -0.9, 0.02, 125); pl.gear = pl.gearT = 0; pl.throttle = 0.9;
+    pl.place(AF.x + 1500 + s * 90, 1300 + s * 40, AF.z - 2500 + s * 60, -0.9, 0.02, (pl.spec.cruise || 130) * 0.96); pl.gear = pl.gearT = 0; pl.throttle = 0.9;
   }
-  pl.missiles = diff().playerMsl; pl.flares = diff().flares;
+  pl.missiles = diff().playerMsl + (pl.spec.mslBonus || 0); pl.flares = diff().flares + (pl.spec.flareBonus || 0);
   $('tGear').classList.toggle('on', !!pl.gear); $('tFlaps').classList.remove('on');
   return pl;
 }
 function spawnWave(i) {
   const list = WAVES[i];
-  const ekey = settings.plane === 'kestrel' ? 'falke' : 'kestrel';
+  const types = opposingTypes(settings.plane);
   // aim the wave at the squadron: the middle of the human pilots in the air
   const pilots = G.planes.filter(p => p.role === 'player' && p.team === 'blue' && p.alive && !p.gone);
   const c = new V3(AF.x + 1000, 1200, AF.z - 1500); if (pilots.length) { c.set(0, 0, 0); for (const p of pilots) c.add(p.pos); c.multiplyScalar(1 / pilots.length); }
@@ -2200,13 +2526,15 @@ function spawnWave(i) {
   list.forEach((sk, j) => {
     NET.raiderSeq = (NET.raiderSeq || 0) + 1;
     const d = diff(), skill = shiftSkill(sk, d.shift);
+    const ekey = types[(i + j) % types.length];
     const e = new Plane(ekey, { skill, ace: sk === 'ace', id: 'r' + NET.raiderSeq, team: 'red', role: 'raider' });
-    e.missiles = d.enemyMsl[SKILLS.indexOf(skill)]; e.flares = skill === 'rookie' ? 0 : 3;
+    e.missiles = d.enemyMsl[SKILLS.indexOf(skill)] + (e.spec.jet ? 1 : 0); e.flares = (skill === 'rookie' ? 0 : 3) + (e.spec.jet ? 2 : 0);
     const off = (j - (list.length - 1) / 2) * 70;
-    e.place(cx + Math.cos(yaw) * off, y + (j % 3) * 15, cz - Math.sin(yaw) * off, yaw, 0, 135); e.gear = e.gearT = 0;
+    e.place(cx + Math.cos(yaw) * off, y + (j % 3) * 15, cz - Math.sin(yaw) * off, yaw, 0, (e.spec.cruise || 130) * 1.04); e.gear = e.gearT = 0;
     G.planes.push(e);
   });
-  const text = `Wave ${i + 1} of ${WAVES.length}: ${list.length} ${SPECS[ekey].name}${list.length === 1 ? '' : 's'}${list.includes('ace') ? ', one flown by an ace' : ''}`;
+  const names = [...new Set(list.map((_, j) => SPECS[types[(i + j) % types.length]].name))].join(' and ');
+  const text = `Wave ${i + 1} of ${WAVES.length}: ${list.length} × ${names}${list.includes('ace') ? ', one flown by an ace' : ''}`;
   if (NET.on) netEvent({ k: 'say', text, kind: 'warn' }); else msg(text, 'warn', 4.5);
 }
 function missionUpdate(dt) {
@@ -2248,6 +2576,7 @@ addEventListener('message', e => {
   else if (d.type === 'roster') netRoster(d);
   else if (d.type === 'rt') handleNet(d.from, d.data);
   else if (d.type === 'over') showNetDebrief(d.results);
+  else if (d.type === 'rematch') { NET.rm = d; rematchButton(); }
 });
 function normOpts(o = {}) {
   return { mode: o.mode === 'versus' ? 'versus' : 'coop', difficulty: DIFF[o.difficulty] ? o.difficulty : 'normal', enemies: o.enemies ?? 'normal', waves: Number(o.waves) || 3, kills: Number(o.kills) || 5, wingmen: o.wingmen === 'on' ? 'on' : 'off' };
@@ -2273,7 +2602,7 @@ function netRoster(d, quiet) {
 // is another person (not a computer pilot) connected to this table right now?
 function sharedSky() { return NET.on && NET.roster.some(r => r.kind === 'human' && r.seat !== NET.seat && r.connected !== false); }
 function netReset() {
-  for (const m of MSL) scene.remove(m.mesh); MSL.length = 0; FLARES.length = 0; LOCK.target = null;
+  for (const m of MSL) { scene.remove(m.mesh); Sfx.motorStop(m); } MSL.length = 0; FLARES.length = 0; LOCK.target = null;
   clearWorldPlanes(); smokeFX.n = 0; fireFX.n = 0; G.crashSites = []; G.player = null; G.mission = null; G.msgs = []; G.respawnT = null; G.ended = false;
   NET.over = false; NET.life = 0; NET.bots = {}; NET.raiderSeq = 0;
   NET.w = { phase: 'waiting', wave: 0, next: null, left: 0, W: buildWaves(NET.opts.enemies, NET.opts.waves).length, done: false };
@@ -2374,7 +2703,7 @@ function netSnapIn(s) {
   if (!p) {
     if (s.gn) return;
     p = new Plane(s.k, { remote: true, id: s.id, team: s.tm, role: s.rl, label: s.lb, seat: s.st, ace: !!s.ace, skill: s.sk });
-    p.ammo = { m: 1e9, c: 1e9 }; p.gear = p.gearT = s.gear;
+    p.ammo = Object.fromEntries(Object.keys(p.spec.ammo).map(k => [k, 1e9])); p.gear = p.gearT = s.gear;
     p.pos.set(s.pos[0], s.pos[1], s.pos[2]); p.q.set(s.q[0], s.q[1], s.q[2], s.q[3]).normalize(); p.vel.set(s.vel[0], s.vel[1], s.vel[2]); p.axes();
     G.planes.push(p);
   }
@@ -2404,7 +2733,7 @@ function remoteStep(p, dt) {
 }
 function netObjective() {
   const m = G.mission, w = NET.w || {};
-  if (m && m.phase === 'takeoff') return 'Take off · full throttle, lift off near 100 mph';
+  if (m && m.phase === 'takeoff') return liftOffText();
   if (NET.opts.mode === 'versus') { const me = NET.board[NET.seat]; return `Free-for-all · first to ${NET.opts.kills} kills · you have ${me ? me.kills : 0}`; }
   if (!w.phase || w.phase === 'waiting') return 'Waiting for the host to launch';
   if (w.phase === 'rtb') return NET.host ? 'All raiders down · land at the airfield to finish' : 'All raiders down · the host lands to finish';
@@ -2438,7 +2767,7 @@ function showNetDebrief(r) {
   const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   $('dbBoard').hidden = false;
   $('dbBoard').innerHTML = `<table><thead><tr><th>Pilot</th><th>Kills</th><th>Down</th></tr></thead><tbody>${board.map(b => `<tr${b.seat === NET.seat ? ' class="me"' : ''}><td>${esc(b.name)}${b.bot ? ' <small>computer</small>' : ''}</td><td>${b.kills}</td><td>${b.deaths}</td></tr>`).join('')}</tbody></table>`;
-  $('btnAgain').textContent = NET.host ? 'New round for everyone' : 'Waiting for the host…'; $('btnAgain').disabled = !NET.host;
+  NET.rmSent = false; NET.rm = null; rematchButton(); // fresh status follows from the Game Center
   $('btnMenu').textContent = 'Leave table';
   G.state = 'debrief'; showScreen('debrief'); $('touch').hidden = true;
   if (document.pointerLockElement) document.exitPointerLock();
@@ -2620,7 +2949,7 @@ function playerControl(dt) {
   p.firing = fire;
   // boost (war emergency power): about 18 s at full throttle, recharges when you ease off
   p.boosting = wantBoost && p.throttle >= 0.99 && p.wep > 0.02 && p.engineOn;
-  p.wep = p.boosting ? Math.max(0, p.wep - dt / 18) : Math.min(1, p.wep + dt / (p.throttle < 0.9 ? 30 : 60));
+  p.wep = p.spec.jet ? 1 : p.boosting ? Math.max(0, p.wep - dt / 18) : Math.min(1, p.wep + dt / (p.throttle < 0.9 ? 30 : 60));
   $('tThr').classList.toggle('boost', p.boosting);
   const mode = settings.control;
   const inv = settings.invert ? -1 : 1;
@@ -2673,6 +3002,7 @@ function autopilot(p, dt) {
 // =====================================================================
 //  Sound (WebAudio, all generated)
 // =====================================================================
+const _sv0 = new V3(), _sv1 = new V3(), _sv2 = new V3();
 const Sfx = {
   ctx: null, ok: false, lastGun: { m: 0, c: 0 },
   init() {
@@ -2693,6 +3023,13 @@ const Sfx = {
     this.lockOsc = c.createOscillator(); this.lockOsc.type = 'sine'; this.lockG = c.createGain(); this.lockG.gain.value = 0; this.lockOsc.connect(this.lockG); this.lockG.connect(this.master); this.lockOsc.start();
     this.warnOsc = c.createOscillator(); this.warnOsc.type = 'square'; this.warnOsc.frequency.value = 1320; this.warnG = c.createGain(); this.warnG.gain.value = 0; this.warnOsc.connect(this.warnG); this.warnG.connect(this.master); this.warnOsc.start();
     this.horn = c.createOscillator(); this.horn.type = 'square'; this.horn.frequency.value = 620; this.hornG = c.createGain(); this.hornG.gain.value = 0; this.horn.connect(this.hornG); this.hornG.connect(this.master); this.horn.start();
+    // jet engine: turbine whine (two partials), a broad roar, and the afterburner's low rumble
+    this.jet = c.createGain(); this.jet.gain.value = 0; this.jet.connect(this.master);
+    this.jw1 = c.createOscillator(); this.jw1.type = 'sine'; this.jw2 = c.createOscillator(); this.jw2.type = 'triangle';
+    this.jwG = c.createGain(); this.jwG.gain.value = 0; this.jw1.connect(this.jwG); const j2g = c.createGain(); j2g.gain.value = 0.4; this.jw2.connect(j2g); j2g.connect(this.jwG); this.jwG.connect(this.jet); this.jw1.start(); this.jw2.start();
+    const roar = loop(); this.jrLP = c.createBiquadFilter(); this.jrLP.type = 'lowpass'; this.jrLP.frequency.value = 700; this.jrG = c.createGain(); this.jrG.gain.value = 0; roar.connect(this.jrLP); this.jrLP.connect(this.jrG); this.jrG.connect(this.jet);
+    const rum = loop(); const rLP = c.createBiquadFilter(); rLP.type = 'lowpass'; rLP.frequency.value = 170; rLP.Q.value = 0.9; this.abG = c.createGain(); this.abG.gain.value = 0; rum.connect(rLP); rLP.connect(this.abG); this.abG.connect(this.jet);
+    this.motors = new Set();
     this.ok = true;
   },
   vol(v) { if (this.ok) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05); },
@@ -2704,7 +3041,27 @@ const Sfx = {
     this.rbp.frequency.setTargetAtTime(Math.max(40, f * 1.2), t, 0.05);
     const ck = G.cam.mode === 'cockpit';
     this.eLP.frequency.setTargetAtTime(ck ? 380 + p.throttle * 500 : 600 + (p ? p.throttle : 0) * 900, t, 0.1);
-    this.eng.gain.setTargetAtTime(live && p.engineOn && p.fuel > 0 ? (0.05 + p.throttle * 0.11) * (ck ? 1.2 : 1) : 0, t, 0.1);
+    const jet = !!(p && p.spec.jet), running = live && p.engineOn && p.fuel > 0;
+    this.eng.gain.setTargetAtTime(running && !jet ? (0.05 + p.throttle * 0.11) * (ck ? 1.2 : 1) : 0, t, 0.1);
+    if (jet) {
+      const spool = clamp((p.rpm - 750) / 2150, 0, 1.2);
+      this.jw1.frequency.setTargetAtTime(1500 + spool * 2600, t, 0.25); this.jw2.frequency.setTargetAtTime(2300 + spool * 3900, t, 0.25);
+      this.jwG.gain.setTargetAtTime(running ? (0.006 + spool * 0.016) * (ck ? 0.7 : 1) : 0, t, 0.2);
+      this.jrLP.frequency.setTargetAtTime((ck ? 420 : 650) + p.throttle * 1300, t, 0.2); this.jrG.gain.setTargetAtTime(running ? 0.05 + p.throttle * 0.13 : 0, t, 0.2);
+      this.abG.gain.setTargetAtTime(running && p.boosting ? 0.5 : 0, t, p.boosting ? 0.08 : 0.3);
+    }
+    this.jet.gain.setTargetAtTime(jet && live ? 1 : 0, t, 0.15);
+    // missile motors: roar while burning, a thin whistle after, panned and pitched by their motion past you
+    const camV = live ? p.vel : _sv0;
+    for (const m of this.motors) {
+      const d = m.pos.distanceTo(camera.position), dir = _sv1.subVectors(camera.position, m.pos).multiplyScalar(1 / Math.max(d, 1));
+      const vr = _sv2.subVectors(m.vel, camV).dot(dir); // closing speed
+      const rate = clamp(343 / Math.max(80, 343 - vr * 0.75), 0.55, 2.2), burning = m.age < m.burn;
+      const v = clamp(1 - d / 3200, 0, 1) ** 2 * (burning ? 1 : 0.22) * (m.owner && m.owner.player ? 0.8 : 1);
+      m.snd.src.playbackRate.setTargetAtTime(rate, t, 0.05); m.snd.f.frequency.setTargetAtTime((burning ? 900 : 2600) * rate, t, 0.05);
+      m.snd.g.gain.setTargetAtTime(live || NET.on ? v * 0.5 : 0, t, 0.06);
+      if (m.snd.pan) m.snd.pan.pan.setTargetAtTime(clamp(-dir.dot(_sv2.set(1, 0, 0).applyQuaternion(camera.quaternion)), -1, 1) * 0.85, t, 0.05);
+    }
     this.wind.gain.setTargetAtTime(live ? clamp(p.V / 220, 0, 1) ** 2 * 0.35 : 0, t, 0.15);
     this.wBP.frequency.setTargetAtTime(400 + (p ? p.V : 0) * 6, t, 0.2);
     let nd = 1e9; for (const e of G.planes) if (!e.player && !e.gone) nd = Math.min(nd, e.pos.distanceTo(camera.position));
@@ -2720,11 +3077,45 @@ const Sfx = {
     const rate = clamp(md / 450, 0.1, 0.6);
     this.warnG.gain.setTargetAtTime(md < Infinity && (G.time % rate) < rate * 0.5 ? 0.045 : 0, t, 0.004);
   },
-  launch(pos) { if (!this.ok) return; const v = clamp(1 - pos.distanceTo(camera.position) / 3000, 0, 1) ** 2; if (v < 0.01) return; this.burst(500, 0.4, 1.2, 0.55 * v, 'lowpass'); this.burst(1800, 0.5, 0.5, 0.22 * v); },
+  // missile away: the rail lets go with a clunk, the motor lights with a crack and a rising whoosh
+  launch(pos, own) {
+    if (!this.ok) return; const v = own ? 1 : clamp(1 - pos.distanceTo(camera.position) / 3000, 0, 1) ** 2; if (v < 0.01) return;
+    if (own) this.thump(150, 50, 0.22, 0.5);
+    this.burst(2600, 0.7, 0.12, 0.3 * v, 'highpass', 0.04);
+    this.sweep(350, 2200, 0.7, 0.9, 0.5 * v, 'bandpass', 0.04);
+    this.burst(260, 0.6, 1.1, 0.4 * v, 'lowpass', 0.04);
+  },
+  motorStart(m) {
+    if (!this.ok || this.motors.size >= 10) return; const c = this.ctx;
+    const src = c.createBufferSource(); src.buffer = this.noise; src.loop = true;
+    const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 0.6;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4200;
+    const g = c.createGain(); g.gain.value = 0; const pan = c.createStereoPanner ? c.createStereoPanner() : null;
+    src.connect(f); f.connect(lp); lp.connect(g); if (pan) { g.connect(pan); pan.connect(this.master); } else g.connect(this.master);
+    src.start(0, Math.random() * 1.5); m.snd = { src, f, g, pan }; this.motors.add(m);
+  },
+  motorStop(m) {
+    if (!m.snd) return; const t = this.ctx.currentTime;
+    m.snd.g.gain.setTargetAtTime(0, t, 0.03); m.snd.src.stop(t + 0.2); this.motors.delete(m); m.snd = null;
+  },
   flare(p) { if (!this.ok) return; const v = p.player ? 0.5 : this.near(p.pos) * 0.4; if (v > 0.01) this.burst(2600, 1, 0.16, v, 'highpass'); },
   chime() { if (!this.ok) return; const c = this.ctx, t = c.currentTime; for (const [f, d] of [[660, 0], [990, 0.12]]) { const o = c.createOscillator(), g = c.createGain(); o.frequency.value = f; g.gain.setValueAtTime(0.0001, t + d); g.gain.exponentialRampToValueAtTime(0.12, t + d + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.35); o.connect(g); g.connect(this.master); o.start(t + d); o.stop(t + d + 0.4); } },
-  burst(freq, q, dur, vol, type = 'bandpass') {
-    const c = this.ctx, t = c.currentTime; const s = c.createBufferSource(); s.buffer = this.noise;
+  // a falling sine for the low thump of a blast or a missile leaving its rail
+  thump(f0, f1, dur, vol, delay = 0) {
+    const c = this.ctx, t = c.currentTime + delay, o = c.createOscillator(), g = c.createGain();
+    o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t + dur + 0.05);
+  },
+  // noise through a filter whose frequency glides from f0 to f1
+  sweep(f0, f1, q, dur, vol, type = 'bandpass', delay = 0) {
+    const c = this.ctx, t = c.currentTime + delay, s = c.createBufferSource(); s.buffer = this.noise;
+    const f = c.createBiquadFilter(); f.type = type; f.Q.value = q; f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(vol, 0.0002), t + dur * 0.25); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(this.master); s.start(t, Math.random() * 1.5, dur + 0.05);
+  },
+  burst(freq, q, dur, vol, type = 'bandpass', delay = 0) {
+    const c = this.ctx, t = c.currentTime + delay; const s = c.createBufferSource(); s.buffer = this.noise;
     const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; const g = c.createGain();
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(vol, 0.0002), t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     s.connect(f); f.connect(g); g.connect(this.master); s.start(t, Math.random() * 1.5, dur + 0.05);
@@ -2733,12 +3124,23 @@ const Sfx = {
   gun(t, p) {
     if (!this.ok) return; const now = this.ctx.currentTime;
     const v = p.player ? 1 : this.near(p.pos) * 0.6; if (v < 0.01) return;
-    if (now - (p.player ? this.lastGun[t] : 0) < (t === 'm' ? 0.055 : 0.085)) return; if (p.player) this.lastGun[t] = now;
-    if (t === 'm') this.burst(1700, 0.9, 0.06, 0.22 * v); else { this.burst(420, 1.2, 0.16, 0.42 * v); this.burst(2500, 0.6, 0.04, 0.12 * v); }
+    if (now - (p.player ? this.lastGun[t] || 0 : 0) < (t === 'm' || t === 'h' ? 0.055 : t === 'r' ? 0.028 : 0.085)) return; if (p.player) this.lastGun[t] = now;
+    if (t === 'm') this.burst(1700, 0.9, 0.06, 0.22 * v); else if (t === 'h') { this.burst(1100, 0.9, 0.07, 0.3 * v); this.burst(300, 1, 0.08, 0.16 * v); } else if (t === 'r') { this.burst(700, 0.7, 0.05, 0.3 * v); this.burst(2200, 0.5, 0.03, 0.1 * v); } else { this.burst(420, 1.2, 0.16, 0.42 * v); this.burst(2500, 0.6, 0.04, 0.12 * v); }
   },
   hit(p) { if (!this.ok) return; const v = p.player ? 0.6 : this.near(p.pos) * 0.4; if (v > 0.01) this.burst(3200, 3, 0.05, v, 'bandpass'); },
   crack() { if (this.ok) this.burst(4200, 0.7, 0.03, 0.35, 'highpass'); },
-  boom(pos) { if (!this.ok) return; const v = clamp(1 - pos.distanceTo(camera.position) / 5000, 0, 1) ** 1.5; if (v < 0.01) return; this.burst(240, 0.6, 1.8, 0.9 * v, 'lowpass'); this.burst(900, 0.6, 0.4, 0.4 * v, 'lowpass'); },
+  // a blast, heard after the light by the time sound takes to arrive: a sharp crack up close, the boom itself
+  // falling in pitch, a sub-bass thump, a long rumble, and bits of wreckage pattering down nearby
+  boom(pos, size = 1, kind = 'air') {
+    if (!this.ok) return; const d = pos.distanceTo(camera.position), v = clamp(1 - d / 6000, 0, 1) ** 1.5 * Math.min(1.3, 0.55 + size * 0.45); if (v < 0.01) return;
+    const delay = Math.min(3, d / 343), far = clamp(d / 3000, 0, 1);
+    if (d < 900) this.burst(3200, 0.6, 0.09, 0.55 * v * (1 - d / 900), 'highpass', delay);
+    this.sweep(lerp(1600, 700, far), 140, 0.5, 2.0, 0.85 * v, 'lowpass', delay);
+    this.thump(85, 30, 0.7, 0.5 * v, delay);
+    this.burst(120, 0.7, 3.4, 0.32 * v, 'lowpass', delay + 0.05);
+    if (kind === 'water') this.sweep(900, 3000, 0.6, 1.4, 0.25 * v, 'highpass', delay + 0.1);
+    if (d < 700 && kind !== 'missile') for (let i = 0; i < 9; i++) this.burst(rand(2500, 6500), 2, 0.025, rand(0.04, 0.12) * v, 'bandpass', delay + 0.3 + Math.random() * 1.3);
+  },
 };
 
 // =====================================================================
@@ -2763,7 +3165,7 @@ function updateCamera(dt, rdt) {
   }
   const shake = c.shake; c.shake = Math.max(0, c.shake - rdt * 2.5);
   if (c.mode === 'cockpit') {
-    camera.position.set(0, 0.9, -0.05).applyQuaternion(p.q).add(p.pos);
+    const e = p.spec.eye || [0, 0.9, -0.05]; camera.position.set(e[0], e[1], e[2]).applyQuaternion(p.q).add(p.pos);
     camera.quaternion.copy(p.q); camera.rotateX(-0.05);
     if (shake > 0) camera.rotateX((Math.random() - 0.5) * shake * 0.02);
     return;
@@ -2771,12 +3173,12 @@ function updateCamera(dt, rdt) {
   const aimMode = (settings.control === 'mouse' || settings.control === 'touch-aim') && p.alive && !AUTOPILOT;
   if (aimMode) {
     _dir.set(-Math.sin(G.aimYaw) * Math.cos(G.aimPitch), Math.sin(G.aimPitch), -Math.cos(G.aimYaw) * Math.cos(G.aimPitch));
-    camera.position.copy(p.pos).addScaledVector(_dir, -21).add(_a.set(0, 5.5, 0));
+    const cb = Math.max(21, p.spec.length * 1.8); camera.position.copy(p.pos).addScaledVector(_dir, -cb).add(_a.set(0, 5.5 * cb / 21, 0));
     camera.up.set(0, 1, 0); _cp.copy(p.pos).addScaledVector(_dir, 300); camera.lookAt(_cp);
     c.q.copy(camera.quaternion);
   } else {
     c.q.slerp(p.q, 1 - Math.exp(-rdt * 5));
-    camera.position.set(0, 4.3, 17).applyQuaternion(c.q).add(p.pos);
+    const cb = Math.max(17, p.spec.length * 1.5); camera.position.set(0, 4.3 * cb / 17, cb).applyQuaternion(c.q).add(p.pos);
     camera.quaternion.copy(c.q); camera.rotateX(-0.09);
   }
   if (shake > 0) { camera.position.x += (Math.random() - 0.5) * shake * 0.6; camera.position.y += (Math.random() - 0.5) * shake * 0.6; }
@@ -2885,7 +3287,7 @@ function drawHUD(rdt) {
     if (s.ok) { hx.strokeStyle = '#97c46f'; hx.lineWidth = 2; hx.strokeRect(s.x - 10, s.y - 10, 20, 20); txt(`BASE ${(d / 1000).toFixed(1)} km`, s.x, s.y + 26, 11, '#97c46f', 'center'); }
   }
   // objective, score
-  const obj = !m ? '' : NET.on ? netObjective() : m.phase === 'takeoff' ? 'Take off · full throttle, lift off near 100 mph' : m.phase === 'combat' ? (m.next !== null ? `Wave ${m.wave + 1} inbound in ${Math.ceil(m.next)} s` : `Wave ${m.wave} of ${WAVES.length} · ${enemies().length} bandit${enemies().length === 1 ? '' : 's'} remaining`) : m.phase === 'rtb' ? 'Return to base and land on the runway' : m.phase === 'landed' ? 'Landed' : '';
+  const obj = !m ? '' : NET.on ? netObjective() : m.phase === 'takeoff' ? liftOffText() : m.phase === 'combat' ? (m.next !== null ? `Wave ${m.wave + 1} inbound in ${Math.ceil(m.next)} s` : `Wave ${m.wave} of ${WAVES.length} · ${enemies().length} bandit${enemies().length === 1 ? '' : 's'} remaining`) : m.phase === 'rtb' ? 'Return to base and land on the runway' : m.phase === 'landed' ? 'Landed' : '';
   txt(obj.toUpperCase(), HW / 2, safeT + 18, isTouch ? 13 : 15, '#f1e8d2', 'center', COND, 600);
   // on phones the score sits under the button row
   const scoreX = HW - safeL, scoreY = isTouch ? safeT + 66 : safeT;
@@ -2902,13 +3304,13 @@ function drawHUD(rdt) {
   _a.copy(p.pos).addScaledVector(p.vel, 3.5); if (!p.onGround && p.vel.y < -5 && _a.y < Math.max(groundH(_a.x, _a.z), waterLevelAt(_a.x, _a.z)) + 20 && !(m && (m.phase === 'rtb') && p.gear)) warns.push('PULL UP');
   if (p.onFire) warns.push('FIRE'); if (p.fuel < 30 && p.fuel > 0) warns.push('LOW FUEL'); if (p.fuel <= 0) warns.push('FUEL OUT');
   if (Math.hypot(p.pos.x, p.pos.z) > COMBAT) warns.push('LEAVING SECTOR');
-  if (p.gear && p.V > 115) warns.push('GEAR SPEED');
+  if (p.gear && p.V > (p.spec.gearV || 115)) warns.push('GEAR SPEED');
   if (threat) warns.unshift(isTouch ? 'MISSILE · BREAK AND FLARE' : 'MISSILE · BREAK HARD, F FOR FLARES');
   if (warns.length && (G.time * 3 % 1) < 0.7) warns.forEach((w, i) => txt(w, HW / 2, HH * 0.32 + i * 24, 20, '#e2553f', 'center', COND, 700));
   // flight data
   const MPH = 2.23694; // m/s to mph
   const ias = p.V * MPH * Math.sqrt(Math.exp(-Math.max(0, p.pos.y) / 8500));
-  const ammoTxt = `MG ${p.ammo.m}  CN ${p.ammo.c}  MSL ${p.missiles}  FLR ${p.flares}`;
+  const ammoTxt = `${Object.entries(p.ammo).map(([k, v]) => `${GUN_LABEL[k] || k.toUpperCase()} ${v}`).join('  ')}  MSL ${p.missiles}  FLR ${p.flares}`;
   if (isTouch) {
     const line = `${Math.round(ias)} mph · ${Math.round(p.pos.y)} m · G ${p.gs.toFixed(1)} · THR ${Math.round(p.throttle * 100)}${p.boosting ? ' · BOOST' : ''} · WEP ${Math.round(p.wep * 100)}%`;
     const lx = Math.min(HW / 2, (HW - 230) / 2 + 40);
@@ -2923,7 +3325,7 @@ function drawHUD(rdt) {
     txt(`G    ${p.gs.toFixed(1)}`, x0, y0 + 60, 13, p.gs > 6 ? '#eaa53c' : '#c4bba3');
     txt(`THR  ${Math.round(p.throttle * 100)}%`, x0, y0 + 80, 13, '#c4bba3'); hx.fillStyle = '#eaa53c'; hx.fillRect(x0 + 100, y0 + 72, 80 * p.throttle, 6); hx.strokeStyle = 'rgba(241,232,210,.4)'; hx.lineWidth = 1; hx.strokeRect(x0 + 100, y0 + 72, 80, 6);
     txt(`${p.gear ? 'GEAR DN' : 'GEAR UP'}  ${p.flaps ? 'FLAPS' : ''}  FUEL ${Math.round(p.fuel / p.spec.fuel * 100)}%`, x0, y0 + 100, 11, '#c4bba3');
-    txt(p.boosting ? 'BOOST' : 'WEP', x0 + 100, y0 + 60, 11, p.boosting ? '#e2553f' : '#c4bba3'); hx.fillStyle = p.boosting ? '#e2553f' : 'rgba(241,232,210,.55)'; hx.fillRect(x0 + 140, y0 + 53, 40 * p.wep, 5);
+    txt(p.boosting ? (p.spec.jet ? 'A/B' : 'BOOST') : (p.spec.jet ? 'A/B' : 'WEP'), x0 + 100, y0 + 60, 11, p.boosting ? '#e2553f' : '#c4bba3'); hx.fillStyle = p.boosting ? '#e2553f' : 'rgba(241,232,210,.55)'; hx.fillRect(x0 + 140, y0 + 53, 40 * p.wep, 5);
     txt(ammoTxt, HW - safeL, HH - 20, 13, '#f1e8d2', 'right');
   }
   // damage diagram + corner map (radar, the whole sector, or off)
@@ -2941,6 +3343,7 @@ function drawHUD(rdt) {
     hx.globalAlpha = 0.95; hx.drawImage(gaugeCanvas, (HW - gw) / 2, HH - gh - (isTouch ? 44 : 8), gw, gh); hx.globalAlpha = 1;
   }
 }
+function liftOffText() { const p = G.player, v = p ? Math.round(p.stallSpeed() * 1.15 * 2.237 / 5) * 5 : 100; return `Take off · full throttle${p && p.spec.jet ? ', afterburner helps' : ''}, lift off near ${v} mph`; }
 function drawMsgs() {
   let y = 64;
   for (const m of G.msgs) { const a = clamp(m.t / 0.6, 0, 1); hx.globalAlpha = a; txt(m.text, HW / 2, y, isTouch ? 14 : 16, m.kind === 'danger' ? '#e2553f' : m.kind === 'warn' ? '#eaa53c' : m.kind === 'good' ? '#97c46f' : '#f1e8d2', 'center', COND, 600); y += 22; }
@@ -3075,7 +3478,16 @@ $('btnEnd').addEventListener('click', () => {
   if (NET.on) { if (NET.host) { G.state = 'play'; showScreen(null); NET.w.done = true; finishNet('ended'); } else post({ type: 'leave' }); return; }
   G.state = 'play'; endMission(false);
 });
-$('btnAgain').addEventListener('click', () => { if (NET.on) { if (NET.host) post({ type: 'rematch' }); return; } startMission(G.mission ? G.mission.mode : 'sortie'); });
+$('btnAgain').addEventListener('click', () => { if (NET.on) { post({ type: 'rematch' }); if (!NET.host) { NET.rmSent = true; rematchButton(); } return; } startMission(G.mission ? G.mission.mode : 'sortie'); });
+// The Game Center's shared rematch: the host's tap starts a new round for everyone at the table
+// (same pilots, same room code); anyone else's tap says "I'm in" and the host sees who is ready.
+function rematchButton() {
+  const b = $('btnAgain'), rm = NET.rm || { ready: [], mine: false, host: 'the host' };
+  if (!NET.on) return;
+  if (NET.host) { b.textContent = rm.solo ? 'Fly again' : rm.ready.length ? `Rematch — ${rm.ready.join(', ')} ${rm.ready.length === 1 ? 'is' : 'are'} in` : 'Rematch — same pilots'; b.disabled = false; }
+  else if (rm.mine || NET.rmSent) { b.textContent = `You're in ✓ — waiting for ${rm.host}`; b.disabled = true; }
+  else { b.textContent = "Rematch — I'm in"; b.disabled = false; }
+}
 $('btnMenu').addEventListener('click', () => { if (NET.on) { post({ type: 'leave' }); return; } G.state = 'menu'; clearWorldPlanes(); G.player = null; G.mission = null; showScreen('menu'); });
 function setPhoneMode(v) {
   settings.phone = v; isTouch = v === 'on' || (v !== 'off' && touchDevice);
@@ -3101,8 +3513,26 @@ $('btnFull').addEventListener('click', () => {
   const el = document.documentElement; const req = el.requestFullscreen || el.webkitRequestFullscreen;
   try { const r = req.call(el); if (r && r.then) r.then(() => { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => { }); }).catch(() => { }); } catch (e) { }
 });
-function pick(k) { settings.plane = k; saveSettings(); $('pickKestrel').setAttribute('aria-checked', k === 'kestrel'); $('pickFalke').setAttribute('aria-checked', k === 'falke'); }
-$('pickKestrel').addEventListener('click', () => pick('kestrel')); $('pickFalke').addEventListener('click', () => pick('falke'));
+// aircraft cards, grouped by era; bars are turn, speed, climb and guns within that era
+(function buildPlaneCards() {
+  const box = $('planeList'), esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  for (const era of ['prop', 'jet']) {
+    const h = document.createElement('h4'); h.textContent = ERA_NAME[era]; box.append(h);
+    for (const k of Object.keys(SPECS).filter(k => SPECS[k].era === era)) {
+      const sp = SPECS[k], [blurb, ...bars] = sp.card, b = document.createElement('button');
+      b.className = 'pcard'; b.id = 'pick-' + k; b.setAttribute('role', 'radio'); b.dataset.plane = k;
+      // a picture rendered from the game (tools/dogfight-plane-thumbs.cjs), a spec line, the bars and two fun facts
+      const guns = {}; for (const gn of sp.guns) guns[gn.t] = (guns[gn.t] || 0) + 1;
+      const gunTxt = Object.entries(guns).map(([t, n]) => `${n} ${GUN_NAME[t]}`).join(' + ');
+      b.innerHTML = `<div class="ph"><img src="planes/${k}.jpg" alt="${esc(sp.full)}" width="128" height="64" loading="lazy"><div><b>${esc(sp.full)}</b><small>${esc(blurb)}</small></div></div>`
+        + `<span class="spec">Top ${sp.top} mph · ${gunTxt} · ${DIFF.normal.playerMsl + (sp.mslBonus || 0)} missiles</span>`
+        + ['Turn', 'Speed', 'Climb', 'Guns'].map((n, i) => `<div class="stat">${n}<div class="bar"><i style="width:${bars[i]}%"></i></div></div>`).join('')
+        + `<ul class="facts">${(sp.facts || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul>`;
+      b.addEventListener('click', () => pick(k)); box.append(b);
+    }
+  }
+})();
+function pick(k) { if (!SPECS[k]) k = 'kestrel'; settings.plane = k; saveSettings(); for (const b of $('planeList').querySelectorAll('.pcard')) b.setAttribute('aria-checked', b.dataset.plane === k); }
 function updateHint() {
   const h = $('ctrlHint');
   if (isTouch) h.innerHTML = 'Phone controls: left thumb steers, slide the throttle on the right, hold <kbd>FIRE</kbd>, tap <kbd>MSL</kbd> when the box turns red, <kbd>FLARE</kbd> when a missile is coming. The assisted stick levels the wings and holds your height when you let go. Switch to touch-drag aim or tilt steering in settings.';
@@ -3169,7 +3599,7 @@ function frame(now) {
     for (const p of G.planes) { if (!p.gone) emitTrails(p, dt); }
     for (const c of G.crashSites) { c.t -= dt; if (Math.random() < dt * 8 && c.t > 0) { smokeFX.spawn(c.x + rand(-3, 3), c.y + 1, c.z + rand(-3, 3), rand(-1, 1) + 2, rand(5, 8), rand(-1, 1), rand(6, 10), 6, 4, 0.14, 0.13, 0.12, c.t / 45 * 0.7, 0.1, -0.2, 0); if (Math.random() < 0.4 && !c.water) fireFX.spawn(c.x + rand(-2, 2), c.y + 0.5, c.z + rand(-2, 2), 0, rand(2, 5), 0, 0.6, 3, 1, 1, 0.6, 0.3, c.t / 45, 0.5, -1, 1); } }
     G.crashSites = G.crashSites.filter(c => c.t > 0);
-    smokeFX.update(dt); fireFX.update(dt);
+    smokeFX.update(dt); fireFX.update(dt); updateBlastFX(dt);
     for (const p of G.planes) if (!p.gone) p.visuals(dt);
     updateCamera(dt, rdt);
     updateFov(rdt);
@@ -3227,11 +3657,11 @@ window.__game = { get post() { return !!renderPipeline; }, get fx() { return { s
   renderNow(dt = 0) {
     return new Promise(resolve => renderer.setAnimationLoop(() => {
       renderer.setAnimationLoop(frame);
-      smokeFX.update(dt); fireFX.update(dt); for (const p of G.planes) if (!p.gone) p.visuals(0); sky.position.copy(camera.position); updateTracers();
+      smokeFX.update(dt); fireFX.update(dt); updateBlastFX(dt); for (const p of G.planes) if (!p.gone) p.visuals(0); sky.position.copy(camera.position); updateTracers();
       if (renderPipeline && QUALITY[settings.quality].bloom) renderPipeline.render(); else renderer.render(scene, camera);
       resolve(canvas.toDataURL('image/png'));
     }));
-  }, G, settings, startMission, SPECS, NET, netSend, finishNet, MSL, LOCK, launchMissile, dropFlares, DIFF };
+  }, G, settings, startMission, SPECS, NET, netSend, finishNet, MSL, LOCK, launchMissile, dropFlares, DIFF, explosion, Sfx };
 
 (async function boot() {
   resizeHUD();

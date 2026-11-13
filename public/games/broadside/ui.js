@@ -478,7 +478,7 @@ export function mount(ctx) {
         h(
           'div.bs-report-btns',
           h('button.btn.ghost', { onclick: () => ctx.leave() }, 'Game Center'),
-          ctx.client.isHost ? h('button.btn.gold', { onclick: () => ctx.client.send({ t: 'rematch' }) }, 'Rematch') : h('small', 'Waiting for the host…'),
+          ctx.rematch(),
         ),
       ),
     );

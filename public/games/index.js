@@ -4,10 +4,16 @@
 export const GAME_MODULES = [
   () => import('./rook/index.js'),
   () => import('./pinochle/index.js'),
+  () => import('./euchre/index.js'),
   () => import('./hexstead/index.js'),
   () => import('./broadside/index.js'),
+  () => import('./roofline/index.js'),
+  () => import('./shed-tycoon/index.js'),
   () => import('./escape-grind/index.js'),
   () => import('./four-in-a-row/index.js'),
+  () => import('./spit-speed/index.js'),
+  () => import('./chinese-checkers/index.js'),
+  () => import('./liars-dice/index.js'),
   () => import('./dogfight/index.js'),
   () => import('./rally/index.js'),
 ];

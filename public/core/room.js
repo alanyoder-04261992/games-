@@ -60,6 +60,7 @@ export class HostRoom extends Emitter {
     this.peer = null;
     this.status = online ? 'connecting' : 'offline';
     this.players = new Map();
+    this.rematchVotes = new Set(); // players who said "I'm in" for a rematch after the game ended
     this.chatLog = saved?.chat || [];
     this.timer = null;
     this.claim = null;
@@ -287,6 +288,8 @@ export class HostRoom extends Emitter {
           hostMuted: !!p.hostMuted,
         })),
       started: this.started,
+      // ids of players ready for a rematch (only after a game has ended)
+      rematch: [...this.rematchVotes].filter((id) => this.players.has(id) && !this.players.get(id).kicked && this.seatOf(id) != null),
     };
   }
 
@@ -375,7 +378,9 @@ export class HostRoom extends Emitter {
     for (let i = 0; i < this.seats.length; i++) if (this.seats[i].kind === 'open') this.seats[i] = this.#newBot(i);
     this.state = this.game.engine.setup({ seed: (Math.random() * 2 ** 32) >>> 0, options: this.options });
     this.started = true;
+    this.rematchVotes.clear();
     this.seq = 0;
+    this.due = null;
     this.lastEvent = { type: 'start' };
     this.#broadcastLobby();
     this.#broadcastState(this.lastEvent);
@@ -383,10 +388,25 @@ export class HostRoom extends Emitter {
     this.schedule();
   }
 
+  // Same table, same seats, same players, same room code: just a fresh deal. Anyone who
+  // dropped out keeps their seat (a computer player covers it until they come back).
   rematch() {
     this.started = false;
     this.claim = null;
     this.start();
+  }
+
+  // A seated player taps Rematch after the game ended. The host's tap starts the new game
+  // right away (the host's device runs the table). Anyone else's tap tells the table they are
+  // in: the host sees who is ready on their Rematch button, plus a toast and a chat line.
+  #rematchVote(p) {
+    if (!this.started || !this.state || !this.game.engine.isOver(this.state)) return;
+    if (p.isHost) return this.rematch();
+    if (this.seatOf(p.id) == null || this.rematchVotes.has(p.id)) return; // watchers don't get a say
+    this.rematchVotes.add(p.id);
+    this.#system(`${p.name} is in for a rematch`);
+    this.#send(this.players.get('host'), { t: 'toast', text: `${p.name} wants a rematch` });
+    this.#broadcastLobby();
   }
 
   handle(playerId, msg) {
@@ -448,7 +468,7 @@ export class HostRoom extends Emitter {
         this.#sendState(p, null);
         break;
       case 'rematch':
-        if (p.isHost && this.game.engine.isOver(this.state)) this.rematch();
+        this.#rematchVote(p);
         break;
       case 'rt': {
         // Real-time channel for action games (see docs/ADDING_A_GAME.md). Relayed to everyone
@@ -473,6 +493,7 @@ export class HostRoom extends Emitter {
     this.seq++;
     this.lastEvent = { seat, action, seq: this.seq };
     this.prevState = prev;
+    if (this.due) delete this.due[seat]; // real-time games: this seat starts a fresh clock
     if (this.claim != null && !this.game.engine.claimActive(this.state, this.claim)) this.claim = null;
     this.#broadcastState(this.lastEvent);
     this.#persist();
@@ -526,20 +547,32 @@ export class HostRoom extends Emitter {
 
     const speed = SPEEDS[this.settings.speed]?.factor ?? 1;
     const actors = engine.actors(this.state);
+    // pace's 4th argument says who is about to move, so a game can time each seat differently
+    const pace = (seat, level) => (this.game.pace ? this.game.pace(this.state, this.lastEvent, this.prevState, { seat, level }) : 700);
+    // Real-time games (manifest `realtime: true`, where several seats act at once): each seat
+    // keeps its own clock from when it could first act, so one quick player doesn't keep
+    // restarting the computer's reaction time.
+    const now = Date.now();
+    if (this.game.realtime) for (const seat of Object.keys(this.due || {})) if (!actors.includes(+seat)) delete this.due[seat];
     let pick = null;
     let wait = Infinity;
     for (const seat of actors) {
       const s = this.seats[seat];
       let delay = null;
       if (this.claim != null) delay = 380;
-      else if (s.kind === 'bot') delay = this.game.pace ? this.game.pace(this.state, this.lastEvent, this.prevState) : 700;
+      else if (s.kind === 'bot') delay = pace(seat, s.level);
       else if (s.kind === 'human') {
         const p = this.players.get(s.playerId);
-        if (p?.autopilot) delay = this.game.pace ? this.game.pace(this.state, this.lastEvent, this.prevState) : 700;
+        if (p?.autopilot) delay = pace(seat, this.settings.botLevel);
         else if (!p?.connected) delay = 9000; // give a dropped player a moment, then the computer covers
       }
       if (delay == null) continue;
       delay *= this.claim != null ? Math.min(speed, 1) : speed;
+      if (this.game.realtime) {
+        this.due ??= {};
+        this.due[seat] ??= now + delay;
+        delay = Math.max(0, this.due[seat] - now);
+      }
       if (delay < wait) [pick, wait] = [seat, delay];
     }
     if (pick == null) return;
