@@ -6,7 +6,7 @@ import { SPIT_TILE as TILE } from './tile.js';
 
 export default {
   id: 'spit-speed',
-  version: '1.0', // shown on the home tile; bump it whenever you improve the game
+  version: '1.1', // shown on the home tile; bump it whenever you improve the game
   name: 'Spit & Speed',
   tagline: 'No turns, just fast hands. Race to get rid of your cards.',
   description:
