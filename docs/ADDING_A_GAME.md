@@ -110,7 +110,20 @@ screen doesn't place one, the table shows it in a bar along the bottom once the 
 A game in its own frame (Dogfight, Rally) marks its frame with `data-own-rematch` and gets
 the status through its bridge instead (see `public/games/rally/ui.js`).
 
-## Real-time games
+## Games where everyone plays at once
+
+A card game like Spit & Speed (`public/games/spit-speed/`) has no turns but still runs on the
+rules engine: `actors()` returns every seat that has a legal move, and the host applies moves
+in the order they arrive (a move that's no longer legal gets `check()`'s reason back, such as
+"Too slow"). Two manifest settings help:
+
+```js
+realtime: true,   // each computer player keeps its own reaction clock, so a fast human
+                  // playing over and over doesn't keep restarting the computer's timer
+pace(state, lastEvent, prevState, { seat, level }) { … }  // who is about to move, and their level
+```
+
+## Real-time channel
 
 Turn-based games never need this. A game where everyone acts at once (like Coastal Dogfight)
 can use the room's real-time channel next to the rules engine:

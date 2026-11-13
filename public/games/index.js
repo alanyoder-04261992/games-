@@ -10,6 +10,7 @@ export const GAME_MODULES = [
   () => import('./shed-tycoon/index.js'),
   () => import('./escape-grind/index.js'),
   () => import('./four-in-a-row/index.js'),
+  () => import('./spit-speed/index.js'),
   () => import('./chinese-checkers/index.js'),
   () => import('./liars-dice/index.js'),
   () => import('./dogfight/index.js'),
