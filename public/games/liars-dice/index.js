@@ -6,7 +6,7 @@ import { LIARS_TILE as TILE } from './tile.js';
 
 export default {
   id: 'liars-dice',
-  version: '1.0', // shown on the home tile; bump it whenever you improve the game
+  version: '1.1', // shown on the home tile; bump it whenever you improve the game
   name: "Liar's Dice",
   tagline: 'Hide your dice, raise the bid, call the bluff.',
   description:
