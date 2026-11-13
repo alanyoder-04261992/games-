@@ -215,7 +215,7 @@ table.res i{display:inline-block;width:10px;height:10px;border-radius:2px;margin
 // Three.js r187 drawing with WebGPU (WebGPURenderer falls back to WebGL2 by itself), through
 // the import map above so the add-ons share one copy of it. Shaders are written in TSL.
 import * as THREE from 'three/webgpu';
-import { Fn, uniform, texture, pmremTexture, diffuseColor, normalWorld, uv, vec2, vec3, vec4, float, mix, smoothstep, pow, exp, dot, normalize, reflect, cos, positionWorld, positionGeometry, normalGeometry, cameraPosition, positionView, screenDPR, instancedDynamicBufferAttribute, pass, sample, rtt, unpackRGBToNormal } from 'three/tsl';
+import { Fn, uniform, texture, pmremTexture, diffuseColor, normalWorld, uv, vec2, vec3, vec4, float, mix, smoothstep, pow, exp, dot, normalize, reflect, cos, positionWorld, positionGeometry, normalGeometry, cameraPosition, positionView, screenDPR, instancedDynamicBufferAttribute, pass, mrt, normalView, rtt, context, renderOutput, densityFogFactor } from 'three/tsl';
 import { SkyMesh } from 'three/addons/objects/SkyMesh.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -280,7 +280,32 @@ await renderer.init();
 const scene = new THREE.Scene(); scene.environmentIntensity = 0.55; // sky reflections, kept off the matte surfaces' backs
 const HORIZON = new THREE.Color('#c3d3df'), ZENITH = new THREE.Color('#3d6aa3'), SUN = new V3(-0.45, 0.7, 0.55).normalize();
 const FOG = { density: 0.00028 };
-scene.fog = new THREE.FogExp2(HORIZON.clone(), FOG.density);
+const SCENE_FOG = scene.fog = new THREE.FogExp2(HORIZON.clone(), FOG.density);
+// How the frame reaches the canvas.
+// High: materials output linear light into the RenderPipeline (AO, bloom), which tone-maps (ACES)
+// and encodes sRGB once at the end, with the fog mixed in linear light, as the old post chain did.
+// Medium and Low (phones): no full-screen pass at all. Every material tone-maps and encodes its own
+// colour as it draws straight into the canvas, as the WebGL renderer did, and then the fog goes on
+// toward the fog colour in sRGB, WebGL's order (it gave the shaders the fog colour in output space).
+const fogOut = { color: uniform(new THREE.Color()), density: uniform(FOG.density) };
+let linearContext = null, directContext = null;
+const directOutput = (color, builder) => {
+  if (builder.renderer.getRenderTarget() !== null) return color; // shadow maps, the sky probe and reflections stay linear
+  const mat = builder.material, out = renderOutput(color, THREE.ACESFilmicToneMapping, THREE.SRGBColorSpace);
+  out.premultipliedAlpha = !!mat?.premultipliedAlpha;
+  if (!mat || mat.fog === false) return out;
+  return vec4(mix(out.rgb, fogOut.color, densityFogFactor(fogOut.density)), out.a);
+};
+function applyOutputStyle(q) {
+  const direct = !QUALITY[q].bloom;
+  if (!linearContext) { linearContext = renderer.contextNode; directContext = context({ ...linearContext.getFlowContextData(), getOutput: directOutput }); }
+  // swapping the context node changes every render object's cache key, so materials build (once) for the new style
+  renderer.contextNode = direct ? directContext : linearContext;
+  renderer.toneMapping = direct ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping; // NoToneMapping + linear output: no framebuffer target
+  renderer.outputColorSpace = direct ? THREE.LinearSRGBColorSpace : THREE.SRGBColorSpace;
+  scene.fog = direct ? null : SCENE_FOG; // on Medium/Low the fog is added in directOutput instead
+}
+applyOutputStyle(settings.quality);
 const camera = new THREE.PerspectiveCamera(isTouch ? 72 : 66, innerWidth / innerHeight, 0.3, 30000);
 scene.add(camera);
 const hemi = new THREE.HemisphereLight(0xd6e4f5, 0x5d5c42, 1.3); scene.add(hemi);
@@ -318,7 +343,7 @@ async function sampleSky(dir, out) {
 }
 async function applySky(name) {
   const k = SKIES[name] || SKIES.day;
-  SUN.set(...k.sun).normalize(); scene.fog.density = FOG.density = k.fog;
+  SUN.set(...k.sun).normalize(); SCENE_FOG.density = fogOut.density.value = FOG.density = k.fog;
   sun.color.set(k.sunCol); sun.intensity = k.sunI; hemi.color.set(k.hs); hemi.groundColor.set(k.hg); hemi.intensity = k.hi; renderer.toneMappingExposure = k.exp;
   skyU.sunPosition.value.copy(SUN); skyU.turbidity.value = k.turb; skyU.rayleigh.value = k.ray; skyU.mieCoefficient.value = k.mie; skyU.mieDirectionalG.value = k.g;
   skyU.cloudCoverage.value = k.cov; skyU.cloudDensity.value = k.dens; skyU.cloudElevation.value = k.elev; skyU.skyGain.value = k.gain;
@@ -336,7 +361,7 @@ async function applySky(name) {
     const l = lum(HORIZON); if (l > 0.95) HORIZON.multiplyScalar(0.95 / l); const l2 = lum(HORIZON); HORIZON.lerp(new THREE.Color(l2, l2, l2), k.desat ?? 0.3);
     if (await sampleSky(new V3(-SUN.x, 0.8, -SUN.z), ZENITH)) ZENITH.multiplyScalar(f).lerp(new THREE.Color(k.zen), 0.5); else ZENITH.set(k.zen);
   } else { HORIZON.set(k.hor); ZENITH.set(k.zen); }
-  scene.fog.color.copy(HORIZON);
+  SCENE_FOG.color.copy(HORIZON); fogOut.color.value.copy(HORIZON).convertLinearToSRGB();
 }
 
 // =====================================================================
@@ -665,7 +690,7 @@ function buildTrees(tr, count) {
 }
 // the lake: three swells of ripples, a Fresnel blend from the deep water colour to
 // the sky it reflects (horizon to zenith), a hot sun glint, and its own distance haze
-const waterU = { time: uniform(0), sun: uniform(SUN), hor: uniform(HORIZON), zen: uniform(ZENITH), fogC: uniform(scene.fog.color), fogD: uniform(0.0003) };
+const waterU = { time: uniform(0), sun: uniform(SUN), hor: uniform(HORIZON), zen: uniform(ZENITH), fogC: uniform(SCENE_FOG.color), fogD: uniform(0.0003) };
 const waterMat = new THREE.MeshBasicNodeMaterial({ fog: false, colorNode: Fn(() => {
   const p = positionWorld.xz, toCam = cameraPosition.sub(positionWorld), dist = toCam.length();
   const wv = (dx, dz, f, a, s) => { const d = vec2(dx, dz); return d.mul(cos(dot(p, d).mul(f).add(waterU.time.mul(s))).mul(f * a)); };
@@ -1553,7 +1578,7 @@ bindSel('setMap', 'map');
 $('setVolume').addEventListener('input', e => { settings.volume = +e.target.value; saveSettings(); Sfx.vol(settings.volume); });
 $('setAssist').addEventListener('change', e => { settings.assist = e.target.checked; saveSettings(); });
 $('setAutoGas').addEventListener('change', e => { settings.autogas = e.target.checked; saveSettings(); });
-$('setQuality').addEventListener('change', e => { settings.quality = e.target.value; saveSettings(); const q = QUALITY[settings.quality]; renderer.setPixelRatio(Math.min(devicePixelRatio || 1, q.pr)); renderer.shadowMap.enabled = q.shadows; scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); if (q.bloom) setupPost(); onResize(); $('qualityNote').hidden = false; });
+$('setQuality').addEventListener('change', e => { settings.quality = e.target.value; saveSettings(); const q = QUALITY[settings.quality]; renderer.setPixelRatio(Math.min(devicePixelRatio || 1, q.pr)); renderer.shadowMap.enabled = q.shadows; applyOutputStyle(settings.quality); scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); if (q.bloom) setupPost(); onResize(); $('qualityNote').hidden = false; });
 function setPhoneMode(v) { settings.phone = v; isTouch = v === 'on' || (v !== 'off' && touchDevice); if (isTouch && settings.control === 'keys') settings.control = 'slide'; if (!isTouch) settings.control = 'keys'; saveSettings(); $('optPhone').value = $('setPhone').value = v; $('setControl').value = settings.control; if (G.state === 'race') $('touch').hidden = !isTouch; applyControlMode(); updateHint(); }
 $('optPhone').addEventListener('change', e => setPhoneMode(e.target.value)); $('setPhone').addEventListener('change', e => setPhoneMode(e.target.value));
 $('btnRace').addEventListener('click', () => { if (NET.on) { if (NET.host) netStartAll(); return; } if (showcaseCar) { showcaseCar.dispose(); showcaseCar = null; } startRace('race'); });
@@ -1581,10 +1606,11 @@ async function setupPost() {
     const [{ ao }, { denoise }, { bloom }] = await Promise.all(['GTAONode', 'DenoiseNode', 'BloomNode'].map(n => import(`three/addons/tsl/display/${n}.js`)));
     if (postFX) return;
     const pipeline = new THREE.RenderPipeline(renderer);
-    // opaque geometry only, single-sampled, drawn with a plain normal material (as cheap as the old AO's normal pass)
-    const pre = pass(scene, camera, { samples: 0 }); pre.transparent = false; pre.overrideMaterial = new THREE.MeshNormalNodeMaterial();
-    const preColor = pre.getTextureNode(), depth = pre.getTextureNode('depth');
-    const normal = sample(c => unpackRGBToNormal(preColor.sample(c)));
+    // opaque geometry only, single-sampled, with one plain material standing in for all of them
+    // (as cheap as the old AO's normal pass); it writes view-space normals as they are
+    const pre = pass(scene, camera, { samples: 0 }); pre.transparent = false; pre.overrideMaterial = new THREE.MeshBasicNodeMaterial();
+    pre.setMRT(mrt({ output: normalView }));
+    const normal = pre.getTextureNode(), depth = pre.getTextureNode('depth');
     // ground-truth ambient occlusion: soft contact shading under cars, round barns, in the trees
     // at half resolution (soft shading needs no more), then denoised once into its own half-size texture
     const aoNode = ao(depth, normal, camera); aoNode.resolutionScale = 0.5;
@@ -1594,7 +1620,9 @@ async function setupPost() {
     const aoSoft = rtt(aoDen, null, null, { resolutionScale: 0.5, depthBuffer: false });
     const scenePass = pass(scene, camera);
     const shaded = scenePass.getTextureNode().rgb.mul(mix(float(1), aoSoft.r, 0.85));
-    const glow = bloom(shaded, 0.2, 0.35, 1.45);
+    // the WebGL bloom this replaces, at strength 0.2, added two to three times what BloomNode does at
+    // the same setting (more in low sun); 0.6 matched it best on the same frames of two circuits
+    const glow = bloom(shaded, 0.6, 0.35, 1.45);
     pipeline.outputNode = vec4(shaded.add(glow.rgb), 1);
     postFX = { pipeline, ao: aoNode, nodes: [pre, aoNode, aoDen, aoSoft, scenePass, glow] };
   } catch (e) { console.warn('post-processing unavailable', e); postFX = null; }
@@ -1652,7 +1680,6 @@ function frame(now) {
 // QA hooks: run the race headless, or hold a frame still for a capture
 window.__sim = (seconds, dt = 1 / 60) => { const n = Math.round(seconds / dt); for (let i = 0; i < n && (G.state === 'race' || G.state === 'paused'); i++) simulate(dt); const p = RACE.player; return p && { state: G.state, phase: RACE.phase, lap: p.lap, pos: RACE.order.indexOf(p) + 1, of: RACE.order.length, mph: Math.round(p.speed * MPH), best: p.best, t: +RACE.t.toFixed(1), onRoad: p.onRoad, finished: p.finished }; };
 window.__game = { scene, ZENITH, HORIZON, RACE, G, T, settings, startRace, NET, TRACKS, CARS, camera, buildCircuit, set hud(v) { hud.hidden = !v; }, renderNow() { for (const c of RACE.cars) c.visuals(0.5); sky.position.copy(camera.position); if (postFX) postFX.pipeline.render(); else renderer.render(scene, camera); return canvas.toDataURL('image/png'); }, get post() { return !!postFX; }, frameAt };
-window.__renderer = renderer; // TEMP-WEBGPU-CHECK
 
 (async function boot() {
   resizeHUD();

@@ -3,7 +3,7 @@
 // with brick stacks, snowy quarry peaks, harbors with piers and sailboats, painted wooden
 // homesteads, barns with silos, trails, a bandit in a wide-brim hat, and dice that tumble.
 import * as THREE from '../../vendor/three/three.webgpu.min.js';
-import { Fn, vec3, vec4, float, mix, texture, screenUV, uniform, output, rangeFogFactor, acesFilmicToneMapping, sRGBTransferOETF, sRGBTransferEOTF } from '../../vendor/three/three.tsl.min.js';
+import { context, renderOutput, vec3, vec4, mix, texture, screenUV, uniform, rangeFogFactor } from '../../vendor/three/three.tsl.min.js';
 import { OrbitControls } from '../../vendor/three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from '../../vendor/three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from '../../vendor/three/addons/geometries/RoundedBoxGeometry.js';
@@ -63,10 +63,10 @@ const std = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, rough
 // ---------------------------------------------------------------------
 // tone mapping
 // ---------------------------------------------------------------------
-// WebGPURenderer tone-maps the finished frame in one pass at the end, so (unlike the old WebGL
-// renderer) it can't leave out the sky (an sRGB background) or the markers (toneMapped: false).
-// untone() runs three's ACES Filmic curve backwards, so those still reach the screen in their own
-// colours.
+// Each material tone-maps (ACES) and sRGB-encodes its own colour as it draws, as under WebGL (see
+// the output setup in createScene). The sky is drawn by three's background mesh, which can't be
+// marked toneMapped: false, so untoneNode() runs the ACES curve backwards on it first: the sky
+// gradient then reaches the screen in its own colours, as it did before.
 const EXPOSURE = 1.05;
 const rowsOf = (m) => {
   const e = m.transpose().elements;
@@ -75,22 +75,10 @@ const rowsOf = (m) => {
 // three's ACESOutputMat and ACESInputMat, inverted
 const ACES_OUT_INV = rowsOf(new THREE.Matrix3().set(1.60475, -0.53108, -0.07367, -0.10208, 1.10813, -0.00605, -0.00327, -0.07276, 1.07602).invert());
 const ACES_IN_INV = rowsOf(new THREE.Matrix3().set(0.59719, 0.35458, 0.04823, 0.076, 0.90834, 0.01566, 0.0284, 0.13383, 0.83777).invert());
-// inverse of the RRT/ODT fit (v² + 0.0245786v − 0.000090537) / (0.983729v² + 0.432951v + 0.238081)
-const fitInv = (y) => {
-  y = Math.min(1, Math.max(0, y));
-  const a = 0.983729 * y - 1, b = 0.432951 * y - 0.0245786, c = 0.238081 * y + 0.000090537;
-  return (-b - Math.sqrt(b * b - 4 * a * c)) / (2 * a);
-};
-const mul3 = (rows, [r, g, b]) => rows.map(([x, y, z]) => x * r + y * g + z * b);
-function untone(color) {
-  const c = new THREE.Color(color);
-  const u = mul3(ACES_IN_INV, mul3(ACES_OUT_INV, [c.r, c.g, c.b]).map(fitInv));
-  return new THREE.Color(...u.map((x) => Math.max(0, (x * 0.6) / EXPOSURE)));
-}
-// the same, as a shader node
 function untoneNode(rgb) {
   const m = (rows, v) => vec3(...rows.map((r) => vec3(...r).dot(v)));
   const y = m(ACES_OUT_INV, rgb).clamp(0, 1);
+  // inverse of the RRT/ODT fit (v² + 0.0245786v − 0.000090537) / (0.983729v² + 0.432951v + 0.238081)
   const a = y.mul(0.983729).sub(1), b = y.mul(0.432951).sub(0.0245786), c = y.mul(0.238081).add(0.000090537);
   const v = b.mul(-1).sub(b.mul(b).sub(a.mul(c).mul(4)).sqrt()).div(a.mul(2));
   return m(ACES_IN_INV, v).mul(0.6 / EXPOSURE).max(0);
@@ -684,16 +672,10 @@ export function createScene(container, { onPick, onHover } = {}) {
   // the sky gradient fills the screen behind everything, untouched by tone mapping as before
   const sky = skyTexture();
   scene.backgroundNode = vec4(untoneNode(texture(sky, screenUV.flipY()).rgb), 1);
-  // Fog. The old WebGL renderer mixed it in after tone mapping, in screen colours; WebGPURenderer
-  // would mix it in before (so the far sea turned pale sooner and greyer). This fog node does it
-  // the old way: tone-map the surface, mix with '#d9e6ec' in sRGB, then untone() the result.
+  // Fog is mixed in after tone mapping, toward '#d9e6ec' as it appears on screen, as under WebGL
+  // (see the output setup below), so it isn't a scene.fog: three would mix that in before.
   const fogNear = uniform(22), fogFar = uniform(52);
-  scene.fogNode = Fn(() => {
-    const f = rangeFogFactor(fogNear, fogFar);
-    const shown = sRGBTransferOETF(acesFilmicToneMapping(output.rgb, float(EXPOSURE)));
-    const fogged = untoneNode(sRGBTransferEOTF(mix(shown, vec3(0xd9 / 255, 0xe6 / 255, 0xec / 255), f)));
-    return vec4(f.greaterThan(0).select(fogged, output.rgb), output.a);
-  })();
+  const fogColor = vec3(0xd9 / 255, 0xe6 / 255, 0xec / 255);
   let pmrem = null;
   // r181–r186 PBR made diffuse surfaces a little darker; 0.55 (was 0.5) matches the old look
   scene.environmentIntensity = 0.55;
@@ -777,8 +759,7 @@ export function createScene(container, { onPick, onHover } = {}) {
   const pieces = new THREE.Group();
   scene.add(pieces);
   const markers = new THREE.Group();
-  // after the see-through sea rings, which would tint the far markers (orange under WebGPU's
-  // blending, olive under WebGL's)
+  // after the see-through sea rings, which would tint the far markers
   markers.renderOrder = 1;
   scene.add(markers);
   const fx = new THREE.Group();
@@ -990,12 +971,9 @@ export function createScene(container, { onPick, onHover } = {}) {
   }
 
   // ---------- targets (where the player can click) ----------
-  // bright, untone-mapped marker colours (see untone())
-  const markerMat = new THREE.MeshBasicMaterial({ color: untone('#ffd23f'), transparent: true, opacity: 0.95, depthWrite: false });
-  const markerHot = new THREE.MeshBasicMaterial({ color: untone('#ffffff'), transparent: true, opacity: 1, depthWrite: false });
-  // the halo is see-through, and WebGPU blends before tone mapping: this colour and opacity were
-  // fitted so it blends over the tiles like the old untone-mapped '#ffe680' at 45%
-  const haloMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.3, 1.07, 0.18), transparent: true, opacity: 0.165, depthWrite: false, side: THREE.DoubleSide });
+  const markerMat = new THREE.MeshBasicMaterial({ color: '#ffd23f', transparent: true, opacity: 0.95, depthWrite: false, toneMapped: false });
+  const markerHot = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 1, depthWrite: false, toneMapped: false });
+  const haloMat = new THREE.MeshBasicMaterial({ color: '#ffe680', transparent: true, opacity: 0.45, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
   const haloGeo = new THREE.RingGeometry(0.11, 0.17, 32).rotateX(-Math.PI / 2);
   const hitMat = new THREE.MeshBasicMaterial({ visible: false });
   const ringGeo = new THREE.RingGeometry(0.62, 0.8, 6).rotateX(-Math.PI / 2).rotateY(Math.PI / 6);
@@ -1332,13 +1310,15 @@ export function createScene(container, { onPick, onHover } = {}) {
     const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' }).catch(() => null);
     if (destroyed) return;
     renderer = new THREE.WebGPURenderer({ canvas: el, antialias: true, powerPreference: 'high-performance', forceWebGL: !adapter });
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    // Tone mapping (ACES, exposure 1.05) and the sRGB encode happen in each material (see below),
+    // not in a full-screen pass afterwards, so the renderer draws (and antialiases) straight to the
+    // canvas with no half-float buffer in between.
+    renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+    renderer.toneMapping = THREE.NoToneMapping;
     renderer.toneMappingExposure = EXPOSURE;
     // PCFShadowMap is the soft one (see sun.shadow.radius)
     renderer.shadowMap.type = THREE.PCFShadowMap;
     applyQuality();
-    window.__renderer = renderer; // TEMP-HOOK
     await renderer.init();
     if (destroyed) return;
     pmrem = new THREE.PMREMGenerator(renderer);
@@ -1347,12 +1327,26 @@ export function createScene(container, { onPick, onHover } = {}) {
     room.position.y = 0;
     scene.environment = pmrem.fromScene(room, 0.04).texture;
     room.dispose();
+    // Every material maps and encodes its own colour as it draws, exactly as the WebGL renderer did,
+    // so toneMapped: false (the yellow markers) still works and see-through things blend the same
+    // way. The fog goes on last, in screen colours, again as under WebGL. Installed after the
+    // environment map is made: that has to stay linear HDR.
+    renderer.contextNode = context({
+      ...renderer.contextNode.getFlowContextData(),
+      getOutput: (color, builder) => {
+        if (builder.renderer.getRenderTarget() !== null) return color; // shadow maps
+        const mat = builder.material;
+        const out = renderOutput(color, mat?.toneMapped === false ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping, THREE.SRGBColorSpace);
+        out.premultipliedAlpha = !!mat?.premultipliedAlpha;
+        if (mat?.fog === false) return out;
+        return vec4(mix(out.rgb, fogColor, rangeFogFactor(fogNear, fogFar)), out.a);
+      },
+    });
     timer.reset(); // count from the first frame, as THREE.Clock did
     frame();
   }
   const ready = start();
 
-  window.__hx = { camera, markers }; // TEMP-HOOK
   return {
     ready,
     setBoard,

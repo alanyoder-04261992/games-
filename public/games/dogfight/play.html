@@ -250,7 +250,7 @@ import * as THREE from 'three/webgpu';
 import {
   Fn, If, Discard, uniform, texture, attribute, uv as tslUv, float, vec2, vec3, vec4, normalize, mix, pow, clamp as tslClamp, max, dot, abs, length, exp, cos, sin,
   smoothstep, reflect, select, vertexStage, positionLocal, positionWorld, cameraPosition, cameraProjectionMatrix, modelViewMatrix, normalGeometry,
-  materialColor, instancedDynamicBufferAttribute, screenDPR, pass, output, sqrt, densityFogFactor, sRGBTransferOETF, sRGBTransferEOTF,
+  materialColor, instancedDynamicBufferAttribute, screenDPR, pass, densityFogFactor, context, renderOutput,
 } from 'three/tsl';
 
 // =====================================================================
@@ -312,6 +312,8 @@ renderer.setSize(innerWidth, innerHeight, false);
 renderer.shadowMap.enabled = QUALITY[settings.quality].shadows;
 renderer.shadowMap.type = THREE.PCFShadowMap; // PCF is the soft filter since r182 (PCFSoftShadowMap is gone); sun.shadow.radius sets the softness
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;
+// Our TSL materials (sky, water, particles, tracers) (sky, water, particles, tracers) set fragmentNode, which skips the context's getOutput; this applies it (see applyOutputStyle)
+const withOutput = (node) => Fn((_, builder) => (builder.context.getOutput ? builder.context.getOutput(node, builder) : node))();
 const scene = new THREE.Scene();
 const HORIZON = new THREE.Color('#c3d3df'), ZENITH = new THREE.Color('#3d6aa3');
 const FOG_DENSITY = 0.000082;
@@ -337,14 +339,14 @@ function makeSkyMat() {
   m.side = THREE.BackSide; m.depthWrite = false; m.fog = false;
   // gl_Position = p.xyww: the dome sits on the far plane and never clips
   m.vertexNode = Fn(() => { const p = cameraProjectionMatrix.mul(modelViewMatrix).mul(vec4(positionLocal, 1)); return vec4(p.x, p.y, p.w, p.w); })();
-  m.fragmentNode = Fn(() => {
+  m.fragmentNode = withOutput(Fn(() => {
     const d = normalize(positionLocal), h = d.y;
     const col = mix(uHor, uZen, pow(tslClamp(h, 0, 1), 0.55)).toVar();
     If(h.lessThan(0), () => { col.assign(mix(uHor, uHor.mul(0.86), tslClamp(h.negate().mul(5), 0, 1))); });
     const s = max(dot(d, uSun), 0);
     col.addAssign(vec3(1, 0.88, 0.7).mul(pow(s, 10).mul(0.22).add(pow(s, 900).mul(5))));
     return vec4(col, 1);
-  })();
+  })());
   return m;
 }
 const skyMat = makeSkyMat();
@@ -425,37 +427,33 @@ const onAirfield = (x, z) => Math.abs(x - AF.x) < 170 && Math.abs(z - AF.z) < 95
 //  Shared water material
 // =====================================================================
 const fogU = { uFogColor: uniform(scene.fog.color), uFogDensity: uniform(FOG_DENSITY) };
-// Medium and Low drew straight to the canvas with the WebGL renderer, where three's built-in materials (terrain, buildings,
-// trees, cloud sprites) add fog after tone mapping and sRGB, so the fog colour mixed in display space. High went through a
-// post-processing target and fogged in linear light, which is what node materials always do. On Medium and Low this fog node
-// tone-maps the lit colour like the output pass (ACES at our exposure, then sRGB), mixes in the fog colour as sRGB (WebGL
-// passed it to those shaders in output colour space), and maps the result back through the exact inverse, so after the
-// output pass those pixels come out as before.
-const legacyFog = (() => {
-  const exposure = renderer.toneMappingExposure;
-  const IN = new THREE.Matrix3().set(0.59719, 0.35458, 0.04823, 0.07600, 0.90834, 0.01566, 0.02840, 0.13383, 0.83777);
-  const OUT = new THREE.Matrix3().set(1.60475, -0.53108, -0.07367, -0.10208, 1.10813, -0.00605, -0.00327, -0.07276, 1.07602);
-  const IN_INV = IN.clone().invert(), OUT_INV = OUT.clone().invert();
-  const mul = (m, v) => { const e = m.elements; return vec3(dot(vec3(e[0], e[3], e[6]), v), dot(vec3(e[1], e[4], e[7]), v), dot(vec3(e[2], e[5], e[8]), v)); };
-  const toDisplay = (c) => {
-    const x = mul(IN, c.mul(exposure / 0.6));
-    const y = x.mul(x.add(0.0245786)).sub(0.000090537).div(x.mul(x.mul(0.983729).add(0.4329510)).add(0.238081));
-    return sRGBTransferOETF(tslClamp(mul(OUT, y), 0, 1));
-  };
-  const fromDisplay = (d) => {
-    const y = tslClamp(mul(OUT_INV, sRGBTransferEOTF(d)), 0, 0.999); // the curve tops out at 1/0.983729
-    const A = y.mul(0.983729).sub(1), B = y.mul(0.4329510).sub(0.0245786), C = y.mul(0.238081).add(0.000090537);
-    const v = B.negate().sub(sqrt(B.mul(B).sub(A.mul(C).mul(4)).max(0))).div(A.mul(2));
-    return mul(IN_INV, v).mul(0.6 / exposure);
-  };
-  const fogSRGB = scene.fog.color.clone().convertLinearToSRGB();
-  return Fn(() => {
-    const f = densityFogFactor(fogU.uFogDensity);
-    return vec4(fromDisplay(mix(toDisplay(output.rgb), uniform(fogSRGB), f)), output.a);
-  })();
-})();
-const applyFogStyle = (q) => { scene.fogNode = QUALITY[q].bloom ? null : legacyFog; };
-applyFogStyle(settings.quality);
+// How the frame reaches the canvas.
+// High: node materials output linear HDR into the RenderPipeline (scene pass + bloom), which tone-maps (ACES) and encodes
+// sRGB once at the end, with the scene's fog applied in linear light, exactly like the old WebGL post-processing path.
+// Medium and Low (phones): no full-screen pass at all. Every material tone-maps and encodes its own colour as it draws,
+// straight into the canvas, as the WebGL renderer did. That also brings back WebGL's order for the built-in materials
+// (terrain, buildings, trees, cloud sprites): fog after tone mapping, toward the fog colour as sRGB (WebGL passed it to
+// those shaders in output colour space), with see-through things blending in display space.
+const SCENE_FOG = scene.fog;
+const FOG_SRGB = uniform(SCENE_FOG.color.clone().convertLinearToSRGB());
+let linearContext = null, directContext = null;
+const directOutput = (color, builder) => {
+  if (builder.renderer.getRenderTarget() !== null) return color; // shadow maps and the reflection map stay linear
+  const mat = builder.material;
+  const out = renderOutput(color, THREE.ACESFilmicToneMapping, THREE.SRGBColorSpace);
+  out.premultipliedAlpha = !!mat?.premultipliedAlpha;
+  if (!mat || mat.fog === false) return out;
+  return vec4(mix(out.rgb, FOG_SRGB, densityFogFactor(fogU.uFogDensity)), out.a);
+};
+function applyOutputStyle(q) {
+  const direct = !QUALITY[q].bloom;
+  if (!linearContext) { linearContext = renderer.contextNode; directContext = context({ ...linearContext.getFlowContextData(), getOutput: directOutput }); }
+  // swapping the context node changes every render object's cache key, so materials build (once) for the new style
+  renderer.contextNode = direct ? directContext : linearContext;
+  renderer.toneMapping = direct ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping; // NoToneMapping + linear output: no framebuffer target
+  renderer.outputColorSpace = direct ? THREE.LinearSRGBColorSpace : THREE.SRGBColorSpace;
+  scene.fog = direct ? null : SCENE_FOG; // on Medium/Low the fog is added in directOutput instead
+}
 // Sea, lake and river (TSL): waves, fresnel sky reflection, sun glint, shallow-water tint and surf from the baked depth map.
 const waterU = {
   uTime: uniform(0), uSun: uniform(SUN), uDeep: uniform(new THREE.Color('#0d3244')), uShallow: uniform(new THREE.Color('#22606c')), uReef: uniform(new THREE.Color('#4aa39a')),
@@ -465,7 +463,7 @@ const waterU = {
 const waterDepthTex = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat); waterDepthTex.magFilter = waterDepthTex.minFilter = THREE.LinearFilter;
 const waterMat = new THREE.NodeMaterial();
 waterMat.fog = false; // fogged by hand below, as before
-waterMat.fragmentNode = Fn(() => {
+waterMat.fragmentNode = withOutput(Fn(() => {
   const { uTime, uSun, uDeep, uShallow, uReef, uHor, uZen, uGrid, uFogColor, uFogDensity } = waterU;
   const wv = (p, dx, dy, f, a, s) => { const d = vec2(dx, dy); return d.mul(cos(dot(p, d).mul(f).add(uTime.mul(s))).mul(f * a)); };
   const vW = positionWorld, p = vW.xz, dist = length(cameraPosition.sub(vW));
@@ -492,7 +490,7 @@ waterMat.fragmentNode = Fn(() => {
   col.assign(mix(col, vec3(0.92, 0.95, 0.95), tslClamp(surf, 0, 1).mul(0.75).mul(smoothstep(2500, 9000, dist).oneMinus())));
   const f = exp(uFogDensity.mul(uFogDensity).mul(dist).mul(dist).negate()).oneMinus();
   return vec4(mix(col, uFogColor, f), 1);
-})();
+})());
 function buildDepthTex() {
   const n1 = GN + 1, data = new Uint8Array(n1 * n1 * 4);
   for (let iz = 0; iz < n1; iz++) for (let ix = 0; ix < n1; ix++) {
@@ -560,13 +558,13 @@ class Particles {
     // gl_PointSize was in drawing-buffer pixels; sizeNode is in CSS pixels (the material multiplies by the pixel ratio)
     m.sizeNode = tslClamp(iPS.w.mul(this.uScale).div(depth.max(0.1)), 1, 480).div(screenDPR);
     const vFog = vertexStage(exp(uFogDensity.mul(uFogDensity).mul(depth).mul(depth).negate()).oneMinus());
-    m.fragmentNode = Fn(() => {
+    m.fragmentNode = withOutput(Fn(() => {
       const d = length(tslUv().sub(0.5)).mul(2);
       const a = iCA.w.mul(smoothstep(0.25, 1, d).oneMinus()).toVar();
       If(a.lessThan(0.004), () => { Discard(); });
       const c = mix(iCA.xyz, uFogColor, vFog);
       return vec4(c, additive ? a.mul(vFog.oneMinus()) : a);
-    })();
+    })());
     this.mat = m;
     this.points = new THREE.Sprite(m); this.points.count = 2; this.points.frustumCulled = false; this.points.renderOrder = additive ? 3 : 2;
     scene.add(this.points);
@@ -1148,12 +1146,12 @@ function buildTracers() {
   // glowing streaks: bright core across the width, fading toward the tail (TSL)
   const m = new THREE.NodeMaterial();
   Object.assign(m, { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
-  m.fragmentNode = Fn(() => {
+  m.fragmentNode = withOutput(Fn(() => {
     const vC = attribute('color', 'vec4'), vUv = tslUv();
     const e = abs(vUv.y.sub(0.5)).mul(2).oneMinus();
     const a = vC.w.mul(e).mul(e).mul(vUv.x.mul(0.6).add(0.4));
     return vec4(vC.xyz.mul(e.add(1)), a);
-  })();
+  })());
   tracerMesh = new THREE.Mesh(g, m); tracerMesh.frustumCulled = false; tracerMesh.renderOrder = 5; scene.add(tracerMesh);
 }
 const _a = new V3(), _b = new V3(), _c = new V3(), _d = new V3(), _e = new V3(), _f = new V3();
@@ -2754,7 +2752,7 @@ function fillSettings() {
   else $('btnEnd').textContent = 'End mission';
 }
 $('setControl').addEventListener('change', e => { settings.control = e.target.value; saveSettings(); applyControlMode(); updateHint(); });
-$('setQuality').addEventListener('change', e => { settings.quality = e.target.value; saveSettings(); const q = QUALITY[settings.quality]; renderer.setPixelRatio(Math.min(devicePixelRatio || 1, q.pr)); renderer.shadowMap.enabled = q.shadows; applyFogStyle(settings.quality); scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); if (q.bloom) setupPost(); onResize(); $('qualityNote').hidden = false; });
+$('setQuality').addEventListener('change', e => { settings.quality = e.target.value; saveSettings(); const q = QUALITY[settings.quality]; renderer.setPixelRatio(Math.min(devicePixelRatio || 1, q.pr)); renderer.shadowMap.enabled = q.shadows; applyOutputStyle(settings.quality); scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); if (q.bloom) setupPost(); onResize(); $('qualityNote').hidden = false; });
 $('setVolume').addEventListener('input', e => { settings.volume = +e.target.value; saveSettings(); Sfx.vol(settings.volume); });
 $('setInvert').addEventListener('change', e => { settings.invert = e.target.checked; saveSettings(); });
 $('setKill').addEventListener('change', e => { settings.killcam = e.target.checked; saveSettings(); });
@@ -2915,14 +2913,14 @@ window.__game = { get post() { return !!renderPipeline; }, get fx() { return { s
     return new Promise(resolve => renderer.setAnimationLoop(() => {
       renderer.setAnimationLoop(frame);
       smokeFX.update(dt); fireFX.update(dt); for (const p of G.planes) if (!p.gone) p.visuals(0); sky.position.copy(camera.position); updateTracers();
-      if (renderPipeline) renderPipeline.render(); else renderer.render(scene, camera);
+      if (renderPipeline && QUALITY[settings.quality].bloom) renderPipeline.render(); else renderer.render(scene, camera);
       resolve(canvas.toDataURL('image/png'));
     }));
   }, G, settings, startMission, SPECS, NET, netSend, finishNet, MSL, LOCK, launchMissile, dropFlares, DIFF };
 
 (async function boot() {
   resizeHUD();
-  try { await renderer.init(); window.__renderer = renderer; /* TEMP QA */ await buildWorld(); }
+  try { await renderer.init(); applyOutputStyle(settings.quality); await buildWorld(); }
   catch (e) { console.error(e); progress('Could not build the world: ' + e.message, 1); return; }
   progress('Ready', 1);
   await setupPost();
