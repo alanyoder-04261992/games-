@@ -543,6 +543,7 @@ export function mount(ctx) {
     tools.replaceChildren(
       h('button.eg-tool', { title: 'My financial statement (Y)', onclick: () => openStatement(me() ?? 0) }, h('span', { html: ICONS.sheet })),
       h('button.eg-tool', { title: 'Camera view (X)', onclick: () => cycleCamera() }, h('span', { html: ICONS.cam })),
+      h('button.eg-tool', { title: 'Center the board (R, or double-tap the table)', 'aria-label': 'Center the board', onclick: () => recenter() }, h('span', { html: ICONS.center })),
       h('button.eg-tool', { title: 'Full screen (Start)', onclick: () => fullscreen() }, h('span', { html: ICONS.full })),
     );
   }
@@ -551,6 +552,26 @@ export function mount(ctx) {
   function cycleCamera() {
     camIdx = (camIdx + 1) % CAMS.length;
     table.view(CAMS[camIdx]);
+  }
+  function recenter() {
+    camIdx = 0;
+    table.recenter();
+  }
+  // double-tap (or double-click) the table to bring the board back to the middle
+  {
+    let lastTap = 0, downAt = null;
+    table.canvas.addEventListener('pointerdown', (e) => (downAt = e.isPrimary ? { x: e.clientX, y: e.clientY, t: performance.now() } : null));
+    table.canvas.addEventListener('pointerup', (e) => {
+      if (!downAt || !e.isPrimary) return;
+      const still = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < 12 && performance.now() - downAt.t < 300;
+      downAt = null;
+      if (!still) return (lastTap = 0);
+      const now = performance.now();
+      if (now - lastTap < 350) {
+        lastTap = 0;
+        recenter();
+      } else lastTap = now;
+    });
   }
   function fullscreen() {
     const el = document.documentElement;
@@ -712,6 +733,7 @@ export function mount(ctx) {
     } else if (k === 'Escape' || k === 'Backspace') back();
     else if (k === 's' || k === 'S') toggleSheet();
     else if (k === 'c' || k === 'C') cycleCamera();
+    else if (k === 'r' || k === 'R' || k === 'Home') recenter();
     else if (k === 'f' || k === 'F') fullscreen();
     else if (k === '+' || k === '=') table.zoom(0.9);
     else if (k === '-') table.zoom(1.1);
@@ -752,6 +774,7 @@ export function mount(ctx) {
     press('x', b(2), cycleCamera);
     press('y', b(3), toggleSheet);
     press('start', b(9), fullscreen);
+    press('rstick', b(11), recenter);
     press('back', b(8), () => openStatement(((statementSeat ?? me() ?? 0) + 1) % 4));
     press('up', b(12) || ax(1) < 0, () => move(0, -1), true);
     press('down', b(13) || ax(1) > 0, () => move(0, 1), true);
@@ -805,5 +828,6 @@ const PAD_HINT = () => [
 const ICONS = {
   sheet: '<svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 11h7M9 15h7M9 7h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
   cam: '<svg viewBox="0 0 24 24"><path d="M4 8h3l2-2h6l2 2h3v11H4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>',
+  center: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><path d="M12 2.5v3.5M12 18v3.5M2.5 12H6M18 12h3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
   full: '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
