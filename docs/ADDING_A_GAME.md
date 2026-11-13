@@ -10,8 +10,10 @@ the same things for free:
 
 Your game only has to describe its rules, its computer player and its screen.
 
-`public/games/four-in-a-row/` is a small, complete example (about 150 lines of rules and
-250 of screen). `public/games/rook/` is the full-size one.
+`public/games/four-in-a-row/` is a small, complete example: about 150 lines of rules
+(`index.js`), 190 of screen (`ui.js`), a flat HTML/CSS board (`board2d.js`) and a 3D board
+(`scene.js`, three.js on WebGPU) that a setting switches between. `public/games/rook/` is the
+full-size one.
 
 ## 1. Make the folder
 
@@ -20,6 +22,7 @@ public/games/my-game/
   index.js     the manifest (required)
   ui.js        the screen (required)
   my-game.css  styles (optional)
+  scene.js     a 3D board (optional, see "3D games" below)
   rules.html   shown by the ? button at the table (optional)
 ```
 
@@ -162,6 +165,40 @@ renderer.setAnimationLoop(() => pipeline.render());    // or renderer.render(sce
   run `npm test`.
 - `tests/three.test.mjs` fails if any game imports three.js from anywhere else, uses an
   add-on that isn't vendored, or still uses WebGL-only code.
+
+### A small 3D board to copy: Four in a Row
+
+`public/games/four-in-a-row/scene.js` is a short, commented 3D board. Things it shows:
+
+```js
+// WebGPU where the browser has it, WebGL 2 everywhere else. Choosing ourselves keeps the
+// console clean (left alone, three logs a warning when it falls back).
+const adapter = navigator.gpu ? await navigator.gpu.requestAdapter().catch(() => null) : null;
+const renderer = new THREE.WebGPURenderer({ antialias: true, forceWebGL: !adapter });
+await renderer.init(); // rejects on a device with neither: show a flat board instead
+
+// a uniform is a value JavaScript sets each frame; the TSL shader reads it
+const glow = uniform(0);
+const mat = new THREE.MeshPhysicalNodeMaterial({ roughness: 0.3 });
+mat.emissiveNode = color('#e0362b').mul(glow);
+```
+
+- `await renderer.compileAsync(scene, camera)` before the first frame, so the first move
+  doesn't stutter while shaders compile.
+- Work animations out from the time since they started rather than adding up per-frame steps,
+  so a slow phone shows the same motion as a fast computer (see `dropDisc`).
+- Keep the 3D board behind a small interface, with a 2D board that has the same interface.
+  Four in a Row's `ui.js` loads `scene.js` only when the "3D board" setting is on (saved with
+  `ctx.prefs`), shows the flat board if 3D can't start, and offers the switch in
+  `settings()`:
+
+```js
+settings: () => [{ label: '3D board', value: want3d, set: (v) => (ctx.prefs.set('four.3d', v), useBoard(v)) }],
+```
+
+- If headless Chromium's WebGPU canvas stays blank (the device is lost at once), add
+  `--use-vulkan=swiftshader` to the flags above. Software rendering runs at a few frames a
+  second, so give animations time before taking screenshots.
 
 ## 4. Register it
 

@@ -23,7 +23,8 @@ Games plug in as folders under `public/games/` — read `docs/ADDING_A_GAME.md` 
   map `"three"` and `"three/webgpu"` to `three.webgpu.min.js`, `"three/tsl"` to
   `three.tsl.min.js` and `"three/addons/"` to the shared add-ons folder.
 - Test on both backends: real WebGPU (Chromium flags `--enable-unsafe-webgpu
-  --enable-features=Vulkan --use-angle=swiftshader --use-webgpu-adapter=swiftshader`) and the
+  --enable-features=Vulkan --use-angle=swiftshader --use-webgpu-adapter=swiftshader`, plus
+  `--use-vulkan=swiftshader` if the WebGPU device is lost at once and the canvas stays blank) and the
   WebGL2 fallback (`--disable-features=WebGPU`).
 - Write r187 code: `THREE.Timer` (not `THREE.Clock`), `PCFShadowMap`/`VSMShadowMap` (not the
   removed `PCFSoftShadowMap`), `colorSpace` (not `encoding`), `RenderPipeline` (not the
