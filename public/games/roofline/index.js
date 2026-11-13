@@ -3,36 +3,16 @@
 import * as E from './engine.js';
 import { chooseAction, LEVELS } from './ai.js';
 
-const SH = ['#b9773e', '#5f7a90', '#b8352c', '#3f7d48', '#d8bf86'];
-function tileArt() {
-  // a shed whose roof is half shingled, with a pallet of bundles in front
-  let roof = '';
-  for (let r = 0; r < 5; r++)
-    for (let c = 0; c < 5; c++) {
-      const filled = (r * 7 + c * 3) % 4 !== 0 || r === 4;
-      const k = SH[(c + 2 * r) % 5];
-      roof += `<rect x="${150 + c * 22}" y="${46 + r * 22}" width="20" height="20" rx="2" fill="${filled ? k : '#00000040'}" ${filled ? '' : `stroke="${k}" stroke-opacity=".6"`}/>`;
-      if (filled) roof += `<rect x="${150 + c * 22}" y="${56 + r * 22}" width="20" height="2" fill="#0004"/>`;
-    }
-  const bundles = [0, 2, 2, 3].map((k, i) => `<rect x="${44 + (i % 2) * 24}" y="${150 + Math.floor(i / 2) * 24}" width="21" height="21" rx="2" fill="${SH[k]}"/><rect x="${44 + (i % 2) * 24}" y="${160 + Math.floor(i / 2) * 24}" width="21" height="2" fill="#0004"/>`).join('');
-  return `<svg viewBox="0 0 400 240" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-  <defs><linearGradient id="rlsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f2b56b"/><stop offset="1" stop-color="#7c4a2c"/></linearGradient></defs>
-  <rect width="400" height="240" fill="url(#rlsky)"/>
-  <rect y="190" width="400" height="50" fill="#3b2a1c"/>
-  <path d="M130 46 L205 6 L280 46 Z" fill="#4b3a2c"/>
-  <rect x="140" y="40" width="130" height="6" fill="#6b5442"/>
-  <rect x="142" y="44" width="126" height="118" fill="#3a2d22"/>
-  ${roof}
-  <rect x="150" y="162" width="110" height="34" fill="#8a3b2a"/><rect x="190" y="166" width="30" height="30" fill="#5a2418"/>
-  <rect x="34" y="196" width="66" height="10" fill="#7e5530"/><rect x="34" y="144" width="66" height="54" fill="#a77b4c" opacity=".55"/>
-  ${bundles}
-  <circle cx="330" cy="176" r="16" fill="#e1ad3d"/><text x="330" y="182" font-size="16" text-anchor="middle">📣</text>
+// Home-page thumbnail: a 3D render of a shed mid-shingle (thumb.jpg, made with
+// tools/render-roofline-thumb.cjs), wrapped in an SVG like the other games' tile art.
+const TILE = `<svg viewBox="0 0 400 240" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+  <rect width="400" height="240" fill="#c9a26e"/>
+  <image href="${new URL('./thumb.jpg', import.meta.url).href}" width="400" height="240" preserveAspectRatio="xMidYMid slice"/>
 </svg>`;
-}
 
 export default {
   id: 'roofline',
-  version: '1.0', // shown on the home tile; bump it whenever you improve the game
+  version: '1.1', // shown on the home tile; bump it whenever you improve the game
   name: 'Roofline',
   tagline: 'Draft shingle bundles, lay the best shed roof.',
   description:
@@ -41,7 +21,7 @@ export default {
   seatCount: (options) => Math.min(4, Math.max(2, Number(options?.players) || 2)),
   seatLabels: ['Roofer 1', 'Roofer 2', 'Roofer 3', 'Roofer 4'],
   players: '1–4 players',
-  tile: tileArt(),
+  tile: TILE,
   accent: '#c9783d',
   options: [
     {
