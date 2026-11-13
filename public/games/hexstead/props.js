@@ -220,17 +220,17 @@ function sheepGeo(seed, graze) {
   const r = rng(seed);
   const WOOL = '#f2ede0', SKIN = '#2a221d';
   const woolPaint = { top: '#fbf8f0', y0: 0.04, y1: 0.16, ao: 0.4, vary: 0.07, seed };
-  const parts = [paint(new THREE.SphereGeometry(0.056, 12, 9).scale(1.35, 0.95, 1).translate(0, 0.1, 0), WOOL, woolPaint)];
+  const parts = [paint(new THREE.SphereGeometry(0.056, 10, 7).scale(1.35, 0.95, 1).translate(0, 0.1, 0), WOOL, woolPaint)];
   // fleece: puffs over the back and sides
   for (let k = 0; k < 15; k++) {
     const th = r() * Math.PI * 2;
     const ph = Math.acos(clamp01(r() * 1.5 - 0.45) * 2 - 1) * 0.5 + 0.15;
     const x = Math.sin(ph) * Math.cos(th) * 0.074, y = Math.cos(ph) * 0.05 + 0.1, z = Math.sin(ph) * Math.sin(th) * 0.054;
-    parts.push(paint(new THREE.IcosahedronGeometry(0.022 + r() * 0.01, 1).translate(x, y, z), WOOL, { ...woolPaint, seed: seed + k }));
+    parts.push(paint(new THREE.IcosahedronGeometry(0.023 + r() * 0.01, 0).translate(x, y, z), WOOL, { ...woolPaint, seed: seed + k }));
   }
   const hx = graze ? 0.098 : 0.096, hy = graze ? 0.055 : 0.132;
   const tilt = graze ? -1.0 : -0.3;
-  parts.push(paint(place(new THREE.SphereGeometry(0.027, 10, 8).scale(1.4, 1, 0.9), hx, hy, 0, 0, 0, tilt), SKIN, { top: '#3a302a', vary: 0.04 }));
+  parts.push(paint(place(new THREE.SphereGeometry(0.027, 8, 6).scale(1.4, 1, 0.9), hx, hy, 0, 0, 0, tilt), SKIN, { top: '#3a302a', vary: 0.04 }));
   parts.push(paint(new THREE.IcosahedronGeometry(0.019, 1).translate(hx - 0.016, hy + 0.017, 0), WOOL, { vary: 0.06 }));
   for (const s of [-1, 1]) parts.push(paint(place(new THREE.SphereGeometry(0.011, 6, 4).scale(1.9, 0.45, 1), hx - 0.012, hy + 0.008, s * 0.026, s * 0.5, s * 0.6, 0), SKIN));
   for (const [lx, lz] of [[0.045, 0.026], [0.045, -0.026], [-0.045, 0.026], [-0.045, -0.026]])
@@ -260,7 +260,7 @@ function wheatGeo(seed) {
   for (let k = 0; k < 6; k++) {
     const h = 0.095 + r() * 0.04;
     m.makeRotationFromEuler(E.set((r() - 0.5) * 0.35, r() * 6, (r() - 0.5) * 0.35)).setPosition((r() - 0.5) * 0.034, 0, (r() - 0.5) * 0.034);
-    parts.push(paint(new THREE.CylinderGeometry(0.0021, 0.003, h, 4, 1, true).translate(0, h / 2, 0).applyMatrix4(m), '#8f8c38', { top: '#d8b552', ao: 0.3 }));
+    parts.push(paint(new THREE.CylinderGeometry(0.0021, 0.003, h, 3, 1, true).translate(0, h / 2, 0).applyMatrix4(m), '#8f8c38', { top: '#d8b552', ao: 0.3 }));
     // the ear: an elongated, slightly nodding head of grain
     const ear = new THREE.OctahedronGeometry(0.0085, 0).scale(1, 3.4, 1).rotateZ(0.18).translate(0.003, h + 0.024, 0).applyMatrix4(m);
     parts.push(paint(ear, '#cf9a2a', { top: '#f3d06c', vary: 0.14, seed: seed + k }));
@@ -328,7 +328,7 @@ function palletGeo(seed) {
     for (let a = -1; a <= 1; a++)
       for (let b = -2; b <= 2; b++) {
         if (lv === 3 && r() < 0.35) continue; // a part-used top layer
-        const brick = new RoundedBoxGeometry(0.05, 0.022, 0.024, 1, 0.003);
+        const brick = new THREE.BoxGeometry(0.05, 0.022, 0.024);
         place(brick, a * 0.053, 0.023 + lv * 0.0235, b * 0.0255, 0, 0, 0);
         brick.rotateY(rot);
         parts.push(paint(brick, BRICKS[Math.floor(r() * BRICKS.length)], { vary: 0.08, seed: seed + lv * 31 + a * 7 + b }));
@@ -343,7 +343,7 @@ function dryingGeo(seed) {
   const parts = [];
   for (let row = 0; row < 2; row++)
     for (let k = 0; k < 6; k++) {
-      const brick = new RoundedBoxGeometry(0.022, 0.05, 0.024, 1, 0.003);
+      const brick = new THREE.BoxGeometry(0.022, 0.05, 0.024);
       place(brick, (k - 2.5) * 0.034, 0.025, row * 0.05 - 0.025, 0, (r() - 0.5) * 0.15, (r() - 0.5) * 0.08);
       parts.push(paint(brick, row ? '#c88360' : BRICKS[Math.floor(r() * 4)], { vary: 0.08, seed: seed + row * 9 + k }));
     }
