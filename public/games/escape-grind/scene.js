@@ -73,6 +73,7 @@ export class Table3D {
     });
     this.controls.addEventListener('start', () => (this.followUntil = performance.now() + 8000));
 
+    const fontsWereReady = T.printFontsLoaded();
     this.#lights();
     this.#table();
     this.#board();
@@ -90,6 +91,7 @@ export class Table3D {
     // The game can place pieces, start tweens and show cards straight away; frames start once the
     // GPU device is ready. `ready` rejects if neither WebGPU nor WebGL 2 could start.
     this.ready = this.#start();
+    if (!fontsWereReady) T.waitForPrintFonts().then(() => this.running && this.repaintPrint?.());
   }
 
   async #start() {
@@ -208,7 +210,8 @@ export class Table3D {
     lip.position.y = BOARD_TOP - 0.02;
     lip.castShadow = true;
     g.add(lip);
-    const topMat = new THREE.MeshStandardMaterial({ map: T.boardTexture({ R: BOARD_R, inner: INNER, outer: OUTER }), roughness: 0.92, metalness: 0 });
+    const printBoard = () => T.boardTexture({ R: BOARD_R, inner: INNER, outer: OUTER });
+    const topMat = new THREE.MeshStandardMaterial({ map: printBoard(), roughness: 0.92, metalness: 0 });
     const top = new THREE.Mesh(new THREE.CircleGeometry(BOARD_R + 0.02, 160), topMat);
     top.rotation.x = -Math.PI / 2;
     top.position.y = BOARD_TOP + 0.001;
@@ -222,7 +225,23 @@ export class Table3D {
 
     // tiles
     const texCache = {};
-    const tileTex = (k) => (texCache[k] ||= T.tileTexture(k));
+    // each ring's tiles are painted at that ring's own proportions, so nothing is stretched
+    const tileSize = (dims) => [Math.round((300 * (dims.w - 0.12)) / (dims.d - 0.12)), 300];
+    const tileTex = (k, dims) => (texCache[`${k}:${dims.w}`] ||= Object.assign(T.tileTexture(k, ...tileSize(dims)), { userData: { kind: k, dims } }));
+    // draw the board's words again (into the same textures) once the print fonts have loaded
+    this.repaintPrint = () => {
+      const swap = (old, fresh) => {
+        old.image = fresh.image;
+        old.needsUpdate = true;
+        fresh.dispose();
+      };
+      swap(topMat.map, printBoard());
+      for (const t of Object.values(texCache)) swap(t, T.tileTexture(t.userData.kind, ...tileSize(t.userData.dims)));
+    };
+    // one face material per kind of space: a matte print, since a glossy coat mirrors the room's
+    // light over the whole face and fades the colors and the lettering to grey
+    const faceMats = {};
+    const tileFace = (k, dims) => (faceMats[`${k}:${dims.w}`] ||= new THREE.MeshStandardMaterial({ map: tileTex(k, dims), roughness: 0.72, metalness: 0, envMapIntensity: 0.35 }));
     const bodyMat = new THREE.MeshPhysicalMaterial({ color: '#f1ece0', roughness: 0.42, clearcoat: 0.5, clearcoatRoughness: 0.3 });
     for (const [track, list, dims] of [['grind', GRIND, INNER], ['free', RING, OUTER]]) {
       const geo = new RoundedBoxGeometry(dims.w, TILE_H, dims.d, 3, 0.05);
@@ -234,7 +253,7 @@ export class Table3D {
         tile.rotation.y = a;
         const body = new THREE.Mesh(geo, bodyMat);
         body.castShadow = body.receiveShadow = true;
-        const face = new THREE.Mesh(plane, new THREE.MeshPhysicalMaterial({ map: tileTex(kind), roughness: 0.4, clearcoat: 0.6, clearcoatRoughness: 0.25 }));
+        const face = new THREE.Mesh(plane, tileFace(kind, dims));
         face.rotation.x = -Math.PI / 2;
         face.position.y = TILE_H / 2 + 0.002;
         face.receiveShadow = true;

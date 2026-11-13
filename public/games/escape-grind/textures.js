@@ -83,6 +83,13 @@ export function woodTextures({ w = 1024, h = 1024, planks = 5, dark = [46, 27, 1
   return { map: c, rough: rc };
 }
 
+// The board and tiles print their words in Inter. If it hasn't arrived yet when they are drawn,
+// the scene draws them again once it has (see Table3D#start), so the type is never the fallback.
+const PRINT_FONTS = ['800 40px Inter', '900 40px "Playfair Display"'];
+export const printFontsLoaded = () => !document.fonts || PRINT_FONTS.every((f) => document.fonts.check(f));
+export const waitForPrintFonts = (ms = 4000) =>
+  Promise.race([Promise.all(PRINT_FONTS.map((f) => document.fonts.load(f))), new Promise((r) => setTimeout(r, ms))]);
+
 // ---- the printed board surface ----------------------------------------------------------------
 // R is the radius of the board top in world units; the ring radii are passed in world units.
 export function boardTexture({ R, inner, outer }) {
@@ -125,8 +132,11 @@ export function boardTexture({ R, inner, outer }) {
   const band = (inner.r + inner.d / 2 + outer.r - outer.d / 2) / 2;
   const curved = (text, radius, startAngle, size, color, spacing = 1) => {
     g.save();
-    g.font = `800 ${size}px ${SANS}`;
+    g.font = `900 ${size}px ${SANS}`;
     g.fillStyle = color;
+    g.shadowColor = 'rgba(0, 0, 0, 0.55)';
+    g.shadowBlur = 6;
+    g.shadowOffsetY = 2;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     let a = startAngle;
@@ -143,8 +153,8 @@ export function boardTexture({ R, inner, outer }) {
     g.restore();
   };
   for (let q = 0; q < 4; q++) {
-    curved('THE GRIND', band - 0.12, (q * Math.PI) / 2 + 0.25, 40, 'rgba(233, 215, 160, 0.75)', 1.35);
-    curved('FREEDOM RING', band - 0.12, (q * Math.PI) / 2 + 0.95, 40, 'rgba(246, 215, 124, 0.9)', 1.35);
+    curved('THE GRIND', band - 0.12, (q * Math.PI) / 2 + 0.25, 48, '#f3e6c4', 1.3);
+    curved('FREEDOM RING', band - 0.12, (q * Math.PI) / 2 + 0.95, 48, '#ffd76e', 1.3);
   }
   // center medallion
   const med = 1.75 * k;
@@ -264,36 +274,69 @@ const ICONS = {
 };
 const ICON_FOR = { pay: 'dollar', opp: 'bulb', mkt: 'swap', spl: 'bag', chr: 'heart', kid: 'stroller', lay: 'slip', fpay: 'dollar', ven: 'case', drm: 'star', set: 'bolt' };
 
+// A space: its color fills the top with a big white icon (readable from across the table), and its
+// name is printed in dark ink on a cream strip below, so the words stay sharp whatever the color.
 export function tileTexture(kind, w = 256, h = 300) {
   const info = SPACE_INFO[kind];
-  const [c, g] = canvas(w, h);
-  const grd = g.createLinearGradient(0, 0, 0, h);
-  grd.addColorStop(0, shade(info.color, 1.18));
-  grd.addColorStop(1, shade(info.color, 0.82));
+  // painted at twice the size so the words stay crisp when the camera is close
+  const [c, g] = canvas(w * 2, h * 2);
+  g.scale(2, 2);
+  const split = Math.round(h * 0.66);
+  const grd = g.createLinearGradient(0, 0, 0, split);
+  grd.addColorStop(0, shade(info.color, 1.08));
+  grd.addColorStop(1, shade(info.color, 0.9));
   g.fillStyle = grd;
-  g.fillRect(0, 0, w, h);
-  g.strokeStyle = 'rgba(255,255,255,0.55)';
-  g.lineWidth = 5;
-  g.strokeRect(12, 12, w - 24, h - 24);
+  g.fillRect(0, 0, w, split);
+  g.fillStyle = '#f7f1e3';
+  g.fillRect(0, split, w, h - split);
+  // a thin rule in the space's color between the two halves
+  g.fillStyle = shade(info.color, 0.7);
+  g.fillRect(0, split, w, 6);
+  // frame around the whole tile, in the space's own color so tiles stay distinct at a distance
+  g.strokeStyle = shade(info.color, 0.75);
+  g.lineWidth = 14;
+  g.strokeRect(7, 7, w - 14, h - 14);
+  g.strokeStyle = 'rgba(255,255,255,0.7)';
+  g.lineWidth = 4;
+  g.strokeRect(20, 20, w - 40, split - 26);
   g.save();
-  g.translate(w / 2, h * 0.42);
-  g.fillStyle = 'rgba(0,0,0,0.25)';
-  g.strokeStyle = 'rgba(0,0,0,0.25)';
-  g.translate(3, 4);
-  ICONS[ICON_FOR[kind]](g, w * 0.5);
-  g.translate(-3, -4);
+  g.translate(w / 2, split * 0.52);
+  g.fillStyle = 'rgba(0,0,0,0.3)';
+  g.strokeStyle = 'rgba(0,0,0,0.3)';
+  g.translate(3, 5);
+  ICONS[ICON_FOR[kind]](g, Math.min(w, h * 0.85) * 0.56);
+  g.translate(-3, -5);
   g.fillStyle = '#fff';
   g.strokeStyle = '#fff';
-  ICONS[ICON_FOR[kind]](g, w * 0.5);
+  ICONS[ICON_FOR[kind]](g, Math.min(w, h * 0.85) * 0.56);
   g.restore();
-  g.fillStyle = '#fff';
+  // the name: one line if it fits at a good size, otherwise two; a long single word is squeezed
+  // a little sideways rather than shrunk, so it stays big enough to read
+  g.fillStyle = shade(info.color, 0.32);
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  let size = 34;
-  g.font = `800 ${size}px ${SANS}`;
-  while (g.measureText(info.label.toUpperCase()).width > w - 40 && size > 18) g.font = `800 ${--size}px ${SANS}`;
-  g.fillText(info.label.toUpperCase(), w / 2, h * 0.82);
-  return tex(c);
+  const text = info.label.toUpperCase();
+  const maxW = w - 40;
+  const top = split + 6;
+  const mid = top + (h - 14 - top) / 2 + 2;
+  const line = (str, size, y) => {
+    g.font = `800 ${size}px ${SANS}`;
+    const sx = Math.min(1, maxW / g.measureText(str).width);
+    g.save();
+    g.translate(w / 2, y);
+    g.scale(sx, 1);
+    g.fillText(str, 0, 0);
+    g.restore();
+  };
+  const words = text.split(' ');
+  g.font = `800 50px ${SANS}`;
+  if (words.length === 1 || g.measureText(text).width <= maxW * 1.12) line(text, 50, mid);
+  else {
+    const lines = [words.slice(0, -1).join(' '), words.at(-1)];
+    line(lines[0], 40, mid - 21);
+    line(lines[1], 40, mid + 21);
+  }
+  return tex(c, { aniso: 8 });
 }
 
 // ---- cards ------------------------------------------------------------------------------------
