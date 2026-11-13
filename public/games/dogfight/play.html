@@ -317,6 +317,9 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure
 const withOutput = (node) => Fn((_, builder) => (builder.context.getOutput ? builder.context.getOutput(node, builder) : node))();
 const scene = new THREE.Scene();
 const HORIZON = new THREE.Color('#c3d3df'), ZENITH = new THREE.Color('#3d6aa3');
+// The distant sea fades to this darker haze instead of the sky's horizon colour, so the horizon stays a clear line
+// and sky and sea can't be mistaken for each other when you're banked or upside down.
+const SEA_HAZE = new THREE.Color('#7a92a3');
 const FOG_DENSITY = 0.000082;
 scene.fog = new THREE.FogExp2(HORIZON.clone(), FOG_DENSITY);
 const camera = new THREE.PerspectiveCamera(isTouch ? 70 : 64, innerWidth / innerHeight, 1, 70000);
@@ -333,9 +336,9 @@ const flash = new THREE.PointLight(0xffaa55, 0, 380, 0); scene.add(flash);
 const muzzleLight = new THREE.PointLight(0xffb060, 0, 26, 0); scene.add(muzzleLight);
 
 // Sky dome (TSL). The colour stays linear; the renderer's output pass applies ACES and sRGB to everything.
-const skyU = { uZen: uniform(ZENITH), uHor: uniform(HORIZON), uSun: uniform(SUN) };
+const skyU = { uZen: uniform(ZENITH), uHor: uniform(HORIZON), uSun: uniform(SUN), uSea: uniform(SEA_HAZE) };
 function makeSkyMat() {
-  const { uZen, uHor, uSun } = skyU;
+  const { uZen, uHor, uSun, uSea } = skyU;
   const m = new THREE.NodeMaterial();
   m.side = THREE.BackSide; m.depthWrite = false; m.fog = false;
   // gl_Position = p.xyww: the dome sits on the far plane and never clips
@@ -343,7 +346,7 @@ function makeSkyMat() {
   m.fragmentNode = withOutput(Fn(() => {
     const d = normalize(positionLocal), h = d.y;
     const col = mix(uHor, uZen, pow(tslClamp(h, 0, 1), 0.55)).toVar();
-    If(h.lessThan(0), () => { col.assign(mix(uHor, uHor.mul(0.86), tslClamp(h.negate().mul(5), 0, 1))); });
+    If(h.lessThan(0), () => { col.assign(mix(uHor, uSea, tslClamp(h.negate().mul(60), 0, 1))); }); // below the horizon: sea haze, with a crisp edge
     const s = max(dot(d, uSun), 0);
     col.addAssign(vec3(1, 0.88, 0.7).mul(pow(s, 10).mul(0.22).add(pow(s, 900).mul(5))));
     return vec4(col, 1);
@@ -457,15 +460,15 @@ function applyOutputStyle(q) {
 }
 // Sea, lake and river (TSL): waves, fresnel sky reflection, sun glint, shallow-water tint and surf from the baked depth map.
 const waterU = {
-  uTime: uniform(0), uSun: uniform(SUN), uDeep: uniform(new THREE.Color('#0d3244')), uShallow: uniform(new THREE.Color('#22606c')), uReef: uniform(new THREE.Color('#4aa39a')),
-  uHor: uniform(HORIZON), uZen: uniform(ZENITH), uGrid: uniform(new V3(HALF, 100, 1)), ...fogU,
+  uTime: uniform(0), uSun: uniform(SUN), uDeep: uniform(new THREE.Color('#0b2d40')), uShallow: uniform(new THREE.Color('#22606c')), uReef: uniform(new THREE.Color('#4aa39a')),
+  uHor: uniform(HORIZON), uZen: uniform(ZENITH), uSea: uniform(SEA_HAZE), uGrid: uniform(new V3(HALF, 100, 1)), ...fogU,
 };
 // a 1x1 placeholder; buildDepthTex() fills it in before the first frame
 const waterDepthTex = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat); waterDepthTex.magFilter = waterDepthTex.minFilter = THREE.LinearFilter;
 const waterMat = new THREE.NodeMaterial();
 waterMat.fog = false; // fogged by hand below, as before
 waterMat.fragmentNode = withOutput(Fn(() => {
-  const { uTime, uSun, uDeep, uShallow, uReef, uHor, uZen, uGrid, uFogColor, uFogDensity } = waterU;
+  const { uTime, uSun, uDeep, uShallow, uReef, uHor, uZen, uSea, uGrid, uFogDensity } = waterU;
   const wv = (p, dx, dy, f, a, s) => { const d = vec2(dx, dy); return d.mul(cos(dot(p, d).mul(f).add(uTime.mul(s))).mul(f * a)); };
   const vW = positionWorld, p = vW.xz, dist = length(cameraPosition.sub(vW));
   const tuv = p.add(uGrid.x).div(uGrid.y).add(0.5).div(uGrid.z);
@@ -479,10 +482,10 @@ waterMat.fragmentNode = withOutput(Fn(() => {
   const V = normalize(cameraPosition.sub(vW));
   const fres = pow(max(dot(n, V), 0).oneMinus(), 5).mul(0.98).add(0.02);
   const R = reflect(V.negate(), n).toVar();
-  const skyc = mix(uHor, uZen, pow(tslClamp(R.y, 0, 1), 0.6));
+  const skyc = mix(uHor, uZen, pow(tslClamp(R.y, 0, 1), 0.6)).mul(0.82); // the sea mirrors a dimmer sky than the sky itself
   const deepc = mix(uShallow, uDeep, smoothstep(0, 0.6, V.y));
   const body = mix(deepc, uReef, smoothstep(0.5, 14, depth).oneMinus().mul(0.9));
-  const col = mix(body, skyc, fres.mul(0.85)).toVar();
+  const col = mix(body, skyc, fres.mul(0.62)).toVar();
   const sd = max(dot(R, uSun), 0);
   col.addAssign(vec3(1, 0.93, 0.82).mul(pow(sd, 300).mul(3.2).add(pow(sd, 24).mul(0.07))));
   const wob = sin(p.x.mul(0.09).add(uTime.mul(0.8))).mul(sin(p.y.mul(0.11).sub(uTime.mul(0.6))));
@@ -490,7 +493,7 @@ waterMat.fragmentNode = withOutput(Fn(() => {
   const surf = band.mul(sin(depth.mul(2.8).sub(uTime.mul(1.7)).add(wob)).mul(0.45).add(0.55));
   col.assign(mix(col, vec3(0.92, 0.95, 0.95), tslClamp(surf, 0, 1).mul(0.75).mul(smoothstep(2500, 9000, dist).oneMinus())));
   const f = exp(uFogDensity.mul(uFogDensity).mul(dist).mul(dist).negate()).oneMinus();
-  return vec4(mix(col, uFogColor, f), 1);
+  return vec4(mix(col, uSea, f), 1);
 })());
 function buildDepthTex() {
   const n1 = GN + 1, data = new Uint8Array(n1 * n1 * 4);
@@ -2876,6 +2879,8 @@ function drawHUD(rdt) {
   if (settings.map === 'radar') { drawRadar(p, rx, ry, R); if (isTouch) dmgX = rx + R + 34; }
   else if (settings.map === 'sector') { const S = isTouch ? 116 : 176; const mx = isTouch ? safeL + 4 : HW - safeL - S, my = isTouch ? safeT + 4 : safeT + 52 + boardH; drawSectorMap(p, mx, my, S); if (isTouch) dmgX = mx + S + 34; }
   drawDamage(p, dmgX, isTouch ? safeT + 40 : HH - 100);
+  // artificial horizon (the cockpit panel has its own)
+  if (!ck) { if (isTouch) drawAttitude(p, dmgX + 78, safeT + 40, 30); else drawAttitude(p, safeL + 4 + 200 + 52, HH - 72, 42); }
   if (ck) {
     drawGauges(p);
     const gw = Math.min(460, HW * (isTouch ? 0.34 : 0.4)), gh = gw * 224 / 512;
@@ -2921,6 +2926,26 @@ function drawRadar(p, cx, cy, R) {
   hx.strokeStyle = 'rgba(241,232,210,0.6)'; hx.lineWidth = 1.5; hx.beginPath(); hx.arc(cx, cy, R, 0, 6.283); hx.stroke();
   hx.fillStyle = '#eaa53c'; hx.beginPath(); hx.moveTo(cx, cy - 6); hx.lineTo(cx + 4.5, cy + 5); hx.lineTo(cx - 4.5, cy + 5); hx.fill();
   const nx = cx + Math.sin(-hdg) * (R - 9), ny = cy - Math.cos(-hdg) * (R - 9); txt('N', nx, ny + 4, 10, '#f1e8d2', 'center');
+}
+// Sky above, earth below, turned with the aircraft: always shows which way is up.
+let attRot = 0;
+function drawAttitude(p, cx, cy, r) {
+  const nx = p.right.y, ny = p.up.y; // which way the sky is, seen from the cockpit
+  if (Math.hypot(nx, ny) > 0.05) attRot = Math.atan2(nx, ny);
+  const pitch = Math.asin(clamp(p.fwd.y, -1, 1)), k = r / (Math.PI / 4); // 45 degrees of pitch to the rim
+  hx.save(); hx.beginPath(); hx.arc(cx, cy, r, 0, 6.283); hx.clip();
+  hx.translate(cx, cy); hx.rotate(attRot);
+  const hy = clamp(pitch * k, -r * 1.6, r * 1.6);
+  hx.fillStyle = '#3f7fc4'; hx.fillRect(-r * 2, -r * 3, r * 4, r * 3 + hy);
+  hx.fillStyle = '#7a5530'; hx.fillRect(-r * 2, hy, r * 4, r * 3);
+  hx.strokeStyle = '#fff'; hx.lineWidth = 2; hx.beginPath(); hx.moveTo(-r * 2, hy); hx.lineTo(r * 2, hy); hx.stroke();
+  hx.strokeStyle = 'rgba(255,255,255,0.75)'; hx.lineWidth = 1;
+  for (const d of [-30, -15, 15, 30]) { const y = hy - d * Math.PI / 180 * k, w = r * (Math.abs(d) === 15 ? 0.28 : 0.45); hx.beginPath(); hx.moveTo(-w, y); hx.lineTo(w, y); hx.stroke(); }
+  hx.restore();
+  hx.strokeStyle = 'rgba(241,232,210,0.8)'; hx.lineWidth = 1.5; hx.beginPath(); hx.arc(cx, cy, r, 0, 6.283); hx.stroke();
+  // the aircraft symbol stays fixed
+  hx.strokeStyle = '#eaa53c'; hx.lineWidth = 2.5; hx.beginPath(); hx.moveTo(cx - r * 0.55, cy); hx.lineTo(cx - r * 0.2, cy); hx.lineTo(cx, cy + r * 0.14); hx.lineTo(cx + r * 0.2, cy); hx.lineTo(cx + r * 0.55, cy); hx.stroke();
+  if (p.up.y < -0.2) txt('INVERTED', cx, cy + r + 13, 10, '#eaa53c', 'center', COND, 700);
 }
 function drawDamage(p, cx, cy) {
   const col = (k) => { const f = p.hp[k] / p.spec.hp[k]; return f <= 0 ? '#1a1a1a' : f > 0.7 ? 'rgba(151,196,111,0.85)' : f > 0.35 ? 'rgba(234,165,60,0.9)' : 'rgba(226,85,63,0.95)'; };

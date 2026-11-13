@@ -80,7 +80,7 @@ Computer pilots always fly the empty seats in a free-for-all. Their skill follow
 - **Enemy AI.** Bandits pursue with lead and fire in bursts. They break when you get on their tail, extend after an overshoot, avoid head-on collisions, avoid terrain and stay inside the sector. There are three skill levels: rookie, veteran and ace (the ace has a red nose).
 - **Mission.** Take off, fight three escalating waves, then return to base and land. The debrief shows score, kills, accuracy, damage taken, flight time, how good the landing was, and a grade.
 - **Cameras.** Chase view, cockpit view, and a slow-motion kill camera (you can turn this off).
-- **HUD.** Gun reticle, a lead indicator on the nearest target, target brackets with range, off-screen arrows, a heading-up radar drawn over the terrain map, a damage diagram, flight data, and warnings for stall, pull-up, fire, fuel, gear overspeed and leaving the sector. It also shows the effects of high G: blackout, redout, wingtip vapour and the stall horn.
+- **HUD.** Gun reticle, a lead indicator on the nearest target, target brackets with range, off-screen arrows, a heading-up radar drawn over the terrain map, a damage diagram, an artificial horizon (sky blue above, earth brown below, with INVERTED when you're upside down; the cockpit panel has its own), flight data, and warnings for stall, pull-up, fire, fuel, gear overspeed and leaving the sector. It also shows the effects of high G: blackout, redout, wingtip vapour and the stall horn.
 - **Sound.** All sound is generated with WebAudio: the engine follows RPM, plus wind, guns, hits, bullet cracks, explosions, nearby enemy engines and the stall horn.
 
 ## Controls
