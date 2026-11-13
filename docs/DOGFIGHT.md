@@ -34,6 +34,13 @@ The **High** graphics setting adds bloom, which makes the sun, tracers, fires an
 
 The game's menu has:
 
+- **Mission** (single player; online tables fly the dogfight):
+  - *Dogfight*: waves of enemy fighters come in off the sea; shoot them all down, then land.
+  - *Naval strike*: a 190 m battleship steams up and down the coast about 5 km out. Its ten light AA mounts throw up flak bursts timed to where you will be and streams of tracer when you come close, its turrets turn to follow you, and its main battery shells the coast now and then. Bomb it (two to four direct hits, more for near misses) until it rolls over and sinks, then land. Fighters scramble to defend it.
+  - *Ground attack*: a convoy of tanks and trucks drives up a track to a fuel depot (four fuel tanks and two supply sheds) guarded by three flak guns. Bomb and strafe them: trucks fall to guns, tanks need cannon or bombs, and fuel tanks go up in a fireball. Flak guns are optional targets. Fighters scramble to defend it.
+  - *Bomber intercept*: formations of twin-engine bombers with fighter cover fly for the harbour town. Their top and tail gunners shoot back. If three bombers get through and drop on the town, the mission fails. The *Waves* option sets how many formations come (one to three).
+  - **Bombs**: every aircraft carries bombs on attack missions (two to four on fighters, eight on the attack jet, ten in the bomber). Drop with **B** in the air (B is still the brake on the ground), **BOMB** on touch, or **LT** on a gamepad. A bomb sight on the HUD shows where a bomb released now would land and how long it would fall. Land on the airfield to rearm.
+  - Targets show as red brackets on screen and squares on the radar; a gold marker (or an arrow at the edge of the screen) points to the objective.
 - **Enemies per wave**: Standard (2, then 3, then more), or a fixed 1, 2, 3, 4, 6, 8 or 12.
 - **Waves**: 1, 2, 3, 5 or 8. Skill rises through the sortie, and the last wave brings an ace.
 - **Difficulty**, **Missile lock** (auto or manual) and **Corner map** are in the same menu and in the pause menu.
@@ -67,13 +74,17 @@ Computer pilots always fly the empty seats in a free-for-all. Their skill follow
 
 - **World.** About 30 km of procedural terrain. It has hills and ridges inland, chalk cliffs and beaches along the coast, a river with its estuary, a mountain lake, forests, a patchwork of fields with hedges, farms with barns and sheds, a harbour town with a church and fishing boats, and a lighthouse. The sea uses a wave shader, the sky has a sun, and there are sprite cumulus clouds you can fly through.
 - **Airfield.** A marked runway (36/18), apron, three hangars, a control tower, a windsock, fuel tanks and two parked fighters.
-- **Six aircraft.** Four 1940s fighters and two modern jets.
+- **Nine aircraft.** Five 1940s fighters, a twin-engine bomber, two modern jets and an attack jet.
   - *Kestrel Mk IX*: elliptical wing, low wing loading, turns tightly, two cannon and four MGs.
   - *Falke G-6*: small wing, faster with a better climb, a nose cannon and two cowl MGs.
   - *Ranger D-20*: bare-metal long-range escort with a laminar wing and belly radiator; fast, six heavy machine guns.
   - *Swift A6*: feather-light, with a radial engine; out-turns anything, but it does not take punishment. Two cowl MGs and two wing cannon.
   - *Lancer F-2* (modern jet): single engine, cropped-delta wing, quick roll, a rotary cannon (50 rounds a second) and six missiles.
   - *Talon T-27* (modern jet): twin engines, twin canted fins, big wing, long range and tough.
+  - *Thunder TB-1*: heavy fighter-bomber with a big radial engine; rugged, eight heavy machine guns, four 500 kg bombs.
+  - *Brute B-25*: twin-engine bomber with a glazed nose, two engines on the wings, a top turret and a tail gunner, and ten bombs in the bay (it drops them in pairs). No missiles.
+  - *Striker A-12* (attack jet): straight thick wing, two engines in pods on top, twin tails on the tailplane tips, a heavy rotary cannon (65 rounds a second), eight bombs; slow for a jet, no afterburner, but it takes a lot of punishment.
+  - Only fighters fly as raiders in dogfights; the bomber is the target in a bomber intercept.
   - The jets have afterburners (hold boost at full throttle; it burns fuel three times as fast instead of running out), fly-by-wire that pulls to 9 g and no further, a transonic drag rise that holds them to about 740 mph, tricycle gear, and two more missiles and four more flares than the 1940s fighters.
   - Raiders fly the other side's aircraft of your era: pick a 1940s fighter and you meet 1940s fighters, pick a jet and you meet jets.
   - The picker shows each aircraft with a small picture rendered from the game (`node tools/dogfight-plane-thumbs.cjs` remakes `public/games/dogfight/planes/*.jpg` after a model changes; it needs `npm start` running and Playwright), its top speed, guns and missiles, and two fun facts.
