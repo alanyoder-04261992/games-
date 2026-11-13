@@ -34,7 +34,7 @@ The **High** graphics setting adds bloom, which makes the sun, tracers, fires an
 
 The game's menu has:
 
-- **Mission** (single player, and Game Center tables where nobody else is sitting; with other people at the table everyone flies the dogfight). The pause menu can **switch mission mid-flight**: the old fight is cleared and the new one starts round you.
+- **Mission**. The pause menu can **switch mission mid-flight**: the old fight is cleared and the new one starts round you. Online in co-op, missions are shared (see Multiplayer).
   - *Dogfight*: waves of enemy fighters come in off the sea; shoot them all down, then land.
   - *Naval strike*: a 190 m battleship steams up and down the coast about 5 km out. Its ten light AA mounts throw up flak bursts timed to where you will be and streams of tracer when you come close, its turrets turn to follow you, and its main battery shells the coast now and then. Bomb it (two to four direct hits, more for near misses) until it rolls over and sinks, then land. Fighters scramble to defend it.
   - *Ground attack*: a convoy of tanks and trucks drives up a track to a fuel depot (four fuel tanks and two supply sheds) guarded by three flak guns. Bomb and strafe them: trucks fall to guns, tanks need cannon or bombs, and fuel tanks go up in a fireball. Flak guns are optional targets. Fighters scramble to defend it.
@@ -56,18 +56,30 @@ In the Game Center, choose **Multiplayer** on its tile or options page. Friends 
 
 | Option | Choices |
 |---|---|
-| Mode | **Co-op vs raiders**: everyone against the waves. **Free-for-all**: every pilot for themselves. |
-| Raiders per wave | Standard, or 1–12 |
-| Waves | 1, 2, 3, 5 or 8 |
+| Mode | **Co-op**: free play and shared missions. **Free-for-all**: every pilot for themselves. |
+| Raiders per wave (dogfight missions) | Standard, or 1–12 |
+| Waves (dogfight missions; bomber formations up to 3) | 1, 2, 3, 5 or 8 |
 | Kills to win (free-for-all) | 3, 5 or 10 |
 | Computer wingmen (co-op) | Off, or fill the empty seats with computer pilots |
 
-Computer pilots always fly the empty seats in a free-for-all. Their skill follows the table's computer player setting: Rookie, Veteran or Ace. A pilot who is shot down is back in the air after 6 seconds. In co-op the round ends when the host lands after the last wave; in a free-for-all it ends when someone reaches the kill target. The host can also end the round from the pause menu. The debrief shows the scoreboard, and the host starts a new round for everyone.
+Computer pilots always fly the empty seats in a free-for-all. Their skill follows the table's computer player setting: Rookie, Veteran or Ace. A pilot who is shot down is back in the air after 6 seconds. In co-op the round runs until the host ends it from the pause menu; in a free-for-all it ends when someone reaches the kill target (the host can end it early the same way). The debrief shows the scoreboard, and the host starts a new round for everyone.
+
+### Co-op missions
+
+A co-op round starts in **free play**: no raiders. The menu shows a *Free play* card first, then the four missions. Picking a mission there starts it as you launch, or joins it if someone is already flying it. While flying, the pause menu's *Mission* list does the same and shows who is flying what (`· join Ana`, `· you are in it`). Choosing *Free play* there leaves your mission.
+
+- **Starting.** The pilot who starts a mission owns it. Their device runs it: it spawns the mission's raiders and bombers, sails the battleship, drives the convoy and decides when the mission is won or lost.
+- **The banner.** Everyone else gets *"Ana started Naval strike — Join mission ✕"* across the top for 30 seconds. *Join mission* joins it, even partway through. ✕ (or ignoring it) leaves you in free play. Each kind of mission runs once at a time, so different pilots can fly different missions together. If two pilots start the same kind at the same moment, the lower seat keeps it and the other joins.
+- **Everyone sees the targets.** The owner sends the mission's state twice a second (`mstate`: the battleship's position, heading and hull; each convoy vehicle's place on its track and health; the HUD line; the objective marker). Other devices build the same battleship and depot (the depot is laid out the same way on every device) and follow it. Mission raiders are ordinary aircraft from the owner's device.
+- **Flak shoots at you on your own device.** Each device's copy of the flak guns aims at the aircraft that device flies, so everyone near a target gets shot at, with no network lag on the bursts.
+- **Damage goes to the owner.** Bullets and bombs that hit a target on your copy are added up and sent to the owner four times a second (`mhit`). The owner applies them and sends back points to whoever destroyed something (`mpts`). Bombs you drop are also sent (`bomb`) so the others see them fall; only your device works out their damage.
+- **Ending.** When the owner's device sees the mission won or lost it sends `mend`. Every member gets +500 for a win, and everyone returns to free play. The convoy's wrecks stay and a sunk battleship finishes going down. If the owner picks free play or another mission, theirs is called off for everyone in it. If the owner leaves the table, the others' copies end after 9 seconds of silence.
+- **Debrief.** It shows how many missions the squadron completed, with your score and the ground targets you destroyed.
 
 ### How the network works
 
 - **Each device flies its own aircraft.** It sends the aircraft's position, attitude, throttle, gear, firing and damage state 15 times a second over the room's real-time channel (`{ t: 'rt' }` in `core/room.js`). Other devices draw it with dead reckoning plus smoothing.
-- **The host flies the raiders and the computer pilots.** It also runs the wave timer and holds the scoreboard, sending both every half second.
+- **The host flies the computer pilots and holds the scoreboard,** sending it every half second. Each mission's raiders are flown by the device of the pilot who started it.
 - **Hits are decided by the shooter.** Every device draws everyone's tracers, but only rounds fired by your own device count. A hit on an aircraft another device flies becomes a `hit` message to that device, which applies the damage through the normal damage model.
 - **Shoot-downs are announced by the victim's device.** It sends a `down` event naming the aircraft that last hit it, so everyone gets the same kill credit and messages.
 - **The bridge to the Game Center.** `ui.js` shows `play.html?embed=1` in a frame and passes messages through `postMessage`. Ending a round is a normal Game Center action (`{ type: 'finish', results }`), so the table, rematches and saving behave like the other games.

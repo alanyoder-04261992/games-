@@ -115,6 +115,12 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
 #tThr{position:absolute;right:calc(max(16px,env(safe-area-inset-right)) + 138px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 4px);width:54px;height:min(150px,30vh);border:2px solid rgba(241,232,210,.6);background:rgba(20,24,18,.42);border-radius:8px;overflow:hidden}
 #tThr i{position:absolute;left:0;right:0;bottom:0;background:rgba(234,165,60,.72)}
 #tThr span{position:absolute;left:0;right:0;top:6px;text-align:center;font-family:var(--f-data);font-size:.65rem;letter-spacing:.06em;color:var(--ink)}
+#missionBanner{position:fixed;left:50%;top:calc(max(8px,env(safe-area-inset-top)) + 30px);transform:translateX(-50%);z-index:12;display:flex;align-items:center;gap:10px;background:var(--panel);border:2px solid var(--amber);padding:6px 8px 6px 14px;max-width:calc(100vw - 32px);box-shadow:0 4px 18px rgba(0,0,0,.35)}
+#missionBanner[hidden]{display:none}
+#missionBanner span{font-weight:600;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#missionBanner button{padding:.4em .9em;white-space:nowrap}
+#missionBanner #mbX{padding:.4em .6em;border-color:transparent}
+@media (pointer:coarse){ #missionBanner{top:calc(max(10px,env(safe-area-inset-top)) + 58px);max-width:min(440px,calc(100vw - 32px))} #missionBanner span{font-size:.85rem} }
 #portrait{position:fixed;left:50%;top:calc(max(10px,env(safe-area-inset-top)) + 64px);transform:translateX(-50%);z-index:6;background:var(--panel);border:1px solid var(--line);padding:8px 12px;font-size:.9rem;color:var(--ink-dim);max-width:80vw;text-align:center}
 @media (max-height:500px){ .sheet{padding:12px 18px;gap:8px} h1{font-size:2.3rem} .lede,#ctrlHint,.pcard .stat{display:none} .settings{gap:8px 14px} .pcard{padding:8px 12px} .pcard b{font-size:1.3rem} .actions button,.row button{padding:.5em .9em} }
 @media (max-width:520px){ .planes{grid-template-columns:1fr} }
@@ -123,6 +129,7 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
 
 <canvas id="gl"></canvas>
 <canvas id="hud"></canvas>
+<div id="missionBanner" role="status" hidden><span id="mbText"></span><button class="primary" id="mbJoin">Join mission</button><button id="mbX" aria-label="Stay in free play">✕</button></div>
 
 <div id="loading" class="screen">
   <div style="text-align:center">
@@ -2573,7 +2580,7 @@ function aiThink(p, dt, target) {
 // Skill climbs through the sortie and the last wave brings an ace.
 // =====================================================================
 //  Missions beyond the dogfight: a battleship to sink, a convoy and fuel depot to bomb, bombers to stop.
-//  Targets, flak and bombs only exist on this device (single player); online tables fly the dogfight.
+//  Offline they run on this device; online (co-op) see 'Missions online' below.
 // =====================================================================
 const MISSIONS = {
   dogfight: { name: 'Dogfight', blurb: 'Waves of enemy fighters come in off the sea. Shoot them all down, then land.' },
@@ -2581,11 +2588,9 @@ const MISSIONS = {
   ground: { name: 'Ground attack', blurb: 'An armoured convoy is moving up to a fuel depot guarded by flak guns. Destroy the tanks, trucks, fuel tanks and sheds.' },
   intercept: { name: 'Bomber intercept', blurb: 'Enemy bombers are heading for the harbour town with fighter cover. Shoot them down before three of them get through.' },
 };
-// online, missions run when nobody else is at the table (just you and computer players, co-op)
-function soloTable() { return NET.on && NET.opts.mode === 'coop' && !NET.roster.some(r => r.kind === 'human' && r.seat !== NET.seat); }
-function missionKind() { return NET.on && !soloTable() ? 'dogfight' : (MISSIONS[settings.mission] ? settings.mission : 'dogfight'); }
+function missionKind() { return MISSIONS[settings.mission] ? settings.mission : 'dogfight'; }
 const TOWN_LIMIT = 3; // bombers through to the town before the intercept fails
-const GW = { units: [], ship: null, flak: [], bombs: [], center: new V3(), active: false };
+const GW = { units: [], ship: null, flak: [], bombs: [], center: new V3(), gc: new V3(), active: false, own: {}, gready: false };
 // what shoots back from the ground: kills and hits are credited to it like to a pilot
 const AA_OWNER = { id: 'aa', team: 'red', role: 'ground', label: 'Anti-aircraft fire', player: false, seat: null, spec: { name: 'Flak' }, alive: true, gone: false, vel: new V3() };
 const GM = {};
@@ -2645,7 +2650,7 @@ function findFlat(cx, cz, step) {
 }
 function setupGround(m) {
   const [cx, cz] = findFlat(coastX(-5200) - 3300, -5200, 260);
-  GW.center.set(cx, groundH(cx, cz), cz);
+  GW.center.set(cx, groundH(cx, cz), cz); GW.gc.copy(GW.center);
   [[-11, -11], [11, -11], [-11, 11], [11, 11]].forEach(([dx, dz]) => { const u = makeUnit('fuel'); placeUnit(u, cx + dx, cz + dz, 0); GW.units.push(u); });
   [[34, -6], [-30, 20]].forEach(([dx, dz], i) => { const u = makeUnit('shed'); placeUnit(u, cx + dx, cz + dz, i * 0.6); GW.units.push(u); });
   for (let i = 0; i < 3; i++) { const a = i / 3 * 6.283 + 0.4, u = makeUnit('aa'); placeUnit(u, cx + Math.cos(a) * 150, cz + Math.sin(a) * 150, 0); u.optional = true; GW.units.push(u); }
@@ -2739,7 +2744,13 @@ function insideShip(S, p, pad = 0) {
 }
 function updateShip(S, dt) {
   const pl = G.player;
-  if (S.alive) {
+  if (S.alive && S.replica && S.net) {
+    // someone else's battleship: follow where its owner says it is
+    const age = Math.min(3, (nowMs() - S.net.at) / 1000), tx = S.net.x - Math.sin(S.net.hdg) * S.speed * age, tz = S.net.z - Math.cos(S.net.hdg) * S.speed * age, k = Math.min(1, dt * 1.5);
+    if (Math.hypot(tx - S.pos.x, tz - S.pos.z) > 200) S.pos.set(tx, 0, tz); else { S.pos.x += (tx - S.pos.x) * k; S.pos.z += (tz - S.pos.z) * k; }
+    S.hdg += Math.atan2(Math.sin(S.net.hdg - S.hdg), Math.cos(S.net.hdg - S.hdg)) * k;
+    S.roll = Math.sin(G.time * 0.35) * 0.012; S.pitch = Math.sin(G.time * 0.5) * 0.006;
+  } else if (S.alive) {
     // sail between the waypoints, turning slowly at each end
     const wp = S.wps[S.wp], dx = wp.x - S.pos.x, dz = wp.z - S.pos.z;
     if (Math.hypot(dx, dz) < 600) S.wp = 1 - S.wp;
@@ -2809,7 +2820,7 @@ function updateFlak(dt) {
     for (let k = 0; k < 6; k++) fireFX.spawn(f.pos.x, f.pos.y, f.pos.z, rand(-30, 30), rand(-30, 30), rand(-30, 30), rand(0.08, 0.2), rand(2, 4), 6, 1, 0.75, 0.4, 1, 3, 0, 1);
     Sfx.flak(f.pos);
     for (const p of G.planes) {
-      if (p.gone || !p.alive || p.team === 'red') continue; const d = p.pos.distanceTo(f.pos); if (d > 25) continue;
+      if (p.gone || !p.alive || p.team === 'red' || p.remote) continue; const d = p.pos.distanceTo(f.pos); if (d > 25) continue;
       const parts = ['engine', 'wingL', 'wingR', 'fuse', 'tail', 'fuel'];
       hitPart(p, parts[rand(0, parts.length) | 0], 22 * (1 - d / 25), AA_OWNER);
       if (p.player) G.cam.shake = Math.min(1.4, G.cam.shake + 0.6 * (1 - d / 25));
@@ -2834,7 +2845,10 @@ function spawnRound(owner, from, tgt, speed, dmg, spread) {
 function hitUnit(u, dmg, owner) {
   if (!u.alive) return; u.hp -= dmg;
   if (u.hp > 0) return;
-  u.alive = false;
+  unitDies(u, owner);
+}
+function unitDies(u, owner) {
+  u.alive = false; u.hp = 0;
   const at = u.pos.clone(); at.y += u.big ? 4 : 1.5;
   explosion(at, _a.set(0, 0, 0), u.big ? 2.4 : u.kind === 'shed' ? 1.6 : 1.1, 'ground');
   if (u.big) for (let i = 0; i < 30; i++) fireFX.spawn(at.x, at.y, at.z, rand(-8, 8), rand(10, 30), rand(-8, 8), rand(1, 2.2), rand(6, 10), 6, 1, 0.6, 0.25, 1, 1, -3, 1);
@@ -2844,7 +2858,7 @@ function hitUnit(u, dmg, owner) {
   if (owner && owner.player) {
     G.stats.score += u.pts; G.stats.ground = (G.stats.ground || 0) + 1;
     msg(`${u.name} destroyed  +${u.pts}`, 'good'); G.popups.push({ pos: at, text: `+${u.pts}`, t: 1.6 });
-  }
+  } else if (NET.on && owner && owner.remote && owner.seat != null) netSend({ k: 'mpts', to: owner.seat, pts: u.pts, text: `${u.name} destroyed` });
 }
 function hitShip(S, dmg, owner) {
   if (!S || !S.alive) return; S.hp -= dmg;
@@ -2852,21 +2866,22 @@ function hitShip(S, dmg, owner) {
   if (S.hp > 0) return;
   S.alive = false; S.sinkT = 0;
   if (owner && owner.player) { G.stats.score += 1500; G.stats.ground = (G.stats.ground || 0) + 1; msg('The battleship is sinking!  +1500', 'good', 5); G.popups.push({ pos: S.pos.clone().setY(30), text: '+1500', t: 2.2 }); }
+  else if (NET.on && owner && owner.remote && owner.seat != null) netSend({ k: 'mpts', to: owner.seat, pts: 1500, text: 'The battleship is sinking!' });
 }
 // a blast at pos hurts everything around it (armour stops bullets far better than blast)
 function blastDamage(pos, radius, dmg, owner) {
-  for (const u of GW.units) if (u.alive) { const d = u.pos.distanceTo(pos) - u.r * 0.5; if (d < radius) hitUnit(u, dmg * (1 - Math.max(0, d) / radius) ** 0.7 * (0.85 + 0.15 * u.armor), owner); }
-  const S = GW.ship; if (S && S.alive) { if (insideShip(S, pos, 2)) hitShip(S, dmg * 2.6, owner); else if (insideShip(S, pos, radius)) hitShip(S, dmg * 0.6, owner); }
+  for (const u of GW.units) if (u.alive) { const d = u.pos.distanceTo(pos) - u.r * 0.5; if (d < radius) damageUnit(u, dmg * (1 - Math.max(0, d) / radius) ** 0.7 * (0.85 + 0.15 * u.armor), owner); }
+  const S = GW.ship; if (S && S.alive) { if (insideShip(S, pos, 2)) damageShip(S, dmg * 2.6, owner); else if (insideShip(S, pos, radius)) damageShip(S, dmg * 0.6, owner); }
 }
 // a bullet segment against the targets; true if it hit something
 function bulletVsGround(ox, oy, oz, nx, ny, nz, dmg, cannon, owner) {
   if (!GW.active) return false;
-  if (GW.ship && GW.ship.alive) { _a.set(nx, ny, nz); if (insideShip(GW.ship, _a) || insideShip(GW.ship, _b.set((ox + nx) / 2, (oy + ny) / 2, (oz + nz) / 2))) { hitShip(GW.ship, dmg * 0.05, owner); for (let s = 0; s < 3; s++) fireFX.spawn(nx, ny, nz, rand(-20, 20), rand(0, 25), rand(-20, 20), rand(0.1, 0.25), cannon ? 1.2 : 0.6, 2, 1, 0.85, 0.55, 1, 2, 9, 1); return true; } }
-  if (_a.set(nx, ny, nz).distanceToSquared(GW.center) > 2200 * 2200) return false;
+  if (GW.ship && GW.ship.alive) { _a.set(nx, ny, nz); if (insideShip(GW.ship, _a) || insideShip(GW.ship, _b.set((ox + nx) / 2, (oy + ny) / 2, (oz + nz) / 2))) { damageShip(GW.ship, dmg * 0.05, owner); for (let s = 0; s < 3; s++) fireFX.spawn(nx, ny, nz, rand(-20, 20), rand(0, 25), rand(-20, 20), rand(0.1, 0.25), cannon ? 1.2 : 0.6, 2, 1, 0.85, 0.55, 1, 2, 9, 1); return true; } }
+  if (!GW.units.length || _a.set(nx, ny, nz).distanceToSquared(GW.gc) > 2200 * 2200) return false;
   for (const u of GW.units) {
     if (!u.alive) continue; _b.set(u.pos.x, u.pos.y + u.r * 0.45, u.pos.z);
     if (segPointDist(_c.set(ox, oy, oz), _d.set(nx, ny, nz), _b) < u.r) {
-      hitUnit(u, dmg * u.armor * (cannon ? 1.6 : 1), owner);
+      damageUnit(u, dmg * u.armor * (cannon ? 1.6 : 1), owner);
       for (let s = 0; s < (cannon ? 6 : 3); s++) fireFX.spawn(nx, ny, nz, rand(-15, 15), rand(2, 18), rand(-15, 15), rand(0.1, 0.25), cannon ? 1.2 : 0.6, 2, 1, 0.85, 0.55, 1, 2, 9, 1);
       return true;
     }
@@ -2881,7 +2896,9 @@ function dropBomb(p) {
   const kg = p.spec.bombKg || 250, mount = p.model.parts.bombs[p.bombs];
   const pos = mount ? mount.position.clone().applyQuaternion(p.q).add(p.pos) : _a.set(0, -1.3, 0.5).applyQuaternion(p.q).add(p.pos).clone();
   const mesh = makeBombMesh(kg); mesh.position.copy(pos); scene.add(mesh);
-  GW.bombs.push({ pos, vel: p.vel.clone().addScaledVector(p.up, -2.5), owner: p, kg, mesh, age: 0 });
+  const vel = p.vel.clone().addScaledVector(p.up, -2.5);
+  GW.bombs.push({ pos, vel, owner: p, kg, mesh, age: 0 });
+  if (NET.on && !p.remote) netSend({ k: 'bomb', pos: pos.toArray().map(r1), vel: vel.toArray().map(r1), kg });
   if (p.player) Sfx.bombDrop();
   return true;
 }
@@ -2904,6 +2921,7 @@ function updateBombs(dt) {
       if (!onShip) b.pos.y = Math.max(gh, wl);
       explosion(b.pos, _a.set(0, 0, 0), big ? 2.1 : 1.6, water ? 'water' : 'ground');
       if (!water && !onShip) G.crashSites.push({ x: b.pos.x, y: b.pos.y, z: b.pos.z, t: 10, water: false });
+      if (b.vis) continue; // another device's bomb: that device works out the damage
       if (b.owner && b.owner.bomber) { GW.townHit = (GW.townHit || 0) + 1; continue; }
       blastDamage(b.pos, big ? 34 : 25, big ? 300 : 190, b.owner);
       // close to the blast hurts aircraft too
@@ -2980,7 +2998,7 @@ function spawnEscorts(n, near, text) {
 function clearGroundWar() {
   for (const u of GW.units) scene.remove(u.g); GW.units = [];
   if (GW.ship) scene.remove(GW.ship.g); GW.ship = null;
-  for (const b of GW.bombs) scene.remove(b.mesh); GW.bombs = []; GW.flak = []; GW.shells = []; GW.townRuns = 0; GW.townHit = 0; GW.active = false;
+  for (const b of GW.bombs) scene.remove(b.mesh); GW.bombs = []; GW.flak = []; GW.shells = []; GW.townRuns = 0; GW.townHit = 0; GW.active = false; GW.own = {}; GW.gready = false;
 }
 function setupMission(m) {
   clearGroundWar(); m.kind = missionKind();
@@ -3007,35 +3025,237 @@ function updateGroundWar(dt) {
 function missionObjective(m, dt) {
   const pl = G.player;
   if (m.kind === 'intercept') {
-    if ((GW.townRuns || 0) >= TOWN_LIMIT && m.phase === 'combat') { m.phase = 'over'; m.endT = 4; m.cause = 'let the bombers through to the town'; m.townLost = true; msg('The town has been bombed. Mission failed', 'danger', 6); return; }
-    const bombers = G.planes.filter(p => p.bomber && p.alive && !p.gone);
+    if ((GW.townRuns || 0) >= TOWN_LIMIT && m.phase === 'combat') { m.phase = 'over'; m.endT = 4; m.cause = 'let the bombers through to the town'; m.townLost = true; if (!NET.on) msg('The town has been bombed. Mission failed', 'danger', 6); return; }
+    const bombers = G.planes.filter(p => p.bomber && p.alive && !p.gone && !p.remote);
     if (m.next != null) { m.next -= dt; if (m.next <= 0) { m.next = null; spawnBombers(m, 3 + m.bwave, m.bwave); m.bwave++; } }
     else if (bombers.length === 0) {
       if (m.bwave < m.bwaves) { m.next = 10; msg('Bombers stopped. More on radar', 'good', 4); }
-      else if (raiders().length === 0 || m.t > 600) { m.phase = 'rtb'; msg('The town is safe. Return to base and land', 'good', 6); }
+      else if (mRaiders(m).length === 0 || m.t > 600) { m.phase = 'rtb'; if (!NET.on) msg('The town is safe. Return to base and land', 'good', 6); }
     }
     return;
   }
   // naval / ground: fighters come to defend the target now and then
-  if (m.next != null) { m.next -= dt; if (m.next <= 0) { m.next = null; m.escortsLeft--; spawnEscorts(2, GW.center.clone().setY(1400), 'Enemy fighters scrambled to defend the target'); } }
-  else if (m.escortsLeft > 0 && raiders().length === 0) m.next = 45;
+  if (m.next != null) { m.next -= dt; if (m.next <= 0) { m.next = null; m.escortsLeft--; spawnEscorts(2, (m.kind === 'naval' ? (GW.ship ? GW.ship.pos : GW.center) : GW.gc).clone().setY(1400), 'Enemy fighters scrambled to defend the target'); } }
+  else if (m.escortsLeft > 0 && mRaiders(m).length === 0) m.next = 45;
   const done = m.kind === 'naval' ? !GW.ship || !GW.ship.alive : GW.units.every(u => u.optional || !u.alive);
-  if (done) { m.phase = 'rtb'; msg(m.kind === 'naval' ? 'Target sunk. Return to base and land' : 'Convoy and depot destroyed. Return to base and land', 'good', 6); }
+  if (done) { m.phase = 'rtb'; if (!NET.on) msg(m.kind === 'naval' ? 'Target sunk. Return to base and land' : 'Convoy and depot destroyed. Return to base and land', 'good', 6); }
   void pl;
 }
 function missionLine(m) {
   if (m.kind === 'naval') return GW.ship && GW.ship.alive ? `Sink the battleship · ${Math.max(0, Math.round(GW.ship.hp / GW.ship.max * 100))}% afloat` : 'Battleship sinking';
   if (m.kind === 'ground') { const left = GW.units.filter(u => !u.optional && u.alive).length; return `Destroy the convoy and depot · ${left} of ${m.targetsTotal} targets left`; }
-  if (m.kind === 'intercept') { const n = G.planes.filter(p => p.bomber && p.alive && !p.gone).length; return m.next != null ? `Bombers inbound in ${Math.ceil(m.next)} s · town hit ${GW.townRuns || 0} of ${TOWN_LIMIT}` : `Stop the bombers · ${n} inbound · town hit ${GW.townRuns || 0} of ${TOWN_LIMIT}`; }
+  if (m.kind === 'dogfight') { const n = mRaiders(m).length; return m.next != null ? `Wave ${m.wave + 1} of ${WAVES.length} inbound in ${Math.ceil(m.next)} s` : `Wave ${m.wave} of ${WAVES.length} · ${n} bandit${n === 1 ? '' : 's'} left`; }
+  if (m.kind === 'intercept') { const n = G.planes.filter(p => p.bomber && p.alive && !p.gone && !p.remote).length; return m.next != null ? `Bombers inbound in ${Math.ceil(m.next)} s · town hit ${GW.townRuns || 0} of ${TOWN_LIMIT}` : `Stop the bombers · ${n} inbound · town hit ${GW.townRuns || 0} of ${TOWN_LIMIT}`; }
   return '';
 }
 // where the objective is, for the HUD marker
-function objectivePos() {
-  const m = G.mission; if (!m || !GW.active) return null;
+function objectivePos(kind) {
+  const m = { kind }; if (!kind) { const gm = G.mission; if (!gm || !GW.active) return null; m.kind = gm.kind; }
+  if (m.kind === 'dogfight' && NET.on) { const r = raidersOf('dogfight')[0]; return r ? _e.copy(r.pos) : null; }
   if (m.kind === 'naval' && GW.ship && GW.ship.alive) return _e.copy(GW.ship.pos).setY(12);
   if (m.kind === 'ground') { const u = GW.units.find(u => u.alive && !u.optional); return u ? _e.copy(u.pos).setY(u.pos.y + 6) : null; }
-  if (m.kind === 'intercept') { const b = G.planes.find(p => p.bomber && p.alive && !p.gone); return b ? _e.copy(b.pos) : _e.set(TOWN.x, 200, TOWN.z); }
+  if (m.kind === 'intercept') { const b = G.planes.find(p => p.bomber && p.alive && !p.gone && !p.remote); return b ? _e.copy(b.pos) : _e.set(TOWN.x, 200, TOWN.z); }
   return null;
+}
+
+// =====================================================================
+//  Missions online. A co-op round starts in free play. Anyone can start a mission; the device that starts it
+//  (its owner) runs it: its raiders, the battleship's course, the convoy and the score, and it sends their
+//  state twice a second. Every other device builds the same targets from that state (the depot always stands
+//  in the same place), so everyone sees them, flak shoots at everyone and anyone's hits count: damage done on
+//  another device is sent to the owner. The others get a banner to join; they can also stay in free play or
+//  start a different mission. Each kind of mission runs once at a time; starting one that is running joins it.
+// =====================================================================
+const NM = { kinds: {}, mine: null, mk: {}, sendT: 0, flushT: 0, pick: 'free', banner: null, bannerT: 0, pend: { naval: 0, nby: null, ground: {} } };
+const nowMs = () => performance.now();
+// spawn helpers tag the aircraft they add with the mission they belong to
+function tagSpawn(kind, fn) { const before = new Set(G.planes); fn(); for (const p of G.planes) if (!before.has(p) && !p.remote) p.mk = kind; }
+function raidersOf(kind) { return G.planes.filter(p => p.mk === kind && p.alive && !p.gone); }
+function mRaiders(m) { return NET.on ? raidersOf(m.kind) : raiders(); }
+function dropLocalRaiders(kind) { for (const p of [...G.planes]) if (p.mk === kind && !p.remote) { netSend({ k: 'rm', id: p.id }); removePlane(p); } }
+// set up one kind of mission on its owner's device without touching anything else in the sky
+function setupKind(kind, m) {
+  m.kind = kind; GW.own[kind] = true; GW.active = true;
+  if (kind === 'naval') { if (GW.ship) scene.remove(GW.ship.g); GW.ship = null; setupNaval(m); }
+  else if (kind === 'ground') { for (const u of GW.units) scene.remove(u.g); GW.units = []; setupGround(m); GW.gready = true; }
+  else if (kind === 'intercept') { GW.townRuns = 0; m.bwave = 0; m.bwaves = clamp(Number(NET.opts.waves) || 2, 1, 3); }
+  else { m.wave = 0; WAVES = buildWaves(NET.opts.enemies, NET.opts.waves); }
+  m.escortsLeft = kind === 'intercept' ? 0 : 3;
+}
+// what a mission leaves behind when it ends: the convoy's wrecks stay, anything still alive goes
+function dropKind(kind, won) {
+  if (kind === 'naval' && won && GW.ship && GW.ship.alive) { GW.ship.alive = false; GW.ship.sinkT = 0; GW.ship.hp = 0; }
+  if (kind === 'ground') { GW.gready = false; GW.units = GW.units.filter(u => { if (u.alive) scene.remove(u.g); return !u.alive; }); }
+  if (kind === 'naval' && GW.ship && GW.ship.alive) { scene.remove(GW.ship.g); GW.ship = null; }
+  if (kind === 'intercept') GW.townRuns = 0;
+  dropLocalRaiders(kind);
+  GW.own[kind] = false; delete NM.mk[kind]; delete NM.kinds[kind];
+}
+function netMissionStart(kind) {
+  if (!NET.on || NET.opts.mode !== 'coop' || NET.seat == null) return;
+  if (!MISSIONS[kind]) { netMissionLeave(); return; }
+  const r = NM.kinds[kind];
+  if (NM.mine === kind) return;
+  if (r && r.owner !== NET.seat) {
+    if (NM.mine) netMissionLeave(true);
+    NM.mine = kind; if (!r.members.includes(NET.seat)) r.members.push(NET.seat);
+    netSend({ k: 'mjoin', kind, seat: NET.seat, name: NET.name }); hideBanner();
+    if (G.player) G.player.bombs = Math.max(G.player.bombs || 0, G.player.spec.bombs || 0);
+    msg(`Joined ${r.name}'s ${MISSIONS[kind].name} · follow the gold marker`, 'good', 4.5); return;
+  }
+  if (NM.mine) netMissionLeave(true);
+  const m = NM.mk[kind] = { kind, phase: 'combat', t: 0, next: kind === 'intercept' ? 8 : kind === 'dogfight' ? 6 : 25 };
+  setupKind(kind, m);
+  NM.kinds[kind] = { owner: NET.seat, name: NET.name, members: [NET.seat], line: '', obj: null, lastT: nowMs() };
+  NM.mine = kind; NM.sendT = 0; hideBanner();
+  if (G.player) G.player.bombs = Math.max(G.player.bombs || 0, G.player.spec.bombs || 0);
+  netSend({ k: 'mstart', kind, owner: NET.seat, name: NET.name });
+  msg(`${MISSIONS[kind].name} started · the others can join in`, 'info', 5);
+}
+function netMissionLeave(quiet) {
+  const k = NM.mine; if (!k) return;
+  NM.mine = null; const r = NM.kinds[k];
+  if (GW.own[k]) netEvent({ k: 'mend', kind: k, result: 'ended', name: NET.name, owner: NET.seat });
+  else { netSend({ k: 'mleave', kind: k, seat: NET.seat }); if (r) r.members = r.members.filter(s => s !== NET.seat); }
+  if (!quiet) msg('Free play', 'info', 2.5);
+}
+// a dogfight mission: waves of fighters, as in single player
+function dogfightWaves(m, dt) {
+  if (m.next != null) { m.next -= dt; if (m.next <= 0) { m.next = null; spawnWave(m.wave); m.wave++; } }
+  else if (raidersOf('dogfight').length === 0) { if (m.wave < WAVES.length) m.next = 9; else m.phase = 'rtb'; }
+}
+// every device, every frame online: run the missions it owns, send their state, pass on damage, time out the rest
+function netMissionsTick(dt) {
+  for (const kind of Object.keys(NM.mk)) {
+    const m = NM.mk[kind]; m.t += dt;
+    if (m.phase === 'combat') tagSpawn(kind, () => kind === 'dogfight' ? dogfightWaves(m, dt) : missionObjective(m, dt));
+    if (m.phase === 'rtb' || m.phase === 'over') netEvent({ k: 'mend', kind, result: m.phase === 'rtb' ? 'won' : 'lost', name: NET.name, owner: NET.seat });
+  }
+  NM.sendT -= dt;
+  if (NM.sendT <= 0) {
+    NM.sendT = 0.5;
+    for (const kind of Object.keys(NM.mk)) {
+      const m = NM.mk[kind], r = NM.kinds[kind]; if (!r) continue;
+      r.line = missionLine(m); const op = objectivePos(kind); r.obj = op ? op.toArray().map(r1) : null;
+      const d = { k: 'mstate', kind, owner: NET.seat, name: NET.name, members: r.members, line: r.line, obj: r.obj };
+      if (kind === 'naval' && GW.ship) { const S = GW.ship; d.ship = [r1(S.pos.x), r1(S.pos.z), r3(S.hdg), Math.round(S.hp), S.max, S.alive ? 1 : 0, r1(S.sinkT), S.wp]; }
+      if (kind === 'ground') d.units = GW.units.map(u => [u.alive ? 1 : 0, Math.round(u.hp), u.s !== undefined ? r1(u.s) : 0, u.dir || 0]);
+      netSend(d);
+    }
+  }
+  // damage done here to someone else's targets goes to their owner, a few times a second
+  NM.flushT -= dt;
+  if (NM.flushT <= 0) {
+    NM.flushT = 0.25;
+    if (NM.pend.naval > 0) { netSend({ k: 'mhit', kind: 'naval', dmg: Math.round(NM.pend.naval), by: NM.pend.nby }); NM.pend.naval = 0; }
+    for (const i in NM.pend.ground) netSend({ k: 'mhit', kind: 'ground', i: +i, dmg: Math.round(NM.pend.ground[i].dmg), by: NM.pend.ground[i].by });
+    NM.pend.ground = {};
+  }
+  // a mission whose owner went quiet (left the table) has ended
+  for (const kind of Object.keys(NM.kinds)) {
+    const r = NM.kinds[kind]; if (r.owner === NET.seat || nowMs() - r.lastT < 9000) continue;
+    const mine = NM.mine === kind; dropKind(kind);
+    if (mine) { NM.mine = null; msg(`${MISSIONS[kind].name} ended: ${r.name} left · free play`, 'info', 4); }
+    if (NM.banner === kind) hideBanner();
+  }
+  if (NM.banner && (NM.bannerT -= dt) <= 0) hideBanner();
+}
+function handleMission(d) {
+  if (NET.opts.mode !== 'coop') return;
+  if (d.k === 'mpts') {
+    // points for a target this pilot destroyed in someone else's mission
+    if (d.to !== NET.seat || !G.stats) return;
+    const pts = clamp(Number(d.pts) || 0, 0, 2000); G.stats.score += pts; G.stats.ground = (G.stats.ground || 0) + 1;
+    msg(`${String(d.text || 'Target destroyed').slice(0, 60)}  +${pts}`, 'good', pts >= 1000 ? 5 : 3.6); return;
+  }
+  const k = d.kind; if (!MISSIONS[k]) return;
+  if (d.k === 'mstart' || d.k === 'mstate') {
+    if (d.owner === NET.seat) return;
+    if (GW.own[k]) {
+      // two pilots started the same mission at once: the lower seat keeps it, the other joins it
+      if (d.owner > NET.seat) return;
+      const was = NM.mine === k; dropLocalRaiders(k); GW.own[k] = false; delete NM.mk[k];
+      if (was) netSend({ k: 'mjoin', kind: k, seat: NET.seat, name: NET.name });
+    }
+    let r = NM.kinds[k];
+    if (!r) { r = NM.kinds[k] = { owner: d.owner, name: d.name, members: [d.owner], line: '', obj: null, lastT: nowMs() }; if (NM.mine !== k) showBanner(k, d.name); }
+    Object.assign(r, { owner: d.owner, name: d.name || r.name, lastT: nowMs() });
+    if (d.k === 'mstart') return;
+    if (d.members) r.members = d.members; r.line = d.line || ''; r.obj = d.obj;
+    if (k === 'naval' && d.ship) {
+      const [x, z, hdg, hp, max, alive, sinkT, wp] = d.ship;
+      let S = GW.ship;
+      if (!S && !alive) return;
+      if (!S) { S = GW.ship = makeShip(); S.pos.set(x, 0, z); S.hdg = hdg; S.wps = [new V3(coastX(-6000) + 5400, 0, -6000), new V3(coastX(5000) + 5400, 0, 5000)]; shipPose(S); }
+      S.replica = true; S.net = { x, z, hdg, at: nowMs() }; S.hp = hp; S.max = max; S.wp = wp || 0;
+      if (S.alive && !alive) { S.alive = false; S.sinkT = sinkT; }
+    }
+    if (k === 'ground' && d.units) {
+      if (!GW.gready) { for (const u of GW.units) scene.remove(u.g); GW.units = []; setupGround({}); GW.gready = true; }
+      d.units.forEach(([a, hp, s, dir], i) => {
+        const u = GW.units[i]; if (!u) return; u.hp = hp;
+        if (u.s !== undefined) { if (Math.abs(u.s - s) > 12) u.s = s; else u.s += (s - u.s) * 0.3; u.dir = dir; }
+        if (u.alive && !a) unitDies(u, null);
+      });
+    }
+  } else if (d.k === 'mjoin') {
+    const r = NM.kinds[k]; if (r && !r.members.includes(d.seat)) r.members.push(d.seat);
+    if (GW.own[k]) msg(`${d.name || 'A pilot'} joined your ${MISSIONS[k].name}`, 'good', 3.5);
+  } else if (d.k === 'mleave') {
+    const r = NM.kinds[k]; if (r) r.members = r.members.filter(s => s !== d.seat);
+  } else if (d.k === 'mend') {
+    const r = NM.kinds[k]; if (r && d.owner != null && r.owner !== d.owner) return;
+    const mine = NM.mine === k, label = MISSIONS[k].name, byMe = d.owner === NET.seat;
+    dropKind(k, d.result === 'won');
+    if (NET.host && d.result === 'won') NET.w.won = (NET.w.won || 0) + 1;
+    if (mine) {
+      NM.mine = null;
+      if (d.result === 'won') { G.stats.score += 500; G.stats.missions = (G.stats.missions || 0) + 1; msg(`Mission complete: ${label}!  +500 · back to free play`, 'good', 6); }
+      else if (d.result === 'lost') msg(`Mission failed: ${label}${k === 'intercept' ? ' · the town was bombed' : ''} · free play`, 'danger', 6);
+      else if (!byMe) msg(`${d.name} called off the ${label} · free play`, 'info', 4);
+    } else if (d.result === 'won') msg(`${d.name}'s ${label} is complete`, 'good', 3);
+    if (NM.banner === k) hideBanner();
+  } else if (d.k === 'mhit') {
+    if (!GW.own[k]) return;
+    const dmg = clamp(Number(d.dmg) || 0, 0, 5000), by = G.planes.find(p => p.id === d.by) || null;
+    if (k === 'naval' && GW.ship) hitShip(GW.ship, dmg, by);
+    if (k === 'ground' && GW.units[d.i]) hitUnit(GW.units[d.i], dmg, by);
+  }
+}
+// damage to targets: applied here when this device runs that mission (or offline), otherwise sent to its owner
+function damageUnit(u, dmg, by) {
+  if (!NET.on || GW.own.ground) { hitUnit(u, dmg, by); return; }
+  const i = GW.units.indexOf(u); if (i < 0 || !u.alive) return;
+  const e = NM.pend.ground[i] || (NM.pend.ground[i] = { dmg: 0, by: null }); e.dmg += dmg; if (by) e.by = by.id;
+}
+function damageShip(S, dmg, by) {
+  if (!NET.on || GW.own.naval) { hitShip(S, dmg, by); return; }
+  if (!S.alive) return;
+  NM.pend.naval += dmg; if (by) NM.pend.nby = by.id;
+  if (by && by.player && dmg >= 40) msg(`Battleship hit · about ${Math.max(0, Math.round((S.hp - NM.pend.naval) / S.max * 100))}% left`, 'good', 2.2);
+}
+// the banner across the top that offers someone else's mission
+function showBanner(kind, name) {
+  if (!NET.on || NET.seat == null) return;
+  NM.banner = kind; NM.bannerT = 30;
+  $('mbText').textContent = `${name} started ${MISSIONS[kind].name}`; $('missionBanner').hidden = false;
+}
+function hideBanner() { NM.banner = null; $('missionBanner').hidden = true; }
+$('mbJoin').addEventListener('click', () => {
+  const k = NM.banner; if (!k) return;
+  if (G.player && G.mission) netMissionStart(k); else { pickMission(k); hideBanner(); }
+});
+$('mbX').addEventListener('click', hideBanner);
+function netMissionLine() {
+  const k = NM.mine;
+  if (k) { const m = NM.mk[k], r = NM.kinds[k]; return m ? `${MISSIONS[k].name} · ${missionLine(m) || 'in progress'}` : `${MISSIONS[k].name} with ${r ? r.name : '…'} · ${r && r.line ? r.line : 'joining'}`; }
+  const running = Object.entries(NM.kinds).map(([kk, r]) => `${r.name}: ${MISSIONS[kk].name}`);
+  return running.length ? `Free play · ${running.join(' · ')} · join from the pause menu` : 'Free play · start a mission from the pause menu';
+}
+function netObjectivePos() {
+  const k = NM.mine; if (!k) return null;
+  if (NM.mk[k]) return objectivePos(k);
+  const r = NM.kinds[k]; return r && r.obj ? _e.fromArray(r.obj) : null;
 }
 
 function buildWaves(enemies, waves) {
@@ -3058,8 +3278,7 @@ function clearWorldPlanes() { for (const p of G.planes) scene.remove(p.model.gro
 function myTeam() { return NET.on && NET.opts.mode === 'versus' ? 't' + NET.seat : 'blue'; }
 function startMission(mode) {
   if (NET.on && NET.seat == null) { msg('You are watching. Ask the host to give you a seat.', 'warn'); return; }
-  // a mission on this device alone: offline, or a Game Center table with nobody else at it
-  const local = !NET.on || (soloTable() && missionKind() !== 'dogfight');
+  const local = !NET.on; // online, missions run alongside free play (see 'Missions online')
   if (local) { clearWorldPlanes(); smokeFX.n = 0; fireFX.n = 0; G.crashSites = []; }
   else if (G.player) removePlane(G.player);
   G.msgs = []; G.ended = false;
@@ -3070,17 +3289,18 @@ function startMission(mode) {
   camera.near = 1; camera.updateProjectionMatrix();
   const pl = spawnPlayer(mode);
   if (local) {
-    if (mode === 'sortie') { G.mission = { mode, phase: 'takeoff', wave: 0, next: null, t: 0, local: NET.on }; msg('Full throttle to start your take-off roll', 'info', 6); }
-    else { G.mission = { mode, phase: 'combat', wave: 0, next: 3, t: 0, local: NET.on }; }
+    if (mode === 'sortie') { G.mission = { mode, phase: 'takeoff', wave: 0, next: null, t: 0 }; msg('Full throttle to start your take-off roll', 'info', 6); }
+    else { G.mission = { mode, phase: 'combat', wave: 0, next: 3, t: 0 }; }
     setupMission(G.mission);
     const k = G.mission.kind;
     if (mode !== 'sortie') { if (k !== 'dogfight') G.mission.next = k === 'intercept' ? 6 : 30; msg(k === 'dogfight' ? 'Bandits inbound from the sea' : k === 'naval' ? 'Battleship off the coast · bomb it until it sinks (B to drop)' : k === 'ground' ? 'Convoy and depot inland · bomb and strafe them (B to drop)' : 'Bombers heading for the town · stop them', 'info', 5); }
     else if (k !== 'dogfight') msg(`${MISSIONS[k].name}: take off first`, 'info', 6);
   } else {
-    clearGroundWar();
     G.mission = { mode, phase: mode === 'sortie' ? 'takeoff' : 'air', t: 0, net: true };
     if (NET.host) netHostStart(mode);
-    msg(mode === 'sortie' ? 'Full throttle to start your take-off roll' : NET.opts.mode === 'versus' ? `Free-for-all: first to ${NET.opts.kills} kills wins` : 'Launched. Raiders are coming in off the sea', 'info', 5);
+    const coop = NET.opts.mode === 'coop'; GW.active = coop;
+    msg(mode === 'sortie' ? 'Full throttle to start your take-off roll' : !coop ? `Free-for-all: first to ${NET.opts.kills} kills wins` : 'Free play · pick a mission from the pause menu whenever you like', 'info', 5);
+    if (coop && MISSIONS[NM.pick]) netMissionStart(NM.pick);
   }
   resetAim(pl);
   G.state = 'play';
@@ -3135,12 +3355,12 @@ function spawnWave(i) {
   });
   const names = [...new Set(list.map((_, j) => SPECS[types[(i + j) % types.length]].name))].join(' and ');
   const text = `Wave ${i + 1} of ${WAVES.length}: ${list.length} × ${names}${list.includes('ace') ? ', one flown by an ace' : ''}`;
-  if (NET.on) netEvent({ k: 'say', text, kind: 'warn' }); else msg(text, 'warn', 4.5);
+  msg(text, 'warn', 4.5);
 }
 function missionUpdate(dt) {
   const m = G.mission, pl = G.player; if (!m) return;
   m.t += dt;
-  if (NET.on && !m.local) return netMission(dt);
+  if (NET.on) return netMission(dt);
   if (m.phase === 'takeoff') {
     if (!pl.onGround && pl.agl() > 70) { m.phase = 'combat'; m.next = 14; msg('Airborne. Raise the gear and climb', 'good', 4.5); }
   } else if (m.phase === 'combat' && m.kind && m.kind !== 'dogfight') {
@@ -3207,7 +3427,8 @@ function netReset() {
   for (const m of MSL) { scene.remove(m.mesh); Sfx.motorStop(m); } MSL.length = 0; FLARES.length = 0; LOCK.target = null;
   clearWorldPlanes(); clearGroundWar(); smokeFX.n = 0; fireFX.n = 0; G.crashSites = []; G.player = null; G.mission = null; G.msgs = []; G.respawnT = null; G.ended = false;
   NET.over = false; NET.life = 0; NET.bots = {}; NET.raiderSeq = 0;
-  NET.w = { phase: 'waiting', wave: 0, next: null, left: 0, W: buildWaves(NET.opts.enemies, NET.opts.waves).length, done: false };
+  NET.w = { phase: 'waiting', wave: 0, next: null, left: 0, W: buildWaves(NET.opts.enemies, NET.opts.waves).length, done: false, won: 0 };
+  NM.kinds = {}; NM.mk = {}; NM.mine = null; NM.pend = { naval: 0, nby: null, ground: {} }; hideBanner();
   for (const k in NET.board) { NET.board[k].kills = 0; NET.board[k].deaths = 0; }
   netRoster({}, true);
   if (document.pointerLockElement) document.exitPointerLock();
@@ -3216,7 +3437,8 @@ function netReset() {
 function netHostStart(mode) {
   if (NET.w.phase !== 'waiting') return;
   WAVES = buildWaves(NET.opts.enemies, NET.opts.waves);
-  NET.w = { phase: NET.opts.mode === 'coop' ? 'combat' : 'versus', wave: 0, next: NET.opts.mode === 'coop' ? (mode === 'sortie' ? 30 : 10) : null, left: 0, W: WAVES.length, done: false };
+  // co-op starts in free play: no raiders until someone starts a mission
+  NET.w = { phase: NET.opts.mode === 'coop' ? 'free' : 'versus', wave: 0, next: null, left: 0, W: WAVES.length, done: false, won: 0 };
 }
 const BOT_SKILL = { easy: 'rookie', normal: 'veteran', hard: 'ace' };
 // host: computer pilots fly the empty seats (always in free-for-all, as wingmen in co-op when turned on)
@@ -3244,6 +3466,7 @@ function netMission(dt) {
     G.respawnT -= dt;
     if (G.respawnT <= 0) { G.respawnT = null; const np = spawnPlayer('air'); resetAim(np); G.cam.mode = 'chase'; msg('Back in the air', 'good'); }
   }
+  if (NET.opts.mode === 'coop') netMissionsTick(dt);
   if (!NET.host) return;
   netBots(dt);
   if (NET.opts.mode === 'coop' && W.phase !== 'waiting' && !W.done) {
@@ -3260,7 +3483,7 @@ function netMission(dt) {
 function finishNet(reason) {
   const board = Object.entries(NET.board).filter(([, b]) => b.flies).map(([seat, b]) => ({ seat: +seat, name: b.name, kills: b.kills, deaths: b.deaths, bot: !!b.bot }))
     .sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
-  post({ type: 'finish', results: { mode: NET.opts.mode, reason, board, waves: NET.w.wave, W: WAVES.length } });
+  post({ type: 'finish', results: { mode: NET.opts.mode, reason, board, waves: NET.w.wave, W: WAVES.length, missions: NET.w.won || 0 } });
 }
 const r1 = v => Math.round(v * 10) / 10, r3 = v => Math.round(v * 1000) / 1000;
 function snap(p) {
@@ -3297,7 +3520,10 @@ function handleNet(from, d) {
   else if (d.k === 'm') { if (!NET.host && d.w) { NET.w = d.w; if (d.b) { for (const k in d.b) NET.board[k] = { ...NET.board[k], ...d.b[k] }; } } }
   else if (d.k === 'say') msg(String(d.text || ''), d.kind || 'info', 4.5);
   else if (d.k === 'rm') { const p = G.planes.find(x => x.id === d.id && x.remote); if (p) removePlane(p); }
+  else if (d.k === 'bomb') { if (from != null && Array.isArray(d.pos) && Array.isArray(d.vel)) { const kg = d.kg >= 500 ? 500 : 250, mesh = makeBombMesh(kg), pos = new V3().fromArray(d.pos); mesh.position.copy(pos); scene.add(mesh); GW.bombs.push({ pos, vel: new V3().fromArray(d.vel), owner: null, kg, mesh, age: 0, vis: true }); } }
+  else if (MSG_MISSION.has(d.k)) handleMission(d);
 }
+const MSG_MISSION = new Set(['mstart', 'mstate', 'mjoin', 'mleave', 'mend', 'mhit', 'mpts']);
 function netSnapIn(s) {
   if (!s || !s.id || !SPECS[s.k] || !Array.isArray(s.pos)) return;
   let p = G.planes.find(x => x.id === s.id);
@@ -3337,6 +3563,7 @@ function netObjective() {
   const m = G.mission, w = NET.w || {};
   if (m && m.phase === 'takeoff') return liftOffText();
   if (NET.opts.mode === 'versus') { const me = NET.board[NET.seat]; return `Free-for-all · first to ${NET.opts.kills} kills · you have ${me ? me.kills : 0}`; }
+  if (NET.opts.mode === 'coop') return netMissionLine();
   if (!w.phase || w.phase === 'waiting') return 'Waiting for the host to launch';
   if (w.phase === 'rtb') return NET.host ? 'All raiders down · land at the airfield to finish' : 'All raiders down · the host lands to finish';
   if (w.next != null) return `Wave ${w.wave + 1} of ${w.W} inbound in ${Math.ceil(w.next)} s`;
@@ -3345,13 +3572,15 @@ function netObjective() {
 function netMenu() {
   const o = NET.opts, seated = NET.seat != null;
   $('soloSetup').hidden = false; $('optEnemiesL').hidden = $('optWavesL').hidden = $('optDiffL').hidden = true; $('btnOnline').hidden = true;
-  $('missionHead').hidden = $('missionList').hidden = !soloTable(); // with other people at the table, everyone flies the dogfight
+  // co-op: free play to begin with, or a mission (a running one is joined); free-for-all is just the dogfight
+  $('missionHead').hidden = $('missionList').hidden = o.mode !== 'coop'; $('pick-free').hidden = false; pickMission(NM.pick);
+  $('missionHead').textContent = 'Start in free play, or with a mission';
   $('btnSortie').textContent = 'Take off from runway'; $('btnQuick').textContent = 'Launch airborne';
   $('btnSortie').disabled = $('btnQuick').disabled = !seated;
   const pilots = NET.roster.filter(r => r.kind === 'human').map(r => r.name).join(', ');
-  const what = o.mode === 'versus' ? `Free-for-all · first to ${o.kills} kills` : `Co-op · ${NET.w.W || o.waves} waves · ${o.enemies === 'normal' ? 'standard' : o.enemies} raiders per wave${o.wingmen === 'on' ? ' · computer wingmen' : ''}`;
+  const what = o.mode === 'versus' ? `Free-for-all · first to ${o.kills} kills` : `Co-op · free play, and anyone can start a mission the others can join${o.wingmen === 'on' ? ' · computer wingmen' : ''}`;
   $('netInfo').hidden = false;
-  $('netInfo').textContent = `${what} · ${DIFF[o.difficulty].label}. Pilots: ${pilots || '—'}. ` + (seated ? (NET.host ? 'Raiders start coming once you launch.' : 'Launch whenever you are ready.') : 'The round has started. Ask the host to seat you (Settings → Players).');
+  $('netInfo').textContent = `${what} · ${DIFF[o.difficulty].label}. Pilots: ${pilots || '—'}. ` + (seated ? (o.mode === 'coop' ? 'Launch whenever you are ready; the host ends the round from the pause menu.' : NET.host ? 'Raiders start coming once you launch.' : 'Launch whenever you are ready.') : 'The round has started. Ask the host to seat you (Settings → Players).');
 }
 function showNetDebrief(r) {
   if (!r) return;
@@ -3361,11 +3590,12 @@ function showNetDebrief(r) {
   const coop = r.mode === 'coop', board = r.board || [];
   const rank = board.findIndex(b => b.seat === NET.seat);
   const total = board.reduce((a, b) => a + b.kills, 0);
-  $('dbEyebrow').textContent = coop ? `Co-op · ${r.W} wave${r.W === 1 ? '' : 's'}` : 'Free-for-all';
-  $('dbTitle').textContent = coop ? (r.reason === 'landed' ? 'Sortie complete' : 'Sortie ended') : board[0] ? `${board[0].name} wins` : 'Round over';
-  $('dbLede').textContent = coop ? `${r.waves} of ${r.W} waves met. The squadron shot down ${total} raider${total === 1 ? '' : 's'}.` : rank === 0 ? 'You won the round.' : rank > 0 ? `You finished ${['first', 'second', 'third', 'fourth'][rank] || rank + 1 + 'th'}.` : 'Round over.';
-  $('dbGrade').textContent = coop ? (r.reason === 'landed' ? (st.deaths ? 'B' : 'A') : st.kills ? 'C' : 'D') : (['A', 'B', 'C', 'D'][rank] || 'D');
-  const cells = [['Kills', st.kills], ['Times shot down', st.deaths || 0], ['Accuracy', `${(acc * 100).toFixed(1)}%`], ['Rounds fired', st.shots], ['Damage taken', Math.round(st.dmgTaken)], ['Flight time', fmtTime(G.time)]];
+  const nm = r.missions || 0;
+  $('dbEyebrow').textContent = coop ? 'Co-op · free play and missions' : 'Free-for-all';
+  $('dbTitle').textContent = coop ? (nm ? 'Sortie complete' : 'Sortie ended') : board[0] ? `${board[0].name} wins` : 'Round over';
+  $('dbLede').textContent = coop ? `${nm} mission${nm === 1 ? '' : 's'} completed. The squadron shot down ${total} raider${total === 1 ? '' : 's'}${st.missions ? `; you flew in ${st.missions} of the successful missions` : ''}.` : rank === 0 ? 'You won the round.' : rank > 0 ? `You finished ${['first', 'second', 'third', 'fourth'][rank] || rank + 1 + 'th'}.` : 'Round over.';
+  $('dbGrade').textContent = coop ? (st.missions ? (st.deaths ? 'B' : 'A') : st.kills || st.ground ? 'C' : 'D') : (['A', 'B', 'C', 'D'][rank] || 'D');
+  const cells = [['Score', st.score || 0], ['Kills', st.kills], ...(st.ground ? [['Targets destroyed', st.ground]] : []), ['Times shot down', st.deaths || 0], ['Accuracy', `${(acc * 100).toFixed(1)}%`], ['Rounds fired', st.shots], ['Damage taken', Math.round(st.dmgTaken)], ['Flight time', fmtTime(G.time)]];
   $('dbGrid').innerHTML = cells.map(([k, v]) => `<div class="cell"><span>${k}</span><b>${v}</b></div>`).join('');
   const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   $('dbBoard').hidden = false;
@@ -3386,7 +3616,7 @@ function playerDown(cause, killer) {
   G.stats.deaths = (G.stats.deaths || 0) + 1;
   if (G.cam.mode === 'cockpit') { G.cam.mode = 'chase'; camera.near = 1; camera.updateProjectionMatrix(); }
   G.player.firing = false;
-  if (NET.on && !m.local) {
+  if (NET.on) {
     const by = killer ? (killer.label || (killer.role === 'raider' ? `a ${killer.spec.name}` : '')) : '';
     if (G.respawnT == null && !NET.over) { G.respawnT = 6; msg(`You ${cause}${by ? ' · ' + by : ''}`, 'danger', 5); }
     return;
@@ -3882,7 +4112,7 @@ function drawHUD(rdt) {
       hx.stroke(); if (d < 1800 || r > 30) txt(name, s2.x, s2.y - sz - 5, 10, col, 'center', COND, 600);
     }
     // the objective: a marker on screen, an arrow at the edge when it isn't
-    const op = objectivePos();
+    const op = NET.on ? netObjectivePos() : objectivePos();
     if (op) {
       const so = proj(op), od = op.distanceTo(p.pos);
       if (so.ok && so.x > 0 && so.x < HW && so.y > 0 && so.y < HH) { hx.strokeStyle = '#f2c14e'; hx.lineWidth = 2; hx.beginPath(); hx.moveTo(so.x, so.y - 12); hx.lineTo(so.x + 9, so.y); hx.lineTo(so.x, so.y + 12); hx.lineTo(so.x - 9, so.y); hx.closePath(); hx.stroke(); txt(`OBJECTIVE ${(od / 1000).toFixed(1)} km`, so.x, so.y + 26, 11, '#f2c14e', 'center', COND, 700); }
@@ -3935,7 +4165,7 @@ function drawHUD(rdt) {
     if (s.ok) { hx.strokeStyle = '#97c46f'; hx.lineWidth = 2; hx.strokeRect(s.x - 10, s.y - 10, 20, 20); txt(`BASE ${(d / 1000).toFixed(1)} km`, s.x, s.y + 26, 11, '#97c46f', 'center'); }
   }
   // objective, score
-  const obj = !m ? '' : NET.on && !m.local ? netObjective() : m.phase === 'takeoff' ? liftOffText() : m.phase === 'combat' && m.kind && m.kind !== 'dogfight' ? missionLine(m) : m.phase === 'combat' ? (m.next !== null ? `Wave ${m.wave + 1} inbound in ${Math.ceil(m.next)} s` : `Wave ${m.wave} of ${WAVES.length} · ${enemies().length} bandit${enemies().length === 1 ? '' : 's'} remaining`) : m.phase === 'rtb' ? 'Return to base and land on the runway' : m.phase === 'landed' ? 'Landed' : '';
+  const obj = !m ? '' : NET.on ? netObjective() : m.phase === 'takeoff' ? liftOffText() : m.phase === 'combat' && m.kind && m.kind !== 'dogfight' ? missionLine(m) : m.phase === 'combat' ? (m.next !== null ? `Wave ${m.wave + 1} inbound in ${Math.ceil(m.next)} s` : `Wave ${m.wave} of ${WAVES.length} · ${enemies().length} bandit${enemies().length === 1 ? '' : 's'} remaining`) : m.phase === 'rtb' ? 'Return to base and land on the runway' : m.phase === 'landed' ? 'Landed' : '';
   txt(obj.toUpperCase(), HW / 2, safeT + 18, isTouch ? 13 : 15, '#f1e8d2', 'center', COND, 600);
   // on phones the score sits under the button row
   const scoreX = HW - safeL, scoreY = isTouch ? safeT + 66 : safeT;
@@ -3994,7 +4224,7 @@ function drawHUD(rdt) {
 }
 function liftOffText() { const p = G.player, v = p ? Math.round(p.stallSpeed() * 1.15 * 2.237 / 5) * 5 : 100; return `Take off · full throttle${p && p.spec.jet ? ', afterburner helps' : ''}, lift off near ${v} mph`; }
 function drawMsgs() {
-  let y = 64;
+  let y = NM.banner ? (isTouch ? 132 : 110) : 64; // below the join banner while it shows
   for (const m of G.msgs) { const a = clamp(m.t / 0.6, 0, 1); hx.globalAlpha = a; txt(m.text, HW / 2, y, isTouch ? 14 : 16, m.kind === 'danger' ? '#e2553f' : m.kind === 'warn' ? '#eaa53c' : m.kind === 'good' ? '#97c46f' : '#f1e8d2', 'center', COND, 600); y += 22; }
   hx.globalAlpha = 1;
 }
@@ -4111,7 +4341,7 @@ function fillSettings() {
   ];
   $('helpGrid').innerHTML = help.map(([a, b]) => `<div><span>${a}</span><span>${b}</span></div>`).join('');
   $('pauseEyebrow').textContent = G.player ? `${SPECS[settings.plane].full} · ${fmtTime(G.time)} airborne · ${G.stats ? G.stats.kills : 0} kills` : 'Settings';
-  $('missionHere').hidden = !G.player || !G.player.alive || (NET.on && !soloTable()); $('setMission').value = MISSIONS[settings.mission] ? settings.mission : 'dogfight';
+  fillMissionSelect();
   $('setPhone').value = settings.phone; $('setRudder').value = settings.rudder; $('setDiff').value = settings.difficulty; $('setLock').value = settings.lock; $('setMap').value = settings.map;
   $('setDiffL').hidden = NET.on;
   $('btnResume').textContent = G.player ? 'Resume' : 'Back';
@@ -4130,7 +4360,7 @@ $('btnEnd').addEventListener('click', () => {
   if (NET.on) { if (NET.host) { G.state = 'play'; showScreen(null); NET.w.done = true; finishNet('ended'); } else post({ type: 'leave' }); return; }
   G.state = 'play'; endMission(false);
 });
-$('btnAgain').addEventListener('click', () => { if (NET.on && !(G.mission && G.mission.local)) { post({ type: 'rematch' }); if (!NET.host) { NET.rmSent = true; rematchButton(); } return; } startMission(G.mission ? G.mission.mode : 'sortie'); });
+$('btnAgain').addEventListener('click', () => { if (NET.on) { post({ type: 'rematch' }); if (!NET.host) { NET.rmSent = true; rematchButton(); } return; } startMission(G.mission ? G.mission.mode : 'sortie'); });
 // The Game Center's shared rematch: the host's tap starts a new round for everyone at the table
 // (same pilots, same room code); anyone else's tap says "I'm in" and the host sees who is ready.
 function rematchButton() {
@@ -4140,7 +4370,7 @@ function rematchButton() {
   else if (rm.mine || NET.rmSent) { b.textContent = `You're in ✓ — waiting for ${rm.host}`; b.disabled = true; }
   else { b.textContent = "Rematch — I'm in"; b.disabled = false; }
 }
-$('btnMenu').addEventListener('click', () => { const local = G.mission && G.mission.local; if (NET.on && !local) { post({ type: 'leave' }); return; } G.state = 'menu'; clearWorldPlanes(); clearGroundWar(); G.player = null; G.mission = null; showScreen('menu'); if (local) netMenu(); });
+$('btnMenu').addEventListener('click', () => { if (NET.on) { post({ type: 'leave' }); return; } G.state = 'menu'; clearWorldPlanes(); clearGroundWar(); G.player = null; G.mission = null; showScreen('menu'); });
 function setPhoneMode(v) {
   settings.phone = v; isTouch = v === 'on' || (v !== 'off' && touchDevice);
   if (isTouch && settings.control === 'mouse') settings.control = 'stick-assist';
@@ -4187,6 +4417,8 @@ $('btnFull').addEventListener('click', () => {
 // mission cards
 (function buildMissionCards() {
   const box = $('missionList');
+  const f = document.createElement('button'); f.className = 'pcard'; f.id = 'pick-free'; f.hidden = true; f.setAttribute('role', 'radio'); f.dataset.mission = 'free';
+  f.innerHTML = '<b>Free play</b><small>Fly with the others and start or join a mission any time from the pause menu.</small>'; f.addEventListener('click', () => pickMission('free')); box.append(f);
   for (const [k, ms] of Object.entries(MISSIONS)) {
     const b = document.createElement('button'); b.className = 'pcard'; b.setAttribute('role', 'radio'); b.dataset.mission = k;
     b.innerHTML = `<b>${ms.name}</b><small>${ms.blurb}</small>`; b.addEventListener('click', () => pickMission(k)); box.append(b);
@@ -4194,12 +4426,13 @@ $('btnFull').addEventListener('click', () => {
 })();
 // the pause menu can switch mission mid-flight: the old fight is cleared and the new one starts round you
 function startMissionHere() {
-  const pl = G.player; if (!pl || !pl.alive || (NET.on && !soloTable())) return;
+  const pl = G.player; if (!pl || !pl.alive || (NET.on && NET.opts.mode !== 'coop')) return;
+  if (NET.on) { const k = $('setMission').value; NM.pick = MISSIONS[k] ? k : 'free'; pause(false); netMissionStart(NM.pick); return; }
   pickMission($('setMission').value);
   for (const p of [...G.planes]) if (p !== pl && !p.remote) removePlane(p);
   for (const m of MSL) { scene.remove(m.mesh); Sfx.motorStop(m); } MSL.length = 0; FLARES.length = 0; LOCK.target = null;
   WAVES = buildWaves(settings.enemies, settings.waves);
-  G.mission = { mode: 'quick', phase: pl.onGround ? 'takeoff' : 'combat', wave: 0, next: 4, t: 0, local: NET.on };
+  G.mission = { mode: 'quick', phase: pl.onGround ? 'takeoff' : 'combat', wave: 0, next: 4, t: 0 };
   setupMission(G.mission);
   const k = G.mission.kind; if (k !== 'dogfight') G.mission.next = k === 'intercept' ? 6 : 25;
   pl.bombs = pl.spec.bombs || 0; G.ended = false;
@@ -4207,8 +4440,22 @@ function startMissionHere() {
   msg(`${MISSIONS[k].name}: ${k === 'dogfight' ? 'bandits inbound' : k === 'naval' ? 'the battleship is off the coast · follow the gold marker' : k === 'ground' ? 'the convoy and depot are inland · follow the gold marker' : 'bombers inbound for the town'}`, 'info', 5);
 }
 $('btnMissionHere').addEventListener('click', startMissionHere);
-for (const [k, ms] of Object.entries(MISSIONS)) { const o = document.createElement('option'); o.value = k; o.textContent = ms.name; $('setMission').append(o); }
-function pickMission(k) { if (!MISSIONS[k]) k = 'dogfight'; settings.mission = k; saveSettings(); for (const b of $('missionList').querySelectorAll('.pcard')) b.setAttribute('aria-checked', b.dataset.mission === k); }
+// the pause menu's mission list: online it starts with free play and shows who is flying what
+function fillMissionSelect() {
+  const sel = $('setMission'), online = NET.on && NET.opts.mode === 'coop';
+  $('missionHere').hidden = !G.player || !G.player.alive || (NET.on && !online);
+  const opts = (online ? [['free', 'Free play']] : []).concat(Object.entries(MISSIONS).map(([k, ms]) => {
+    const r = online && NM.kinds[k]; return [k, ms.name + (!r ? '' : NM.mine === k ? ' · you are in it' : ` · join ${r.name}`)];
+  }));
+  sel.innerHTML = ''; for (const [k, t] of opts) { const o = document.createElement('option'); o.value = k; o.textContent = t; sel.append(o); }
+  sel.value = online ? (NM.mine || 'free') : missionKind();
+  $('btnMissionHere').textContent = online ? 'Go' : 'Start it here, now';
+  $('missionHere').querySelector('label').firstChild.textContent = online ? 'Mission ' : 'Switch mission ';
+}
+function pickMission(k) {
+  if (NET.on) NM.pick = k = MISSIONS[k] ? k : 'free';
+  else { if (!MISSIONS[k]) k = 'dogfight'; settings.mission = k; saveSettings(); }
+  for (const b of $('missionList').querySelectorAll('.pcard')) b.setAttribute('aria-checked', b.dataset.mission === k); }
 function pick(k) { if (!SPECS[k]) k = 'kestrel'; settings.plane = k; saveSettings(); for (const b of $('planeList').querySelectorAll('.pcard')) b.setAttribute('aria-checked', b.dataset.plane === k); }
 function updateHint() {
   const h = $('ctrlHint');
@@ -4342,7 +4589,7 @@ window.__game = { get post() { return !!renderPipeline; }, get fx() { return { s
       resolve(canvas.toDataURL('image/png'));
     }));
   }, G, settings, startMission, SPECS, NET, netSend, finishNet, MSL, LOCK, launchMissile, dropFlares, DIFF, explosion, Sfx };
-window.__gw = GW; window.__gwDrop = p => { while (p.bombs > 0 && dropBomb(p)); }; window.__town = TOWN; window.__simNoPlayer = dt => { updateBullets(dt); updateGroundWar(dt); }; window.__kill = p => destroy(p, 'shot down', G.player, false); window.__net = NET; window.__netMenu = () => netMenu();
+window.__gw = GW; window.__gwDrop = p => { while (p.bombs > 0 && dropBomb(p)); }; window.__town = TOWN; window.__simNoPlayer = dt => { updateBullets(dt); updateGroundWar(dt); }; window.__kill = p => destroy(p, 'shot down', G.player, false); window.__net = NET; window.__netMenu = () => netMenu(); window.__nm = NM; window.__handleNet = handleNet; window.__netMissionStart = netMissionStart; window.__blast = blastDamage; window.__damageUnit = damageUnit; window.__netObjective = netObjective;
 
 (async function boot() {
   resizeHUD();
