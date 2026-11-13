@@ -444,3 +444,20 @@ body.gc-reloading { opacity: 0.6; transition: opacity 0.2s; }
   box-shadow: var(--shadow); animation: gc-rise 0.3s ease;
 }
 @keyframes gc-rise { from { opacity: 0; transform: translate(-50%, 12px); } }
+
+/* ---- removing a saved game from "Pick up where you left off" ---- */
+.gc-resume-item { position: relative; display: grid; }
+.gc-resume-item .gc-resume { padding-right: 48px; }
+.gc-resume-x {
+  position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
+  width: 36px; height: 36px; border-radius: 50%; border: 0; cursor: pointer;
+  font: 400 22px/1 var(--font); color: var(--muted); background: transparent;
+}
+.gc-resume-x:hover, .gc-resume-x:focus-visible { color: var(--text); background: var(--panel-2); }
+.gc-saved-line { display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; }
+.gc-discard { color: var(--muted); opacity: 0.85; }
+.toast-row { display: inline-flex; align-items: center; gap: 12px; }
+.toast-undo {
+  pointer-events: auto; font: 700 14px var(--font); color: var(--gold); background: none;
+  border: 1px solid rgba(240, 195, 90, 0.5); border-radius: 999px; padding: 4px 12px; cursor: pointer;
+}
