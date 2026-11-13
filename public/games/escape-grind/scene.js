@@ -811,16 +811,28 @@ export class Table3D {
     const len = Math.max(this.controls.minDistance, Math.min(this.controls.maxDistance, off.length() * f));
     this.camera.position.copy(this.controls.target).add(off.setLength(len));
   }
+  // put the board back in the middle of the screen, seen from my own seat, at the starting zoom
+  recenter() {
+    this.followUntil = 0;
+    this.setMySeat(this.mySeat);
+  }
   view(kind) {
     this.followUntil = performance.now() + 1500;
     const a = seatAngle(this.mySeat);
-    const t = this.controls.target.clone();
+    // every view is aimed at the board again, so a view change also undoes any drifting
+    this.focus.copy(this.#home());
+    const t = this.focus.clone();
     let pos;
     if (kind === 'top') pos = t.clone().add(new THREE.Vector3(Math.sin(a) * 2, 34, Math.cos(a) * 2));
     else if (kind === 'low') pos = t.clone().add(new THREE.Vector3(Math.sin(a) * 18, 7, Math.cos(a) * 18));
-    else return this.setMySeat(this.mySeat);
+    else return this.recenter();
     const p0 = this.camera.position.clone();
-    this.tween(900, (k) => this.camera.position.lerpVectors(p0, pos, ease.inOut(k)));
+    const t0 = this.controls.target.clone();
+    this.tween(900, (k) => {
+      const e = ease.inOut(k);
+      this.camera.position.lerpVectors(p0, pos, e);
+      this.controls.target.lerpVectors(t0, t, e);
+    });
   }
 
   // ---------------------------------------------------------------------------------------------
