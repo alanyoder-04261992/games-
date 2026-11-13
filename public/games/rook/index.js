@@ -7,7 +7,7 @@ import { ROOK_TILE as TILE } from './tile.js';
 
 export default {
   id: 'rook',
-  version: '2.0', // shown on the home tile; bump it whenever you improve the game (2.0: the 3D table)
+  version: '2.1', // shown on the home tile; bump it whenever you improve the game (2.1: deck and Bird settings)
   name: 'Rook',
   tagline: 'The classic trick-taking bidding game for four.',
   description:
@@ -30,8 +30,19 @@ export default {
       type: 'select',
       default: true,
       choices: [
-        { value: true, label: '45 cards (with 6, 7, 8)' },
-        { value: false, label: '33 cards (no 6, 7, 8)' },
+        { value: true, label: '45 cards (no 2, 3, 4)' },
+        { value: false, label: '33 cards (no 2, 3, 4, 6, 7, 8)' },
+      ],
+    },
+    {
+      key: 'bird',
+      label: 'Bird',
+      type: 'select',
+      default: 'middle',
+      choices: [
+        { value: 'middle', label: 'Trump between 10 and 11' },
+        { value: 'high', label: 'Highest trump' },
+        { value: 'low', label: 'Lowest trump' },
       ],
     },
     {
@@ -62,8 +73,8 @@ export default {
     claimActive: (s, round) => s.phase === 'play' && s.round === round,
     claimMove: (s, seat) => {
       if (s.phase !== 'play') return null;
-      if (s.trick.plays.length === 0) return { type: 'play', card: R.claimOrder(s.hands[seat], s.trump)[0] };
-      const cards = R.legalPlays(s, seat).sort((a, b) => R.cardPoints(a) - R.cardPoints(b) || R.strength(a, s.trump) - R.strength(b, s.trump));
+      if (s.trick.plays.length === 0) return { type: 'play', card: R.claimOrder(s.hands[seat], s.trump, s.options.bird)[0] };
+      const cards = R.legalPlays(s, seat).sort((a, b) => R.cardPoints(a) - R.cardPoints(b) || R.strength(a, s.trump, s.options.bird) - R.strength(b, s.trump, s.options.bird));
       return { type: 'play', card: cards[0] };
     },
   },

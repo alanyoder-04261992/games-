@@ -21,7 +21,7 @@ import {
   isTrump,
   partnerOf,
   rankOf,
-  strength,
+  strength as rankStrength,
   suitOf,
   teamOf,
 } from './engine.js';
@@ -71,8 +71,14 @@ function hashView(v) {
   return h >>> 0;
 }
 
+// Where the Bird sits in trump for the game being decided (options.bird). Set at the start of
+// every decision, so every strength() below follows the table's setting.
+let birdRank = 'middle';
+const strength = (card, trump) => rankStrength(card, trump, birdRank);
+
 // ---------- entry point ----------
 export function chooseAction(view, legalActions, level = 'normal') {
+  birdRank = view.options?.bird || 'middle';
   const cfg = LEVELS[level] || LEVELS.normal;
   const rnd = makeRng(hashView(view) ^ (Math.random() * 1e9));
   if (legalActions.length === 1 && legalActions[0].type !== 'discard') return legalActions[0];
@@ -744,6 +750,7 @@ function planDiscard(hand, trump, n) {
 }
 
 export function suggestDiscard(view) {
+  birdRank = view.options?.bird || 'middle';
   return chooseDiscard(view, LEVELS.normal, makeRng(hashView(view))).discard;
 }
 

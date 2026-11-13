@@ -18,6 +18,7 @@ import {
   suitOf,
   teamOf,
   partnerOf,
+  strength,
 } from './engine.js';
 import { chooseAction, suggestDiscard } from './ai.js';
 
@@ -195,7 +196,7 @@ class RookTable {
       selected,
       hint,
       newCards: this.newCards ? new Set(this.newCards) : null,
-      winning: v.trick && plays.length > 1 ? this.pos(winnerOf(plays, v.trump)) : null,
+      winning: v.trick && plays.length > 1 ? this.pos(winnerOf(plays, v.trump, v.options?.bird)) : null,
       taker: this.takerSeat != null ? this.pos(this.takerSeat) : null,
       sent: this.sentCard || null,
       bid: c ? { pos: this.pos(c.bidder), amount: c.amount, won: true } : high ? { pos: this.pos(high.seat), amount: high.amount, won: false } : null,
@@ -675,7 +676,7 @@ class RookTable {
       return c;
     });
     if (this.view.trick && plays.length) {
-      const w = winnerOf(plays, this.view.trump);
+      const w = winnerOf(plays, this.view.trump, this.view.options?.bird);
       const win = cards[plays.findIndex((p) => p.seat === w)];
       if (win && plays.length > 1) win.classList.add('winning');
     }
@@ -1117,7 +1118,7 @@ class RookTable {
     }
     // the trick is done: pause, highlight the winner, sweep it away
     const done = next.lastTrick && next.lastTrick.plays.length === plays.length ? next.lastTrick : null;
-    const winner = done ? done.winner : winnerOf(plays, next.trump ?? prev.trump);
+    const winner = done ? done.winner : winnerOf(plays, next.trump ?? prev.trump, (next.options || prev.options)?.bird);
     const pts = sumPoints(plays.map((p) => p.card));
     await this.wait(520);
     const winEl = this.trickEl.querySelector(`[data-seat="${winner}"]`);
@@ -1157,7 +1158,7 @@ class RookTable {
       return;
     }
     const done = next.lastTrick && next.lastTrick.plays.length === plays.length ? next.lastTrick : null;
-    const winner = done ? done.winner : winnerOf(plays, next.trump ?? prev.trump);
+    const winner = done ? done.winner : winnerOf(plays, next.trump ?? prev.trump, (next.options || prev.options)?.bird);
     const pts = sumPoints(plays.map((p) => p.card));
     await this.wait(520);
     this.takerSeat = winner;
@@ -1531,7 +1532,7 @@ class RookTable {
     const body = h(
       'div.rk-sheet',
       h('h3', 'Score sheet'),
-      h('p.rk-sub', `First to ${v.options.winScore} wins · ${v.options.lowCards ? '45' : '33'}-card deck`),
+      h('p.rk-sub', `First to ${v.options.winScore} wins · ${v.options.lowCards ? '45' : '33'}-card deck · Bird ${BIRD_RANK_TEXT[v.options.bird] || BIRD_RANK_TEXT.middle}`),
       rows.length
         ? h('div.rk-sheet-scroll', h('table.rk-score-table.sheet', h('thead', h('tr', h('th', '#'), h('th', 'Bid'), h('th', 'Trump'), h('th', ''), h('th', 'Us'), h('th', 'Them'), h('th', 'Score'))), h('tbody', rows)))
         : h('p', 'No rounds finished yet.'),
@@ -1541,23 +1542,19 @@ class RookTable {
   }
 }
 
-function winnerOf(plays, trump) {
+// `bird` is the table's Bird setting (options.bird): where the Bird ranks in trump.
+function winnerOf(plays, trump, bird) {
   if (!plays.length) return null;
   const led = suitOf(plays[0].card, trump);
   const score = (p) => {
     const s = suitOf(p.card, trump);
-    if (trump && s === trump) return 1000 + strengthOf(p.card, trump);
-    return s === led ? strengthOf(p.card, trump) : -1;
+    if (trump && s === trump) return 1000 + strength(p.card, trump, bird);
+    return s === led ? strength(p.card, trump, bird) : -1;
   };
   return plays.reduce((b, p) => (score(p) > score(b) ? p : b)).seat;
 }
-const PLAIN = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 1];
-const TRUMP = [5, 6, 7, 8, 9, 10, 'bird', 11, 12, 13, 14, 1];
-function strengthOf(card, trump) {
-  if (card === BIRD) return TRUMP.indexOf('bird');
-  const r = Number(card.split('-')[1]);
-  return suitOf(card, trump) === trump ? TRUMP.indexOf(r) : PLAIN.indexOf(r);
-}
+
+const BIRD_RANK_TEXT = { middle: 'between 10 and 11', high: 'highest trump', low: 'lowest trump' };
 
 function legalBids(v) {
   const high = v.bidding.high;

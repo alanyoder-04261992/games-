@@ -36,6 +36,29 @@ test('bird ranks between 10 and 11 of trump', () => {
   assert.equal(R.trickWinner([{ seat: 0, card: 'green-5' }, { seat: 1, card: 'green-1' }, { seat: 2, card: 'yellow-1' }], 'red'), 1);
 });
 
+test('short deck has no 2, 3, 4, 6, 7 or 8', () => {
+  const ranks = new Set(R.fullDeck({ lowCards: false }).filter((c) => c !== R.BIRD).map(R.rankOf));
+  assert.deepEqual([...ranks].sort((x, y) => x - y), [1, 5, 9, 10, 11, 12, 13, 14]);
+  for (const r of [2, 3, 4]) assert.ok(!R.fullDeck({ lowCards: true }).some((c) => R.rankOf(c) === r));
+});
+
+test('bird setting: highest or lowest trump', () => {
+  // default (no setting) and 'middle' are the same: between 10 and 11
+  assert.equal(R.strength('bird', 'red', 'middle'), R.strength('bird', 'red'));
+  assert.ok(R.strength('bird', 'red', 'high') > R.strength('red-1', 'red', 'high'));
+  assert.ok(R.strength('bird', 'red', 'low') < R.strength('red-5', 'red', 'low'));
+  assert.ok(R.strength('bird', 'red', 'low') > R.strength('green-1', 'red', 'low'));
+  const plays = [{ seat: 0, card: 'red-1' }, { seat: 1, card: 'bird' }, { seat: 2, card: 'red-5' }];
+  assert.equal(R.trickWinner(plays, 'red'), 0);
+  assert.equal(R.trickWinner(plays, 'red', 'high'), 1);
+  assert.equal(R.trickWinner(plays, 'red', 'low'), 0);
+  assert.equal(R.trickWinner([{ seat: 0, card: 'red-5' }, { seat: 1, card: 'bird' }], 'red', 'low'), 0);
+  // a game remembers the setting and scores tricks by it
+  const s = R.setup({ seed: 5, options: { bird: 'high' } });
+  assert.equal(s.options.bird, 'high');
+  assert.equal(R.setup({ seed: 5 }).options.bird, 'middle');
+});
+
 test('dealer is stuck when everyone passes', () => {
   let s = R.setup({ seed: 7, firstDealer: 0 });
   for (const seat of [1, 2, 3]) s = R.apply(s, seat, { type: 'pass' });
@@ -65,11 +88,21 @@ test('full bot games finish with legal play (both decks)', () => {
   }
 });
 
+test('full bot games finish with every Bird setting', () => {
+  for (const [i, bird] of ['high', 'low'].entries()) {
+    const { s } = playGame(2000 + i, ['normal', 'easy', 'normal', 'easy'], { lowCards: i === 1, bird, winScore: 500 });
+    assert.equal(s.phase, 'over');
+    assert.ok(s.winner === 0 || s.winner === 1);
+    // every recorded trick went to the right card under this setting
+    for (const t of s.lastRound.tricks) assert.equal(R.trickWinner(t.plays, s.lastRound.trump, bird), t.winner);
+  }
+});
+
 test('claim detection is sound', () => {
   // simulate many positions; whenever claim is true, the leader's team must take every remaining trick
   let checked = 0;
   for (let seed = 1; seed < 40; seed++) {
-    let s = R.setup({ seed, firstDealer: 0 });
+    let s = R.setup({ seed, firstDealer: 0, options: { bird: R.BIRD_RANKS[seed % 3] } });
     while (s.phase !== 'over' && s.phase !== 'score') {
       const seat = R.actors(s)[0];
       if (s.phase === 'play' && R.canClaim(s)) {
@@ -81,7 +114,7 @@ test('claim detection is sound', () => {
         while (t.phase === 'play') {
           const st = R.actors(t)[0];
           let a;
-          if (st === leader && t.trick.plays.length === 0) a = { type: 'play', card: R.claimOrder(t.hands[st], t.trump)[0] };
+          if (st === leader && t.trick.plays.length === 0) a = { type: 'play', card: R.claimOrder(t.hands[st], t.trump, t.options.bird)[0] };
           else { const l = R.legal(t, st); a = l[Math.floor(Math.random() * l.length)]; }
           t = R.apply(t, st, a);
         }
