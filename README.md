@@ -9,6 +9,11 @@ Plain HTML, CSS and JavaScript modules — no build step, hosts anywhere static 
   original app (45-card deck with the Bird, bids 100–200 plus solo 400/800, first lead names
   trump, 1000 to win). Animated dealing and tricks, original card art, Monte Carlo computer
   players, a coach, auto-play helpers and online play for up to four people.
+- **Euchre** — the classic partnership game for four: order up or turn down the up-card, name
+  trump in round two, ride the right and left bowers, go alone for 4, euchre the makers for 2.
+  Table options for 5/10/15 points, stick the dealer, and going alone. Animated dealing and
+  tricks, original card art, computer players at three levels (Expert tries each card on many
+  possible deals), a coach and online play for up to four people.
 - **Hexstead** — an original island-settling game in full 3D (three.js): roll for timber, brick,
   wool, grain and stone, lay trails, raise homesteads and upgrade them to barns, trade with the
   table or the harbors, play almanac cards, and keep the bandit off your fields. Every tile,
@@ -19,6 +24,14 @@ Plain HTML, CSS and JavaScript modules — no build step, hosts anywhere static 
   water, a sky with drifting clouds, bloom): hide your fleet, then trade shots. Shells arc in, misses throw up water columns, hits start fires, and sunk ships roll over
   and go down. 8×8, 10×10 or 12×12 seas; one shot a turn, chain fire or barrage; computer
   admirals that hunt down your remaining ships.
+- **Roofline** — an original tile-drafting game for 2–4: take every shingle bundle of one color
+  from a pallet in the lumber yard, stack them on your staging racks, and nail them onto a 5 × 5
+  shed roof. Long runs score more, overflow lands in the gutter, and roof rows, columns, colors
+  and ★ dormers pay bonuses. Computer roofers at three levels.
+- **Shed Tycoon** — an original engine-building game for 2–4: take lumber, steel, glass, paint
+  and shingles, build sheds, barns and garages from a three-tier order board, and let every
+  building discount that material for good. Hold orders for cash, win over sales lots, and race
+  to 12, 15 or 18 points. Computer builders at three levels.
 - **Escape the Grind** — a 3D personal-finance board game for 1–4 players. Start in a job living
   paycheck to paycheck, buy rentals, shed lots, storage, businesses and stocks, and break out of
   the Grind once your passive income beats your expenses. Then buy your Dream on the Freedom Ring
@@ -84,10 +97,13 @@ public/                 ← the website (deploy this folder)
   core/                 shell, rooms & networking, sound, helpers
   games/index.js        list of games
   games/rook/           Rook: engine.js, ai.js, ui.js, cards.js (art), rook.css, rules.html
+  games/euchre/         Euchre: engine.js, ai.js, ui.js, cards.js (art), euchre.css, rules.html
   games/hexstead/       Hexstead: engine.js, ai.js, geometry.js, scene.js (3D board), ui.js, art.js
   games/escape-grind/   Escape the Grind: engine.js, ai.js, cards.js (decks, jobs), scene.js (3D),
                         textures.js (painted-in-code textures), ui.js (HUD, controller), escape.css
   games/broadside/      Broadside: engine.js, ai.js, scene.js (3D sea), ui.js, broadside.css, rules.html
+  games/roofline/       Roofline: engine.js, ai.js, ui.js, roofline.css, rules.html
+  games/shed-tycoon/    Shed Tycoon: engine.js, ai.js, ui.js, art.js, shed-tycoon.css, rules.html
   games/four-in-a-row/  example game
   games/dogfight/       Coastal Dogfight: play.html (the game), index.js, ui.js (frame bridge)
   games/rally/          Ridgeline Rally: play.html (the game), index.js, ui.js

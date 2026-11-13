@@ -7,6 +7,7 @@ import { GAME_MODULES } from '../games/index.js';
 import { onlineGuide } from './guide.js';
 import { Voice } from './voice.js';
 import { startUpdates } from './updates.js';
+import { rematchControl } from './rematch.js';
 
 const app = document.getElementById('app');
 const GAMES = new Map();
@@ -714,13 +715,38 @@ async function showTable() {
     prefs,
     toast,
     voice: online ? voiceFor() : null,
+    rematch: (opts) => rematchControl(client, opts), // the shared Rematch button for game-over screens
     leave: () => {
       leaveCurrent(false);
       go('#/');
     },
   });
+  rematchFallback(stage, client);
   if (client.isHost) client.send({ t: 'sync' });
   else client.send({ t: 'sync' });
+}
+
+// A game that ends without putting ctx.rematch() on its screen (or marking the stage with
+// data-own-rematch) still gets the shared Rematch button, in a bar along the bottom.
+function rematchFallback(stage, client) {
+  let bar = null;
+  let timer = null;
+  const drop = () => {
+    clearTimeout(timer);
+    bar?.remove();
+    bar = null;
+  };
+  client.on('state', (msg) => {
+    if (!stage.isConnected) return drop();
+    if (!msg.over) return drop();
+    if (bar || timer) return;
+    timer = setTimeout(() => {
+      timer = null;
+      if (!stage.isConnected || !client.lastState?.over || stage.querySelector('.gc-rematch, [data-own-rematch]')) return;
+      bar = h('div.gc-rematch-bar', rematchControl(client));
+      stage.append(bar);
+    }, 1500); // give the game's own end screen time to appear first
+  });
 }
 
 // ---------------------------------------------------------------------

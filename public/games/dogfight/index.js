@@ -53,11 +53,11 @@ const tile = `<svg viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg" role
 
 export default {
   id: 'dogfight',
-  version: '1.9', // shown on the home tile; bump it whenever you improve the game
+  version: '2.1', // shown on the home tile; bump it whenever you improve the game
   name: 'Coastal Dogfight',
   tagline: '1940s fighters over a 20 km coastline. Fly together against raiders, or shoot each other down.',
   description:
-    'A real-time 3D flight game. Take off from the airfield behind the cliffs, then team up against waves of raiders coming in off the sea, or fight a free-for-all where the first pilot to the kill target wins. Works with a mouse, a keyboard, a gamepad or the touch controls on a phone.',
+    'A real-time 3D flight game with four 1940s fighters and two modern jets. Take off from the airfield behind the cliffs, then team up against waves of raiders coming in off the sea, or fight a free-for-all where the first pilot to the kill target wins. Works with a mouse, a keyboard, a gamepad or the touch controls on a phone.',
   seats: 4,
   seatLabels: ['Pilot 1', 'Pilot 2', 'Pilot 3', 'Pilot 4'],
   players: '1–4 pilots',
