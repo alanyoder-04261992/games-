@@ -60,7 +60,7 @@ Computer pilots always fly the empty seats in a free-for-all. Their skill follow
 - **Hits are decided by the shooter.** Every device draws everyone's tracers, but only rounds fired by your own device count. A hit on an aircraft another device flies becomes a `hit` message to that device, which applies the damage through the normal damage model.
 - **Shoot-downs are announced by the victim's device.** It sends a `down` event naming the aircraft that last hit it, so everyone gets the same kill credit and messages.
 - **The bridge to the Game Center.** `ui.js` shows `play.html?embed=1` in a frame and passes messages through `postMessage`. Ending a round is a normal Game Center action (`{ type: 'finish', results }`), so the table, rematches and saving behave like the other games.
-- **Pausing doesn't stop the round.** The menu doesn't pause an online round: your aircraft holds level flight while it is open.
+- **Pausing with friends doesn't stop the round.** When another person is connected to the table, the menu can't pause the round for them: your aircraft holds level flight while it is open. With only computer pilots at the table, pausing freezes everything, the same as playing alone.
 
 ## What's in it
 

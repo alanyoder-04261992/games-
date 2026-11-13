@@ -252,6 +252,7 @@ import {
   smoothstep, reflect, select, vertexStage, positionLocal, positionWorld, cameraPosition, cameraProjectionMatrix, modelViewMatrix, normalGeometry,
   materialColor, instancedDynamicBufferAttribute, screenDPR, pass, densityFogFactor, context, renderOutput,
 } from 'three/tsl';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // =====================================================================
 //  Utilities
@@ -994,7 +995,8 @@ function camoTexture(a, b, seed, mottled) {
   for (const xx of cols) for (let k = 3; k < S; k += 8) x.fillRect(xx + 4, k, 1.5, 1.5);
   x.fillStyle = 'rgba(190,190,185,0.35)';
   for (let i = 0; i < 70; i++) x.fillRect(r() * S, rows[r() * rows.length | 0] + (r() - 0.5) * 6, 1 + r() * 4, 1 + r() * 2);
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(0.33, 0.33); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(0.33, 0.33); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return { map: t, normal: panelNormalTexture(rows, cols, seed) };
 }
 function insigniaTexture(kind) {
   const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
@@ -1002,8 +1004,31 @@ function insigniaTexture(kind) {
   else { x.fillStyle = '#ece6d6'; x.beginPath(); x.moveTo(64, 4); x.lineTo(124, 64); x.lineTo(64, 124); x.lineTo(4, 64); x.fill(); x.fillStyle = '#1b1d1f'; x.beginPath(); x.moveTo(64, 20); x.lineTo(108, 64); x.lineTo(64, 108); x.lineTo(20, 64); x.fill(); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
-function planeMaterial(tex, bottomHex) {
-  const m = pbr({ map: tex, roughness: 0.6, metalness: 0.12, envMapIntensity: 0.75 });
+// Panel seams, access hatches and rivet rows as a normal map, lined up with the seams painted in camoTexture.
+function panelNormalTexture(rows, cols, seed) {
+  const S = 512, r = mulberry32(seed + 101), c = document.createElement('canvas'); c.width = c.height = S; const x = c.getContext('2d');
+  x.fillStyle = '#808080'; x.fillRect(0, 0, S, S);
+  x.strokeStyle = '#383838'; x.lineWidth = 2.2;
+  for (const yy of rows) { x.beginPath(); x.moveTo(0, yy); x.lineTo(S, yy); x.stroke(); }
+  for (const xx of cols) { x.beginPath(); x.moveTo(xx, 0); x.lineTo(xx, S); x.stroke(); }
+  x.strokeStyle = '#4c4c4c'; x.lineWidth = 1.5;
+  for (let i = 0; i < 10; i++) { const w = 18 + r() * 46, h = 14 + r() * 30; x.strokeRect(r() * (S - w), r() * (S - h), w, h); }
+  x.fillStyle = '#b8b8b8';
+  for (const yy of rows) for (let k = 3; k < S; k += 8) { x.fillRect(k, yy + 3.5, 2, 2); x.fillRect(k, yy - 5.5, 2, 2); }
+  for (const xx of cols) for (let k = 3; k < S; k += 8) { x.fillRect(xx + 3.5, k, 2, 2); x.fillRect(xx - 5.5, k, 2, 2); }
+  const src = x.getImageData(0, 0, S, S).data, out = x.createImageData(S, S), o = out.data;
+  const H = (i, j) => src[(((j + S) % S) * S + ((i + S) % S)) * 4] / 255;
+  for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
+    const dx = H(i + 1, j - 1) + 2 * H(i + 1, j) + H(i + 1, j + 1) - H(i - 1, j - 1) - 2 * H(i - 1, j) - H(i - 1, j + 1);
+    const dy = H(i - 1, j + 1) + 2 * H(i, j + 1) + H(i + 1, j + 1) - H(i - 1, j - 1) - 2 * H(i, j - 1) - H(i + 1, j - 1);
+    const nx = -dx * 1.4, ny = dy * 1.4, l = Math.hypot(nx, ny, 1), k = (j * S + i) * 4;
+    o[k] = (nx / l * 0.5 + 0.5) * 255; o[k + 1] = (ny / l * 0.5 + 0.5) * 255; o[k + 2] = (1 / l * 0.5 + 0.5) * 255; o[k + 3] = 255;
+  }
+  x.putImageData(out, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(0.33, 0.33); t.anisotropy = 4; return t;
+}
+function planeMaterial(tex, normal, bottomHex) {
+  const m = pbr({ map: tex, normalMap: normal, normalScale: new THREE.Vector2(0.45, 0.45), roughness: 0.58, metalness: 0.12, envMapIntensity: 0.8 });
   const bottom = new THREE.Color(bottomHex);
   // underside paint: blend to the bottom colour where the object-space normal points down
   const c = materialColor.mul(vec4(1)); // map x colour as a vec4
@@ -1016,106 +1041,311 @@ function mirrorX(g) {
   else { for (const nm of Object.keys(g.attributes)) { const at = g.attributes[nm], s = at.itemSize, ar = at.array; for (let i = 0; i < at.count; i += 3) for (let k = 0; k < s; k++) { const t = ar[(i + 1) * s + k]; ar[(i + 1) * s + k] = ar[(i + 2) * s + k]; ar[(i + 2) * s + k] = t; } } }
   return g;
 }
-function wingGeo(span, chordFn, thick, sweep = 0) {
-  const sh = new THREE.Shape(); const N = 16; const le = [], te = [];
-  for (let i = 0; i <= N; i++) { const t = i / N, x = span * t, c = chordFn(t), zs = sweep * t; le.push([x, zs - 0.3 * c]); te.push([x, zs + 0.7 * c]); }
-  sh.moveTo(le[0][0], le[0][1]); for (let i = 1; i <= N; i++) sh.lineTo(le[i][0], le[i][1]); for (let i = N; i >= 0; i--) sh.lineTo(te[i][0], te[i][1]);
-  const g = new THREE.ExtrudeGeometry(sh, { depth: thick, bevelEnabled: true, bevelThickness: thick * 0.45, bevelSize: 0.05, bevelSegments: 2, curveSegments: 4 });
-  g.rotateX(Math.PI / 2); g.translate(0, thick / 2, 0); g.computeVertexNormals();
-  return g;
+
+// ---- aircraft geometry: lofted surfaces with real aerofoil sections ----
+// n rings of M points; fn(ring, point, out) writes [x, y, z, u, v]. Rings are joined in order and each ring
+// closes on itself; caps close the first/last ring. Faces are turned outward whichever way the rings run.
+const _lo = [0, 0, 0, 0, 0];
+function loftGeo(n, M, fn, capStart = false, capEnd = false) {
+  const pos = [], uv = [], idx = [];
+  for (let i = 0; i < n; i++) for (let j = 0; j < M; j++) { fn(i, j, _lo); pos.push(_lo[0], _lo[1], _lo[2]); uv.push(_lo[3], _lo[4]); }
+  for (let i = 0; i < n - 1; i++) for (let j = 0; j < M; j++) { const a = i * M + j, b = i * M + (j + 1) % M, c = a + M, d = b + M; idx.push(a, c, b, b, c, d); }
+  // caps get their own copy of the ring so they stay flat-shaded and don't bend the skin's normals
+  const cap = (i, rev) => {
+    const s = [0, 0, 0, 0, 0], k0 = pos.length / 3;
+    for (let j = 0; j < M; j++) { const k = i * M + j; for (let q = 0; q < 3; q++) { pos.push(pos[k * 3 + q]); s[q] += pos[k * 3 + q] / M; } uv.push(uv[k * 2], uv[k * 2 + 1]); s[3] += uv[k * 2] / M; s[4] += uv[k * 2 + 1] / M; }
+    const k = pos.length / 3; pos.push(s[0], s[1], s[2]); uv.push(s[3], s[4]);
+    for (let j = 0; j < M; j++) { const a = k0 + j, b = k0 + (j + 1) % M; if (rev) idx.push(k, b, a); else idx.push(k, a, b); }
+  };
+  if (capStart) cap(0, false); if (capEnd) cap(n - 1, true);
+  let vol = 0;
+  for (let t = 0; t < idx.length; t += 3) {
+    const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
+    vol += pos[a] * (pos[b + 1] * pos[c + 2] - pos[b + 2] * pos[c + 1]) - pos[a + 1] * (pos[b] * pos[c + 2] - pos[b + 2] * pos[c]) + pos[a + 2] * (pos[b] * pos[c + 1] - pos[b + 1] * pos[c]);
+  }
+  if (vol < 0) for (let t = 0; t < idx.length; t += 3) { const s = idx[t + 1]; idx[t + 1] = idx[t + 2]; idx[t + 2] = s; }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx); g.computeVertexNormals(); return g;
+}
+// NACA four-digit style section: half-thickness about a gently cambered mean line, per unit chord
+function afY(u, upper, tc, cam = 0) {
+  u = clamp(u, 0, 1);
+  const yt = 5 * tc * (0.2969 * Math.sqrt(u) - 0.126 * u - 0.3516 * u * u + 0.2843 * u * u * u - 0.1036 * u * u * u * u);
+  return cam * 4 * u * (1 - u) + (upper ? yt : -yt);
+}
+// A wing, tailplane or fin. sec(t) gives the section at span fraction t: { s: span position, le: leading-edge z,
+// c: chord, tc: thickness/chord, k: thickness scale (0 closes a rounded tip), cam: camber }. ua/ub take a slice
+// of the chord (0 = leading edge, 1 = trailing edge), so a control surface and the surface it is cut from share
+// one aerofoil and fit together. Vertical surfaces put the span along y.
+function surfaceGeo(ts, sec, { ua = () => 0, ub = () => 1, vertical = false, M = 26, capStart = false, capEnd = false } = {}) {
+  const H = M / 2;
+  return loftGeo(ts.length, M, (i, j, o) => {
+    const t = ts[i], S = sec(t), a = ua(t), b = ub(t), up = j < H, q = (up ? j : j - H) / H;
+    const w = up ? (1 + Math.cos(Math.PI * q)) / 2 : (1 - Math.cos(Math.PI * q)) / 2;
+    const u = a + (b - a) * w, y = afY(u, up, S.tc, S.cam || 0) * S.c * S.k, z = S.le + u * S.c;
+    if (vertical) { o[0] = y; o[1] = S.s; o[3] = z; o[4] = S.s; } else { o[0] = S.s; o[1] = y; o[3] = S.s; o[4] = z; }
+    o[2] = z;
+  }, capStart, capEnd);
+}
+// span stations from t0 to t1, closer together toward the tip
+function stations(n, t0 = 0, t1 = 1) {
+  const ts = []; for (let i = 0; i <= n; i++) ts.push(t0 + (t1 - t0) * (1 - (1 - i / n) ** 1.5));
+  return ts;
+}
+// a surface with a control surface cut out of its trailing edge between span fractions a and b:
+// three pieces (inboard, cut-back middle, outboard) so the notch has clean walls
+function cutSurface(n, sec, a, b, hingeU, o = {}) {
+  const k = Math.max(2, Math.round(n * (b - a))), parts = [];
+  if (a > 0) parts.push(surfaceGeo(stations(Math.max(2, Math.round(n * a)), 0, a), sec, { ...o, capEnd: true }));
+  parts.push(surfaceGeo(stations(k, a, b), sec, { ...o, ub: hingeU, capStart: a > 0, capEnd: true }));
+  if (b < 1) parts.push(surfaceGeo(stations(Math.max(2, Math.round(n * (1 - b))), b, 1), sec, { ...o, capStart: true }));
+  return mergeGeometries(parts);
+}
+const tipRound = (t, from) => t < from ? 1 : Math.sqrt(Math.max(0, 1 - ((t - from) / (1 - from)) ** 2));
+// a hinged control surface: geometry moved into the frame of a group whose x axis runs along the hinge
+function hinged(geo, p0, p1, name) {
+  const ang = Math.atan2(-(p1.z - p0.z), p1.x - p0.x);
+  geo.translate(-p0.x, -p0.y, -p0.z); geo.rotateY(-ang);
+  const h = new THREE.Group(); h.name = name; h.position.copy(p0); h.rotation.set(0, ang, 0, 'YXZ'); return h;
+}
+// a thin rod from a to b (antenna wire, pitot tube, gun barrel)
+function rodGeo(a, b, r0, r1 = r0, seg = 6) {
+  const d = new V3().subVectors(b, a), len = d.length();
+  const g = new THREE.CylinderGeometry(r1, r0, len, seg).translate(0, len / 2, 0);
+  g.applyQuaternion(new Q4().setFromUnitVectors(new V3(0, 1, 0), d.normalize())); g.translate(a.x, a.y, a.z); return g;
+}
+function propDiscTexture(tip) {
+  const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
+  const col = new THREE.Color(tip), rgb = `${col.r * 255 | 0},${col.g * 255 | 0},${col.b * 255 | 0}`;
+  const g = x.createRadialGradient(128, 128, 0, 128, 128, 128);
+  g.addColorStop(0, 'rgba(25,25,25,0)'); g.addColorStop(0.2, 'rgba(25,25,25,0.55)'); g.addColorStop(0.55, 'rgba(25,25,25,0.4)'); g.addColorStop(0.88, 'rgba(25,25,25,0.22)');
+  g.addColorStop(0.9, `rgba(${rgb},0.75)`); g.addColorStop(0.985, `rgba(${rgb},0.6)`); g.addColorStop(1, `rgba(${rgb},0)`);
+  x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 const MAT_CACHE = {};
 function sharedMats(key, ace) {
   const id = key + (ace ? 'ace' : '');
   if (MAT_CACHE[id]) return MAT_CACHE[id];
   const s = SPECS[key];
-  const body = planeMaterial(camoTexture(s.camoA, s.camoB, key === 'kestrel' ? 4 : 9, key === 'falke'), s.bottom);
+  const camo = camoTexture(s.camoA, s.camoB, key === 'kestrel' ? 4 : 9, key === 'falke');
+  const body = planeMaterial(camo.map, camo.normal, s.bottom);
   const M = {
-    body, spinner: pbr({ color: ace ? 0xb02a22 : s.spinner, roughness: 0.38, metalness: 0.25 }),
+    body, spinner: pbr({ color: ace ? 0xb02a22 : s.spinner, roughness: 0.34, metalness: 0.25 }),
     dark: pbr({ color: 0x1d1f1d, roughness: 0.62, metalness: 0.25 }), metal: pbr({ color: 0x8a8d90, roughness: 0.32, metalness: 0.85 }),
+    chrome: pbr({ color: 0xc9ccd0, roughness: 0.16, metalness: 1 }), tyre: pbr({ color: 0x161616, roughness: 0.9, metalness: 0 }),
+    exhaust: pbr({ color: 0x3b2c24, roughness: 0.8, metalness: 0.5 }), frame: pbr({ color: 0x2a2d29, roughness: 0.55, metalness: 0.3 }),
     glass: pbr({ color: 0xb4cde0, roughness: 0.03, metalness: 0.1, transparent: true, opacity: 0.26, envMapIntensity: 2.4, depthWrite: false }),
     tip: pbr({ color: 0xd9a92a, roughness: 0.5 }),
-    disc: new THREE.MeshBasicNodeMaterial({ color: 0x222222, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }),
+    disc: new THREE.MeshBasicNodeMaterial({ map: propDiscTexture(0xd9a92a), transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide }),
     insignia: pbr({ map: insigniaTexture(key), transparent: true, roughness: 0.62, metalness: 0.1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }),
-    band: pbr({ color: key === 'kestrel' ? 0xcfc6a6 : (ace ? 0xb02a22 : 0xd4ab2e), roughness: 0.5, metalness: 0.15 }), pilot: lam(0x5a4330), interior: new THREE.MeshLambertNodeMaterial({ color: 0x2c2f2a, side: THREE.BackSide }),
+    band: pbr({ color: key === 'kestrel' ? 0xcfc6a6 : (ace ? 0xb02a22 : 0xd4ab2e), roughness: 0.5, metalness: 0.15 }), pilot: lam(0x5a4330), suit: lam(0x4a4a36),
+    navR: new THREE.MeshBasicNodeMaterial({ color: 0xff2a1a }), navG: new THREE.MeshBasicNodeMaterial({ color: 0x2aff66 }),
+    interior: new THREE.MeshLambertNodeMaterial({ color: 0x2c2f2a, side: THREE.BackSide }),
   };
   MAT_CACHE[id] = M; return M;
 }
-let gaugeCanvas = null;
-function makePlaneModel(key, opts) {
-  const s = SPECS[key]; const M = sharedMats(key, opts.ace); const g = new THREE.Group(); const parts = {};
-  const L = s.length, R = s.R;
-  // fuselage
+
+// The fuselage: a smoothed radius profile turned on a lathe. t runs from the tail (0) to the nose (1).
+function fuselageShape(key) {
+  const s = SPECS[key], L = s.length, R = s.R;
   const prof = key === 'kestrel'
     ? [[0, 0.05], [0.04, 0.16], [0.14, 0.28], [0.34, 0.44], [0.52, 0.56], [0.66, 0.62], [0.8, 0.6], [0.9, 0.55], [0.97, 0.44], [1, 0.3]]
     : [[0, 0.05], [0.04, 0.15], [0.14, 0.26], [0.34, 0.42], [0.52, 0.53], [0.66, 0.58], [0.8, 0.57], [0.9, 0.53], [0.97, 0.45], [1, 0.33]];
-  const fg = new THREE.LatheGeometry(prof.map(([t, r]) => new THREE.Vector2(r * R, t * L)), 18);
-  const uv = fg.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 3.5, uv.getY(i) * L);
-  fg.rotateX(-Math.PI / 2); fg.translate(0, 0, L + s.noseZ); fg.scale(0.86, 1, 1);
-  const fp = fg.attributes.position; for (let i = 0; i < fp.count; i++) { const z = fp.getZ(i); if (z > 1.5) fp.setY(i, fp.getY(i) + (z - 1.5) * 0.06); }
-  fg.computeVertexNormals();
-  const fus = new THREE.Mesh(fg, M.body); g.add(fus);
-  // cowl band
-  const band = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.5, R * 0.56, key === 'kestrel' ? 0.32 : 1.1, 18, 1, true).rotateX(Math.PI / 2), M.band);
-  band.scale.x = 0.88; band.position.set(0, 0.0, key === 'kestrel' ? 2.65 : s.noseZ + 0.8); if (key === 'kestrel') band.scale.set(0.82, 0.9, 1); g.add(band);
-  // wings
-  const half = s.span / 2;
-  const wg = key === 'kestrel'
-    ? wingGeo(half, t => 2.55 * Math.sqrt(Math.max(0.03, 1 - t * t)), 0.24)
-    : wingGeo(half, t => t > 0.92 ? lerp(1.15, 0.5, (t - 0.92) / 0.08) : lerp(2.1, 1.15, t / 0.92), 0.22, 0.18);
-  const wR = new THREE.Mesh(wg, M.body); wR.position.set(0.25, -0.38, -0.55); wR.rotation.z = 0.1; g.add(wR);
-  const wL = new THREE.Mesh(mirrorX(wg), M.body); wL.position.set(-0.25, -0.38, -0.55); wL.rotation.z = -0.1; g.add(wL);
-  parts.wingL = wL; parts.wingR = wR;
-  // ailerons (hinged groups)
-  const ailGeo = new THREE.BoxGeometry(half * 0.36, 0.07, 0.42).translate(0, 0, 0.21);
-  for (const side of [-1, 1]) {
-    const hinge = new THREE.Group(); const ax = half * 0.66;
-    const chord = key === 'kestrel' ? 2.55 * Math.sqrt(Math.max(0.03, 1 - 0.66 * 0.66)) : lerp(2.1, 1.15, 0.66 / 0.92);
-    hinge.position.set(side * ax, -0.38 + ax * 0.1, -0.55 + 0.7 * chord - 0.42 + (key === 'falke' ? 0.12 : 0));
-    hinge.add(new THREE.Mesh(ailGeo, M.body)); (side < 0 ? wL : wR).parent.add(hinge);
-    parts[side < 0 ? 'ailL' : 'ailR'] = hinge;
+  const pts = new THREE.SplineCurve(prof.map(([t, r]) => new THREE.Vector2(t, r))).getPoints(120);
+  const rAt = t => { t = clamp(t, 0, 1); let i = 1; while (i < pts.length - 1 && pts[i].x < t) i++; const a = pts[i - 1], b = pts[i]; return lerp(a.y, b.y, clamp((t - a.x) / Math.max(1e-6, b.x - a.x), 0, 1)) * R; };
+  const tAt = z => (L + s.noseZ - z) / L, lift = z => z > 1.5 ? (z - 1.5) * 0.06 : 0;
+  // world-space point on the skin at fuselage station z and angle a (0 = right side, PI/2 = top)
+  const at = (z, a, grow = 1) => { const r = rAt(tAt(z)) * grow; return new V3(Math.cos(a) * r * 0.86, Math.sin(a) * r + lift(z), z); };
+  const lathe = (t0, t1, n, grow = 1, seg = 36) => {
+    const prof2 = []; for (let i = 0; i <= n; i++) { const t = lerp(t0, t1, i / n); prof2.push(new THREE.Vector2(Math.max(0.001, rAt(t) * grow), t * L)); }
+    const g = new THREE.LatheGeometry(prof2, seg);
+    const uv = g.attributes.uv, p = g.attributes.position; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 3.5, p.getY(i));
+    g.rotateX(-Math.PI / 2); g.translate(0, 0, L + s.noseZ); g.scale(0.86, 1, 1);
+    for (let i = 0; i < p.count; i++) p.setY(i, p.getY(i) + lift(p.getZ(i)));
+    g.computeVertexNormals(); return g;
+  };
+  return { rAt, tAt, at, lathe };
+}
+
+// The aircraft is built once per type as a template, then cloned for every plane that flies it.
+const PLANE_TEMPLATES = {};
+const MODEL_PARTS = ['wingL', 'wingR', 'ailL', 'ailR', 'elev', 'rud', 'canopy', 'head', 'prop', 'blades', 'disc', 'gearL', 'gearR', 'pylonL', 'pylonR'];
+let gaugeCanvas = null;
+function makePlaneModel(key, opts) {
+  const id = key + (opts.ace ? '.ace' : '') + (opts.cockpit ? '.ck' : '');
+  const T = PLANE_TEMPLATES[id] || (PLANE_TEMPLATES[id] = buildPlaneTemplate(key, opts));
+  const g = T.clone(true), parts = {};
+  for (const n of MODEL_PARTS) parts[n] = g.getObjectByName(n);
+  parts.pylons = [parts.pylonL, parts.pylonR];
+  return { group: g, parts, key,
+    setGear(t) { const a = (1 - t) * Math.PI / 2; parts.gearL.rotation.z = -a; parts.gearR.rotation.z = a; parts.gearL.visible = parts.gearR.visible = t > 0.02; },
+  };
+}
+function buildPlaneTemplate(key, opts) {
+  const s = SPECS[key], M = sharedMats(key, opts.ace), g = new THREE.Group(), kes = key === 'kestrel';
+  const L = s.length, R = s.R, half = s.span / 2, F = fuselageShape(key);
+  // static pieces are merged into one mesh per material (and per moving group) to keep draw calls down
+  const lists = new Map();
+  const put = (parent, mat, geo) => { const k = parent.uuid + mat.uuid; if (!lists.has(k)) lists.set(k, { parent, mat, geos: [] }); lists.get(k).geos.push(geo); };
+  const named = (o, n) => { o.name = n; return o; };
+
+  // ---- fuselage, cowl band / fuselage band, radiators
+  put(g, M.body, F.lathe(0, 1, 70));
+  const bz = kes ? [2.49, 2.81] : [s.noseZ + 0.25, s.noseZ + 1.35];
+  put(g, M.band, F.lathe(F.tAt(bz[1]), F.tAt(bz[0]), 6, 1.006));
+  // radiator / oil-cooler bath: an open lip at the front with a dark matrix inside, tapering to the exit flap
+  const scoop = (x, y, z, r, len, sx = 1.35) => {
+    const pr = [[0.78, 0], [0.97, 0.05], [1, 0.16], [1, 0.62], [0.82, 0.86], [0.5, 1]].map(([a, b]) => new THREE.Vector2(a * r, b * len));
+    put(g, M.body, new THREE.LatheGeometry(pr, 16).rotateX(Math.PI / 2).scale(sx, 0.82, 1).translate(x, y, z - len / 2));
+    put(g, M.dark, new THREE.CircleGeometry(r * 0.8, 16).rotateY(Math.PI).scale(sx, 0.82, 1).translate(x, y, z - len / 2 + 0.07));
+    put(g, M.dark, new THREE.CircleGeometry(r * 0.5, 16).scale(sx, 0.82, 1).translate(x, y, z + len / 2));
+  };
+  if (kes) { scoop(1.3, -0.6, -0.15, 0.15, 0.85); scoop(-1.3, -0.6, -0.15, 0.13, 0.7); }
+  else { scoop(0, -0.66, s.noseZ + 1.2, 0.15, 0.4, 1.6); scoop(1.7, -0.6, -0.45, 0.11, 0.7, 1.5); scoop(-1.7, -0.6, -0.45, 0.11, 0.7, 1.5); }
+  // exhaust stacks along both sides of the cowling
+  for (const sx of [-1, 1]) for (let i = 0; i < 6; i++) {
+    // short fishtail stubs lying along the skin, angled a little outward at the back
+    const z = s.noseZ + 0.95 + i * 0.22, p = F.at(z, 0.3);
+    const st = new THREE.CylinderGeometry(0.04, 0.05, 0.17, 7).rotateX(Math.PI / 2).scale(0.75, 1, 1).rotateY(sx * 0.32).translate(sx * (Math.abs(p.x) + 0.015), p.y, z);
+    put(g, M.exhaust, st);
   }
-  // tail
-  const tg = wingGeo(1.65, t => 1.15 * Math.sqrt(Math.max(0.05, 1 - t * t)), 0.12);
-  const tR = new THREE.Mesh(tg, M.body); tR.position.set(0.1, 0.32, 4.35); g.add(tR);
-  const tL = new THREE.Mesh(mirrorX(tg), M.body); tL.position.set(-0.1, 0.32, 4.35); g.add(tL);
-  const elev = new THREE.Group(); elev.position.set(0, 0.33, 4.35 + 0.42); elev.add(new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.06, 0.38).translate(0, 0, 0.19), M.body)); g.add(elev); parts.elev = elev;
-  const fs = new THREE.Shape(); fs.moveTo(0, 0); fs.quadraticCurveTo(0.2, 1.4, 0.95, 1.65); fs.quadraticCurveTo(1.45, 1.6, 1.4, 0.4); fs.lineTo(1.4, 0); fs.lineTo(0, 0);
-  const finG = new THREE.ExtrudeGeometry(fs, { depth: 0.1, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.03, bevelSegments: 1 }); finG.rotateY(-Math.PI / 2); finG.translate(0.05, 0, 0);
-  const fin = new THREE.Mesh(finG, M.body); fin.position.set(0, 0.35, 3.85); g.add(fin);
-  const rud = new THREE.Group(); rud.position.set(0, 0.35, 3.85 + 1.42); rud.add(new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.5, 0.45).translate(0, 0.78, 0.2), M.body)); g.add(rud); parts.rud = rud;
-  // canopy + pilot
-  const can = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 10), M.glass); can.scale.set(0.9, 0.82, 2.5); can.position.set(0, 0.55, -0.15); can.renderOrder = 4; g.add(can); parts.canopy = can;
-  for (const z of [-0.8, -0.15, 0.5]) { const fr = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.022, 4, 14, Math.PI), M.dark); fr.position.set(0, 0.55, z); fr.scale.set(1.02, 0.95, 1); g.add(fr); }
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), M.pilot); head.position.set(0, 0.73, -0.1); g.add(head); parts.head = head;
-  // propeller
-  const prop = new THREE.Group(); prop.position.set(0, 0, s.noseZ - 0.12); g.add(prop); parts.prop = prop;
-  const spin = new THREE.Mesh(new THREE.ConeGeometry(R * 0.3, 0.75, 14).rotateX(-Math.PI / 2), M.spinner); spin.position.z = -0.2; prop.add(spin);
-  const blades = new THREE.Group(); prop.add(blades); parts.blades = blades;
-  const bg = new THREE.BoxGeometry(0.2, 1.55, 0.05).translate(0, 0.9, 0);
-  const tipG = new THREE.BoxGeometry(0.21, 0.16, 0.056).translate(0, 1.6, 0);
-  for (let i = 0; i < s.blades; i++) { const b = new THREE.Mesh(bg, M.dark); b.rotation.z = i / s.blades * Math.PI * 2; b.rotation.y = 0.35; b.add(new THREE.Mesh(tipG, M.tip)); blades.add(b); }
-  const disc = new THREE.Mesh(new THREE.CircleGeometry(1.72, 28), M.disc); disc.position.z = -0.05; disc.visible = false; prop.add(disc); parts.disc = disc;
-  // radiator / exhausts
-  if (key === 'kestrel') { addBox(0.42, 0.26, 1.2, M.body, 1.25, -0.6, -0.2, 0, g).castShadow = false; }
-  for (const sx of [-1, 1]) for (let i = 0; i < 6; i++) { const ex = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.07, 0.16), M.dark); ex.position.set(sx * 0.5 * R, 0.16, s.noseZ + 0.95 + i * 0.22); g.add(ex); }
-  // landing gear
-  const legG = new THREE.CylinderGeometry(0.06, 0.07, 1.3, 6).translate(0, -0.65, 0);
-  const wheelG = new THREE.CylinderGeometry(0.33, 0.33, 0.17, 14).rotateZ(Math.PI / 2);
-  const gx = key === 'kestrel' ? 0.95 : 0.62;
+  if (!kes) for (const sx of [-1, 1]) { const z0 = -2.45, z1 = -2.88, x = sx * 0.26, y = F.at(z0, Math.PI / 2).y * 0.82 + 0.02; put(g, M.dark, rodGeo(new V3(x, y, z0), new V3(x, y, z1), 0.026)); }
+
+  // ---- main wings: a group per side so a wing shot off takes its aileron, guns and lights with it
+  const wsec = kes
+    ? t => { const c = 2.55 * Math.sqrt(Math.max(0.03, 1 - t * t)); return { s: half * t, le: -0.3 * c, c, tc: lerp(0.15, 0.1, t), k: tipRound(t, 0.9), cam: 0.02 }; }
+    : t => { const c = t > 0.92 ? lerp(1.15, 0.62, (t - 0.92) / 0.08) : lerp(2.1, 1.15, t / 0.92); return { s: half * t, le: 0.18 * t - 0.3 * c, c, tc: lerp(0.15, 0.1, t), k: tipRound(t, 0.86), cam: 0.02 }; };
+  const tA = 0.48, tB = 0.86, ail = t => { const S = wsec(t); return { S, z: S.le + 0.75 * S.c }; };
+  const hA = ail(tA), hB = ail(tB);
+  const hingeZ = t => lerp(hA.z, hB.z, (t - tA) / (tB - tA)), hingeU = t => { const S = wsec(t); return clamp((hingeZ(t) - S.le) / S.c, 0.5, 0.95); };
+  const wingGeoR = cutSurface(24, wsec, tA, tB, hingeU);
+  const g0 = 0.025 / half, ailTs = stations(8, tA + g0, tB - g0);
+  const ailGeoR = surfaceGeo(ailTs, wsec, { ua: hingeU, capStart: true, capEnd: true });
+  const yA = 0.015 * hA.S.c, yB = 0.015 * hB.S.c; // the mean line at the hinge
+  // a point given in the aircraft's frame, in the frame of the wing group on that side
+  const wingLocal = (side, gx, gy, gz) => { const dx = gx - side * 0.25, dy = gy + 0.38, a = side * 0.1; return new V3(dx * Math.cos(a) + dy * Math.sin(a), -dx * Math.sin(a) + dy * Math.cos(a), gz + 0.55); };
   for (const side of [-1, 1]) {
-    const gg = new THREE.Group(); gg.position.set(side * gx, -0.55, -0.6);
-    gg.add(new THREE.Mesh(legG, M.metal)); const wh = new THREE.Mesh(wheelG, M.dark); wh.position.set(side * 0.06, -1.07, 0); gg.add(wh);
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.0, 0.42).translate(0, -0.55, 0), M.body); door.position.x = side * 0.1; gg.add(door);
-    g.add(gg); parts[side < 0 ? 'gearL' : 'gearR'] = gg;
+    const wg = named(new THREE.Group(), side < 0 ? 'wingL' : 'wingR'); wg.position.set(side * 0.25, -0.38, -0.55); wg.rotation.z = side * 0.1; g.add(wg);
+    const mir = geo => side < 0 ? mirrorX(geo) : geo;
+    const wm = new THREE.Mesh(mir(wingGeoR), M.body); wm.castShadow = true; wg.add(wm);
+    // aileron, hinged along the straight line through its two ends
+    const p0 = new V3(side * half * (side < 0 ? tB - g0 : tA + g0), side < 0 ? yB : yA, side < 0 ? hingeZ(tB - g0) : hingeZ(tA + g0));
+    const p1 = new V3(side * half * (side < 0 ? tA + g0 : tB - g0), side < 0 ? yA : yB, side < 0 ? hingeZ(tA + g0) : hingeZ(tB - g0));
+    const ag = mir(ailGeoR.clone()), hg = hinged(ag, p0, p1, side < 0 ? 'ailL' : 'ailR');
+    const am = new THREE.Mesh(ag, M.body); am.castShadow = true; hg.add(am); wg.add(hg);
+    // roundels top and bottom, bent over the aerofoil
+    for (const upper of [true, false]) {
+      const dg = new THREE.PlaneGeometry(1.15, 1.15, 6, 6), p = dg.attributes.position, cx = half * 0.68, cz = 0.2;
+      for (let i = 0; i < p.count; i++) {
+        const px = p.getX(i), py = p.getY(i), x = cx + px, z = upper ? cz - py : cz + py, S = wsec(x / half);
+        p.setXYZ(i, x, afY((z - S.le) / S.c, upper, S.tc, S.cam) * S.c * S.k + (upper ? 0.012 : -0.012), z);
+      }
+      dg.computeVertexNormals(); wg.add(new THREE.Mesh(side < 0 ? mirrorX(dg) : dg, M.insignia));
+    }
+    // gun muzzles poking out of the leading edge
+    for (const gn of s.guns) {
+      if (Math.sign(gn.x) !== side || Math.abs(gn.x) < 1) continue;
+      const lp = wingLocal(side, gn.x, gn.y, gn.z), S = wsec(Math.abs(lp.x) / half), le = S.le, cannon = gn.t === 'c';
+      put(wg, M.dark, rodGeo(new V3(lp.x, lp.y + 0.04, le + 0.25), new V3(lp.x, lp.y + 0.04, le - (cannon ? 0.62 : 0.14)), cannon ? 0.05 : 0.022, cannon ? 0.042 : 0.02, 8));
+      if (cannon) put(wg, M.body, new THREE.CapsuleGeometry(0.075, 0.35, 3, 8).rotateX(Math.PI / 2).translate(lp.x, lp.y + 0.04, le - 0.05));
+    }
+    // navigation light at the tip; pitot tube on the left wing
+    const tS = wsec(0.985);
+    const nl = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), side < 0 ? M.navR : M.navG); nl.position.set(side * half * 0.985, 0, tS.le + 0.18); wg.add(nl);
+    if (side < 0) { const S = wsec(0.78); put(wg, M.metal, rodGeo(new V3(-half * 0.78, -0.08, S.le + 0.2), new V3(-half * 0.78, -0.1, S.le - 0.45), 0.018, 0.012)); }
   }
-  const tw = new THREE.Group(); tw.position.set(0, -0.4, 5.0); const tleg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.35, 5).translate(0, -0.17, 0), M.metal); tw.add(tleg);
-  const twh = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.08, 10).rotateZ(Math.PI / 2), M.dark); twh.position.y = -0.31; tw.add(twh); g.add(tw);
-  // insignia
-  const ig = new THREE.PlaneGeometry(1.15, 1.15);
+
+  // ---- tailplane with elevators, fin with rudder
+  const tsec = t => { const c = 1.15 * Math.sqrt(Math.max(0.05, 1 - t * t)); return { s: 1.65 * t, le: -0.3 * c, c, tc: 0.1, k: tipRound(t, 0.88), cam: 0 }; };
+  const eH = 0.42, eT0 = 0.1, eT1 = 0.8, eU = t => { const S = tsec(t); return clamp((eH - S.le) / S.c, 0.5, 0.97); };
+  const tailR = cutSurface(16, tsec, eT0, eT1, eU, { M: 20 }).translate(0.1, 0.32, 4.35);
+  put(g, M.body, tailR); put(g, M.body, mirrorX(tailR));
+  const elev = named(new THREE.Group(), 'elev'); elev.position.set(0, 0.32, 4.35 + eH); g.add(elev);
+  const elR = surfaceGeo(stations(8, eT0 + 0.01, eT1 - 0.01), tsec, { ua: eU, capStart: true, capEnd: true, M: 20 }).translate(0.1, 0, -eH);
+  for (const eg of [elR, mirrorX(elR)]) { const em = new THREE.Mesh(eg, M.body); em.castShadow = true; elev.add(em); }
+  const FH = 1.75, FB = 0.22, hz = 5.27;
+  const fsec = t => {
+    const le0 = 3.85 + 0.8 * t ** 1.5, te0 = 5.72 - 0.12 * t, m = (le0 + te0) / 2, k = tipRound(t, 0.6);
+    const le = m - (m - le0) * k, te = m + (te0 - m) * k; return { s: FB + FH * t, le, c: Math.max(1e-4, te - le), tc: 0.11, k: 1, cam: 0 };
+  };
+  const fU = t => { const S = fsec(t); return clamp((hz - S.le) / S.c, 0, 1); };
+  let tR = 0; for (let t = 0; t <= 1; t += 0.005) if (fU(t) < 0.93) tR = t;
+  put(g, M.body, cutSurface(18, fsec, 0, tR, fU, { vertical: true, M: 20 }));
+  const rud = named(new THREE.Group(), 'rud'); rud.position.set(0, 0, hz); g.add(rud);
+  const rg = surfaceGeo(stations(10, 0, tR - 0.005), fsec, { ua: fU, vertical: true, M: 20, capStart: true, capEnd: true }).translate(0, 0, -hz);
+  const rm = new THREE.Mesh(rg, M.body); rm.castShadow = true; rud.add(rm);
+
+  // ---- canopy: a glass bubble with frames that sit on it, the pilot, armour behind his head
+  const ca = 0.378, cb = 0.344, cc = 1.05, cy = 0.55, cz = -0.15;
+  const can = named(new THREE.Mesh(new THREE.SphereGeometry(1, 28, 16, 0, Math.PI * 2, 0, Math.PI * 0.62), M.glass), 'canopy');
+  can.scale.set(ca, cb, cc); can.rotation.x = 0; can.position.set(0, cy, cz); can.renderOrder = 4; g.add(can);
+  const hoop = dz => { const f = Math.sqrt(Math.max(0, 1 - (dz / cc) ** 2)); return new THREE.TorusGeometry(1, 0.05, 5, 22, Math.PI).scale(ca * f * 1.02, cb * f * 1.02, 1).translate(0, cy, cz + dz); };
+  for (const dz of kes ? [-0.62, 0.38] : [-0.66, -0.25, 0.18, 0.55]) put(g, M.frame, hoop(dz));
+  // the spine along the top (not in your own cockpit, where it would stand in front of the gunsight)
+  if (!opts.cockpit) put(g, M.frame, new THREE.TorusGeometry(1, 0.035, 4, 30, Math.PI).rotateY(Math.PI / 2).scale(1, cb * 1.02, cc * 1.02).translate(0, cy, cz));
+  if (!kes && !opts.cockpit) for (const r of [-0.62, 0.62]) put(g, M.frame, new THREE.TorusGeometry(1, 0.03, 4, 30, Math.PI).rotateY(Math.PI / 2).rotateZ(r).scale(ca * 1.02, cb * 1.02, cc * 1.02).translate(0, cy, cz));
+  put(g, M.dark, new THREE.BoxGeometry(0.34, 0.36, 0.05).translate(0, cy + 0.12, cz + 0.62));
+  if (!opts.cockpit) put(g, M.dark, new THREE.BoxGeometry(0.6, 0.12, 1.5).translate(0, 0.5, -0.2)); // cockpit floor seen through the glass
+  const pilot = named(new THREE.Group(), 'head'); g.add(pilot);
+  const helm = new THREE.Mesh(new THREE.SphereGeometry(0.16, 14, 10), M.pilot); helm.position.set(0, 0.74, -0.1); pilot.add(helm);
+  const gog = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.025, 4, 16, Math.PI).rotateX(Math.PI / 2).rotateY(Math.PI), M.frame); gog.position.set(0, 0.77, -0.11); pilot.add(gog);
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 0.12, 3, 10).rotateZ(Math.PI / 2).scale(1, 0.9, 0.75), M.suit); torso.position.set(0, 0.5, -0.02); pilot.add(torso);
+  // radio mast and the aerial wire back to the fin
+  const mb = F.at(1.15, Math.PI / 2), mt = new V3(0, mb.y + 0.46, 1.42);
+  put(g, M.dark, rodGeo(mb.clone().setY(mb.y - 0.05), mt, 0.035, 0.012));
+  const ft = fsec(0.88); put(g, M.dark, rodGeo(mt, new V3(0, FB + FH * 0.88, ft.le + 0.05), 0.006, 0.006, 4));
+
+  // ---- propeller: spinner, twisted aerofoil blades with painted tips, and the disc shown at speed
+  const prop = named(new THREE.Group(), 'prop'); prop.position.set(0, 0, s.noseZ - 0.12); g.add(prop);
+  const sr = R * 0.31, sl = 0.82, sp = []; for (let i = 0; i <= 14; i++) { const f = i / 14; sp.push(new THREE.Vector2(Math.max(0.002, sr * (1 - f ** 2.1) ** 0.62), f * sl)); }
+  const spin = new THREE.Mesh(new THREE.LatheGeometry(sp, 22).rotateX(-Math.PI / 2).translate(0, 0, 0.19), M.spinner); spin.castShadow = true; prop.add(spin);
+  prop.add(new THREE.Mesh(new THREE.CylinderGeometry(sr * 1.03, sr * 1.06, 0.06, 22).rotateX(Math.PI / 2).translate(0, 0, 0.2), M.dark));
+  if (!kes) prop.add(new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.1, 8).rotateX(Math.PI / 2).translate(0, 0, 0.19 - sl), M.dark));
+  const blades = named(new THREE.Group(), 'blades'); prop.add(blades);
+  const bladeGeo = (t0, t1, n) => {
+    const ts = []; for (let i = 0; i <= n; i++) ts.push(lerp(t0, t1, i / n));
+    return loftGeo(ts.length, 16, (i, j, o) => {
+      const t = ts[i], r = lerp(0.14, 1.68, t), up = j < 8, q = (up ? j : j - 8) / 8;
+      const w = up ? (1 + Math.cos(Math.PI * q)) / 2 : (1 - Math.cos(Math.PI * q)) / 2;
+      const c = (0.15 + 0.15 * Math.sin(Math.PI * Math.min(1, t * 1.15))) * (0.3 + 0.7 * tipRound(t, 0.86)), th = 0.95 - 0.68 * t;
+      const xc = (w - 0.3) * c, zc = -afY(w, up, lerp(0.22, 0.08, t), 0.03) * c;
+      o[0] = xc * Math.cos(th) - zc * Math.sin(th); o[1] = r; o[2] = xc * Math.sin(th) + zc * Math.cos(th); o[3] = xc; o[4] = r;
+    }, true, true);
+  };
+  const bMain = bladeGeo(0, 0.9, 12), bTip = bladeGeo(0.9, 1, 3);
+  for (let i = 0; i < s.blades; i++) {
+    const b = new THREE.Mesh(bMain, M.dark); b.rotation.z = i / s.blades * Math.PI * 2; b.castShadow = true; b.add(new THREE.Mesh(bTip, M.tip)); blades.add(b);
+  }
+  const disc = named(new THREE.Mesh(new THREE.CircleGeometry(1.72, 40), M.disc), 'disc'); disc.position.z = -0.05; disc.visible = false; prop.add(disc);
+
+  // ---- landing gear: painted leg, chrome oleo, tyre and hub, gear door
+  const gx = kes ? 0.95 : 0.62;
   for (const side of [-1, 1]) {
-    const top = new THREE.Mesh(ig, M.insignia); top.rotation.x = -Math.PI / 2; top.rotation.y = 0; top.position.set(side * half * 0.68, -0.38 + half * 0.68 * 0.1 + 0.135, -0.35); top.rotation.set(-Math.PI / 2, 0, side * 0.1, 'XYZ'); g.add(top);
-    const fsd = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 0.85), M.insignia); fsd.position.set(side * 0.44 * R, 0.1, 2.2); fsd.rotation.y = side * Math.PI / 2; g.add(fsd);
+    const gg = named(new THREE.Group(), side < 0 ? 'gearL' : 'gearR'); gg.position.set(side * gx, -0.55, -0.6);
+    const parts = [
+      [new THREE.CylinderGeometry(0.075, 0.08, 0.72, 8).translate(0, -0.36, 0), M.metal],
+      [new THREE.CylinderGeometry(0.048, 0.048, 0.5, 8).translate(0, -0.92, 0), M.chrome],
+      [new THREE.TorusGeometry(0.245, 0.09, 8, 20).rotateY(Math.PI / 2).translate(side * 0.06, -1.07, 0), M.tyre],
+      [new THREE.CylinderGeometry(0.16, 0.16, 0.15, 14).rotateZ(Math.PI / 2).translate(side * 0.06, -1.07, 0), M.metal],
+      [new THREE.BoxGeometry(0.03, 1.0, 0.42).translate(side * 0.1, -0.55, 0), M.body],
+    ];
+    for (const [geo, mat] of parts) { const m = new THREE.Mesh(geo, mat); m.castShadow = true; gg.add(m); }
+    g.add(gg);
+  }
+  const tw = new THREE.Group(); tw.position.set(0, -0.4 + (kes ? 0 : 0.02), 5.0); g.add(tw);
+  put(tw, M.metal, new THREE.CylinderGeometry(0.04, 0.04, 0.3, 6).translate(0, -0.15, 0));
+  put(tw, M.tyre, new THREE.TorusGeometry(0.1, 0.045, 6, 14).rotateY(Math.PI / 2).translate(0, -0.31, 0));
+
+  // ---- fuselage insignia, wrapped around the skin
+  for (const side of [-1, 1]) {
+    const dg = new THREE.PlaneGeometry(0.85, 0.85, 6, 6), p = dg.attributes.position, zc = 2.2;
+    for (let i = 0; i < p.count; i++) {
+      const px = p.getX(i), py = p.getY(i), z = zc - px, a = py / F.rAt(F.tAt(z)), q = F.at(z, a, 1.012);
+      p.setXYZ(i, q.x, q.y, z);
+    }
+    dg.computeVertexNormals(); g.add(new THREE.Mesh(side < 0 ? mirrorX(dg) : dg, M.insignia));
   }
   // cockpit interior for the player
   if (opts.cockpit) {
@@ -1123,12 +1353,14 @@ function makePlaneModel(key, opts) {
     if (!gaugeCanvas) { gaugeCanvas = document.createElement('canvas'); gaugeCanvas.width = 512; gaugeCanvas.height = 224; }
     for (const sx of [-1, 1]) { const rail = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 1.3), M.dark); rail.position.set(sx * 0.37, 0.56, -0.2); g.add(rail); }
   }
-  parts.pylons = [-1, 1].map(side => { const mm = makeMissileMesh(); mm.rotation.y = Math.PI; mm.position.set(side * 2.3, -0.78, -0.3); mm.visible = false; g.add(mm); return mm; });
-  g.traverse(o => { if (o.isMesh && o.material !== M.glass && o.material !== M.disc && o.material !== M.interior) { o.castShadow = true; } });
-  const model = { group: g, parts, key,
-    setGear(t) { const a = (1 - t) * Math.PI / 2; parts.gearL.rotation.z = -a; parts.gearR.rotation.z = a; parts.gearL.visible = parts.gearR.visible = t > 0.02; },
-  };
-  return model;
+  for (const side of [-1, 1]) { const mm = named(makeMissileMesh(), side < 0 ? 'pylonL' : 'pylonR'); mm.rotation.y = Math.PI; mm.position.set(side * 2.3, -0.78, -0.3); mm.visible = false; g.add(mm); }
+
+  const shadowless = new Set([M.frame, M.dark, M.exhaust, M.tyre, M.metal, M.insignia]);
+  for (const { parent, mat, geos } of lists.values()) {
+    const m = new THREE.Mesh(geos.length > 1 ? mergeGeometries(geos) : geos[0], mat);
+    m.castShadow = mat === M.body || (!shadowless.has(mat) && mat !== M.glass); parent.add(m);
+  }
+  return g;
 }
 
 // =====================================================================
@@ -1988,6 +2220,8 @@ function netRoster(d, quiet) {
   if (G.player) G.player.label = NET.name;
   if (!quiet && G.state === 'menu') netMenu();
 }
+// is another person (not a computer pilot) connected to this table right now?
+function sharedSky() { return NET.on && NET.roster.some(r => r.kind === 'human' && r.seat !== NET.seat && r.connected !== false); }
 function netReset() {
   for (const m of MSL) scene.remove(m.mesh); MSL.length = 0; FLARES.length = 0; LOCK.target = null;
   clearWorldPlanes(); smokeFX.n = 0; fireFX.n = 0; G.crashSites = []; G.player = null; G.mission = null; G.msgs = []; G.respawnT = null; G.ended = false;
@@ -2743,12 +2977,12 @@ function fillSettings() {
     ['Boost', 'hold Shift at full throttle'], ['Corner map', 'M'], ['Gear', 'G'], ['Flaps', 'V'], ['Brakes', 'B'], ['Camera', 'C'], ['Pause', 'Esc · P'], ['Gamepad', 'RT fire · LB missile · RB flares · Y map'],
   ];
   $('helpGrid').innerHTML = help.map(([a, b]) => `<div><span>${a}</span><span>${b}</span></div>`).join('');
-  $('pauseEyebrow').textContent = G.player ? `${SPECS[settings.plane].full} · ${fmtTime(G.time)} airborne · ${G.stats.kills} kills` : 'Settings';
+  $('pauseEyebrow').textContent = G.player ? `${SPECS[settings.plane].full} · ${fmtTime(G.time)} airborne · ${G.stats ? G.stats.kills : 0} kills` : 'Settings';
   $('setPhone').value = settings.phone; $('setDiff').value = settings.difficulty; $('setLock').value = settings.lock; $('setMap').value = settings.map;
   $('setDiffL').hidden = NET.on;
   $('btnResume').textContent = G.player ? 'Resume' : 'Back';
   $('btnRestart').hidden = $('btnEnd').hidden = !G.player;
-  if (NET.on) { $('btnRestart').hidden = true; $('btnEnd').hidden = false; $('btnEnd').textContent = NET.host ? 'End the round for everyone' : 'Leave table'; $('pauseEyebrow').textContent = 'Online · the flight keeps going while this is open'; }
+  if (NET.on) { $('btnRestart').hidden = true; $('btnEnd').hidden = false; $('btnEnd').textContent = NET.host ? 'End the round for everyone' : 'Leave table'; if (sharedSky()) $('pauseEyebrow').textContent = 'Online · the others keep flying, so your plane holds level until you resume'; }
   else $('btnEnd').textContent = 'End mission';
 }
 $('setControl').addEventListener('change', e => { settings.control = e.target.value; saveSettings(); applyControlMode(); updateHint(); });
@@ -2846,8 +3080,9 @@ function simulate(dt) {
 function frame(now) {
   if (window.__freeze) return; // QA: hold the picture still for a staged capture
   let rdt = Math.min(0.1, (now - last) / 1000); last = now; G.frame++;
-  // online the world keeps going while you look at a menu
-  const live = G.state === 'play' || (NET.on && G.player && (G.state === 'paused' || G.state === 'debrief' || G.state === 'paused-menu'));
+  // Pause stops the world. The one exception: a table where another person is flying with you,
+  // whose sky can't stop, so it keeps going (your plane holds level) while your menu is open.
+  const live = G.state === 'play' || (NET.on && G.player && (G.state === 'debrief' || ((G.state === 'paused' || G.state === 'paused-menu') && sharedSky())));
   if (live) {
     const dt = rdt * G.timeScale;
     simulate(dt);
