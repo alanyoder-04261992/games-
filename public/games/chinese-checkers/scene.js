@@ -9,6 +9,7 @@
 //   board.update(view, prev)    draw a view, animating the move since `prev`
 //   board.mark({ selected, targets, path, movable })   highlights for choosing a move
 //   board.frame({ top, bottom }) pixels covered by the player list / buttons, kept clear
+//   board.pose({ yaw, pitch, distance, look, hop })   a fixed shot, for the thumbnail
 //   board.destroy()
 // It uses the Game Center's shared three.js (public/vendor/three, r187) with WebGPURenderer
 // (WebGPU, or WebGL 2 where WebGPU is missing) and TSL node materials: no WebGL-only code.
@@ -462,6 +463,7 @@ export async function createScene(container, { onPick, onHover, onHop }) {
   let dragPitch = 0;
   let idle = 99;
   let basePitch = 0.98; // radians above the table (steeper on a tall phone screen)
+  let posed = null; // a fixed camera set by pose()
   function fitCamera(w, h) {
     camera.aspect = w / h;
     basePitch = camera.aspect < 0.8 ? 1.2 : 0.98;
@@ -498,7 +500,43 @@ export async function createScene(container, { onPick, onHover, onHop }) {
   await renderer.compileAsync(scene, camera);
   standIns.forEach((s) => scene.remove(s));
 
+  // A fixed shot for the home-page thumbnail (tools/render-checkers-thumb.cjs): the camera at
+  // a set angle and distance, and optionally a marble frozen part-way through one hop.
+  function pose({ yaw = 0, pitch = basePitch, distance = fitDist, look: target = [0, 0.3, 0.4], fov = camera.fov, hop: frozen = null } = {}) {
+    posed = { yaw, pitch, distance };
+    look.set(...target);
+    camera.fov = fov;
+    camera.updateProjectionMatrix();
+    if (frozen) {
+      // frozen = { path, leg, u, height }: the marble that just moved, shown on hop `leg` of
+      // its path, `u` of the way along, with a dotted arc behind it through the air
+      finishAnim();
+      trail.clear(); // the arcs show the path instead
+      const { path, leg = 0, u = 0.5, height = 0.95 } = frozen;
+      const m = grid.get(path[path.length - 1]);
+      const arc = (k, v) => {
+        const p = at(path[k]), q = at(path[k + 1]);
+        return [p.px + (q.px - p.px) * v, REST + Math.sin(Math.PI * v) * height, p.py + (q.py - p.py) * v];
+      };
+      if (m) m.position.set(...arc(leg, u));
+      for (let k = 0; k <= leg; k++)
+        for (let v = 0.06; v < (k === leg ? u - 0.12 : 1); v += 0.09) {
+          const b = new THREE.Mesh(viaGeo, onMat);
+          b.position.set(...arc(k, v));
+          b.scale.setScalar(0.55);
+          marks.add(b);
+        }
+    }
+  }
+
   function placeCamera(dt, t) {
+    if (posed) {
+      camera.position.set(Math.sin(posed.yaw) * Math.cos(posed.pitch), Math.sin(posed.pitch), Math.cos(posed.yaw) * Math.cos(posed.pitch)).multiplyScalar(posed.distance).add(look);
+      camera.lookAt(look);
+      scene.fog.near = posed.distance + 8;
+      scene.fog.far = posed.distance + 40;
+      return;
+    }
     idle += dt;
     if (idle > 4) {
       const k = Math.exp(-dt * 0.7);
@@ -622,6 +660,7 @@ export async function createScene(container, { onPick, onHover, onHop }) {
   return {
     update,
     mark,
+    pose,
     frame(next) {
       insets = next;
       resize();

@@ -8,7 +8,7 @@ import { SEAT_NAMES } from './colors.js';
 
 export default {
   id: 'chinese-checkers',
-  version: '1.0', // shown on the home tile; bump it whenever you improve the game
+  version: '1.1', // shown on the home tile; bump it whenever you improve the game
   name: 'Chinese Checkers',
   tagline: 'Hop your marbles across the star. Chain jumps to race home.',
   description:
