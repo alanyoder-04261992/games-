@@ -1143,7 +1143,7 @@ class EuchreTable {
     );
     const body = h(
       'div.eu-summary',
-      over ? h('div.eu-confetti', Array.from({ length: 40 }, (_, i) => h('i', { style: { '--i': i, '--h': (i * 47) % 360 } }))) : null,
+      over && v.winner === us && this.mySeat != null ? h('div.eu-confetti', Array.from({ length: 40 }, (_, i) => h('i', { style: { '--i': i, '--h': (i * 47) % 360 } }))) : null,
       h('div.eu-banner.' + (good ? 'good' : 'bad'), h('small', over ? 'Game over' : `Hand ${r.round}`), h('h2', headline), !over ? h('div.eu-big-pts', `+${pts} for ${scorer === us ? 'us' : 'them'}`) : null),
       h(
         'p.eu-sub',
