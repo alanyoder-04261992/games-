@@ -32,7 +32,7 @@ export function onlineGuide({ onHost, onJoin } = {}) {
 
     h('section.gd-section', h('h3', 'Start a table (the host)'),
       h('ol.gd-steps',
-        step(1, 'host', 'Tap “Play online”', 'On the home page, pick a game and tap ', h('b', 'Play online'), '. A 5-letter table code appears, like ', h('code', 'KDRWP'), '.'),
+        step(1, 'host', 'Tap “Multiplayer”', 'On the home page, pick a game and tap ', h('b', 'Multiplayer'), '. A 5-letter table code appears, like ', h('code', 'KDRWP'), '.'),
         step(2, 'share', 'Invite people', 'Tap ', h('b', 'Invite'), ' to text or email the link, or just read the code out loud. ', h('b', 'Copy link'), ' works too.'),
         step(3, 'seats', 'Check the seats', 'Friends appear in seats as they join. In Rook the first friend sits across from you as your partner. Use ', h('b', 'Sit here'), ' to move yourself, ', h('b', 'Add computer'), ' to fill a chair, or ', h('b', 'Remove'), ' if someone joined by mistake.'),
         step(4, 'play', 'Start the game', 'Tap ', h('b', 'Start game'), '. Any empty seats get computer players automatically, so you can start with just two people.'),

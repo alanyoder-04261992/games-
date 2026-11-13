@@ -1,7 +1,8 @@
 // Escape the Grind — the 3D table. A walnut table under a warm lamp, the round board with its
 // two loops of raised tiles, glossy pawns, rolling dice, flying cards, gold-coin stacks and a
 // tray for each player with miniature buildings for everything they own.
-import * as THREE from '../../vendor/three/three.module.min.js';
+import * as THREE from '../../vendor/three/three.webgpu.min.js';
+import { context, renderOutput, rangeFogFactor, mix, vec3, vec4 } from '../../vendor/three/three.tsl.min.js';
 import { RoomEnvironment } from '../../vendor/three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from '../../vendor/three/addons/geometries/RoundedBoxGeometry.js';
 import { OrbitControls } from '../../vendor/three/addons/controls/OrbitControls.js';
@@ -43,34 +44,22 @@ export class Table3D {
     this.positions = [];
     this.bursts = [];
 
-    const r = (this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' }));
-    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality === 'high' ? 2 : 1.25));
-    r.outputColorSpace = THREE.SRGBColorSpace;
-    r.toneMapping = THREE.ACESFilmicToneMapping;
-    r.toneMappingExposure = 1.05;
-    r.shadowMap.enabled = true;
-    r.shadowMap.type = THREE.PCFShadowMap;
-    container.append(r.domElement);
-    r.domElement.className = 'eg-canvas';
+    // the renderer is made in #start, once we know whether this browser can give us a WebGPU adapter
+    this.renderer = null;
+    const canvas = (this.canvas = document.createElement('canvas'));
+    canvas.className = 'eg-canvas';
+    container.append(canvas);
 
     const scene = (this.scene = new THREE.Scene());
-    scene.background = new THREE.Color('#0b0806');
-    scene.fog = new THREE.Fog('#0b0806', 34, 70);
-    const pm = new THREE.PMREMGenerator(r);
-    // three r183 moved RoomEnvironment down to y = -3.5, which brightens its reflections (a grey sheen
-    // across the walnut table, duller gold). Keep the room where it was so the table looks the same.
-    const room = new RoomEnvironment();
-    room.position.y = 0;
-    scene.environment = pm.fromScene(room, 0.04).texture;
-    // 0.46 (0.42 before three r186, which made indirect diffuse a little darker): keeps the table,
-    // felt and shadowed areas as bright as before.
-    scene.environmentIntensity = 0.46;
-    room.dispose();
-    pm.dispose();
+    // The clear color is written to the canvas as is (no output pass), so give it already encoded.
+    // The fog fades to the same encoded color after tone mapping, as it did under WebGL (#output),
+    // so it isn't a scene.fog, which three.js would mix in before tone mapping (to near-black).
+    const bg = (scene.background = new THREE.Color().setRGB(0x0b / 255, 0x08 / 255, 0x06 / 255, THREE.LinearSRGBColorSpace));
+    this.fog = { color: vec3(bg.r, bg.g, bg.b), near: 34, far: 70 };
 
     const cam = (this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 200));
     scene.add(cam);
-    this.controls = new OrbitControls(cam, r.domElement);
+    this.controls = new OrbitControls(cam, canvas);
     Object.assign(this.controls, {
       enableDamping: true,
       dampingFactor: 0.08,
@@ -98,17 +87,72 @@ export class Table3D {
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(container);
     this.running = true;
-    const loop = () => {
+    // The game can place pieces, start tweens and show cards straight away; frames start once the
+    // GPU device is ready. `ready` rejects if neither WebGPU nor WebGL 2 could start.
+    this.ready = this.#start();
+  }
+
+  async #start() {
+    // WebGPU where the browser has a working adapter, WebGL 2 everywhere else. Asking for WebGL up
+    // front (rather than letting three.js fall back) keeps the console free of its fallback warning.
+    const adapter = navigator.gpu ? await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }).catch(() => null) : null;
+    if (!this.running) return;
+    const r = (this.renderer = new THREE.WebGPURenderer({ canvas: this.canvas, antialias: true, powerPreference: 'high-performance', forceWebGL: !adapter }));
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.quality === 'high' ? 2 : 1.25));
+    // Tone mapping (ACES, exposure 1.05) and the sRGB encode happen in each material (see #output),
+    // not in a full-screen pass afterwards, so the renderer itself writes straight to the canvas.
+    r.outputColorSpace = THREE.LinearSRGBColorSpace;
+    r.toneMapping = THREE.NoToneMapping;
+    r.toneMappingExposure = 1.05;
+    r.shadowMap.enabled = true;
+    r.shadowMap.type = THREE.PCFShadowMap;
+    this.resize();
+    await r.init();
+    if (!this.running) return;
+    const pm = new THREE.PMREMGenerator(r);
+    // three r183 moved RoomEnvironment down to y = -3.5, which brightens its reflections (a grey sheen
+    // across the walnut table, duller gold). Keep the room where it was so the table looks the same.
+    const room = new RoomEnvironment();
+    room.position.y = 0;
+    this.scene.environment = pm.fromScene(room, 0.04).texture;
+    // 0.46 (0.42 before three r186, which made indirect diffuse a little darker): keeps the table,
+    // felt and shadowed areas as bright as before.
+    this.scene.environmentIntensity = 0.46;
+    room.dispose();
+    pm.dispose();
+    this.#output();
+    this.last = performance.now();
+    r.setAnimationLoop(() => {
       if (!this.running) return;
-      this.raf = requestAnimationFrame(loop);
       const now = performance.now();
       const dt = Math.min(0.05, (now - this.last) / 1000);
       this.last = now;
       if (document.hidden) return;
       this.#frame(dt);
       this.#adapt(dt);
-    };
-    loop();
+    });
+  }
+
+  // WebGPURenderer tone-maps the whole frame in one pass at the end, which would also darken the
+  // things marked toneMapped: false (the card print held up to the camera, the pawn glow rings).
+  // Instead every material maps and encodes its own color as it draws, exactly as the WebGL
+  // renderer did, so those stay true to color and transparent pieces blend the same way.
+  // The distance fog goes on last, toward the encoded room color, again as under WebGL.
+  // Installed after the environment map is made: that has to stay linear HDR.
+  #output() {
+    const r = this.renderer;
+    const { color: fogColor, near, far } = this.fog;
+    r.contextNode = context({
+      ...r.contextNode.getFlowContextData(),
+      getOutput: (color, builder) => {
+        if (builder.renderer.getRenderTarget() !== null) return color; // shadow maps and the like
+        const mat = builder.material;
+        const out = renderOutput(color, mat?.toneMapped === false ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping, THREE.SRGBColorSpace);
+        out.premultipliedAlpha = !!mat?.premultipliedAlpha;
+        if (mat?.fog === false) return out;
+        return vec4(mix(out.rgb, fogColor, rangeFogFactor(near, far)), out.a);
+      },
+    });
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -912,7 +956,7 @@ export class Table3D {
     // render the scene a little higher on screen so the action bar never hides the table edge
     this.camera.setViewOffset(w, h, 0, Math.round(h * 0.07), w, h);
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(w, h, false);
+    this.renderer?.setSize(w, h, false);
     if (was !== this.camera.aspect && this.controls) {
       const off = this.camera.position.clone().sub(this.controls.target);
       if (Math.abs(was - this.camera.aspect) > 0.3) off.setLength(this.#defaultDistance());
@@ -921,16 +965,19 @@ export class Table3D {
   }
   setQuality(q) {
     this.quality = q;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q === 'high' ? 2 : 1.25));
-    this.renderer.shadowMap.enabled = true;
+    if (this.renderer) {
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q === 'high' ? 2 : 1.25));
+      this.renderer.shadowMap.enabled = true;
+    }
     this.resize();
   }
   dispose() {
     this.running = false;
-    cancelAnimationFrame(this.raf);
+    if (this.renderer?.initialized) this.renderer.setAnimationLoop(null);
     this.ro.disconnect();
     this.controls.dispose();
-    this.renderer.dispose();
-    this.renderer.domElement.remove();
+    this.scene.environment?.dispose();
+    this.renderer?.dispose();
+    this.canvas.remove();
   }
 }

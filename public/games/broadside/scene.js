@@ -4,18 +4,58 @@
 // in, water columns on a miss, explosions with shockwaves, debris, fire and smoke on a hit, and
 // ships that roll over and sink. Bloom makes fire and lights glow. The enemy grid sits to the
 // north, your own fleet to the south. "Low" quality drops reflections and bloom.
-import * as THREE from '../../vendor/three/three.module.min.js';
+// Renders with WebGPURenderer, which falls back to WebGL 2 by itself where WebGPU is missing.
+import * as THREE from '../../vendor/three/three.webgpu.min.js';
+import { pass, context, renderOutput, rangeFogFactor, vec4, uniform, vec2, vec3, float, positionWorld, cameraPosition, normalize, reflect, max, dot, pow, length, mix, reflector } from '../../vendor/three/three.tsl.min.js';
 import { RoundedBoxGeometry } from '../../vendor/three/addons/geometries/RoundedBoxGeometry.js';
-import { Water } from '../../vendor/three/addons/objects/Water.js';
-import { Sky } from '../../vendor/three/addons/objects/Sky.js';
-import { EffectComposer } from '../../vendor/three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from '../../vendor/three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from '../../vendor/three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from '../../vendor/three/addons/postprocessing/OutputPass.js';
+import { WaterMesh } from '../../vendor/three/addons/objects/WaterMesh.js';
+import { SkyMesh } from '../../vendor/three/addons/objects/SkyMesh.js';
+import { bloom } from '../../vendor/three/addons/tsl/display/BloomNode.js';
 import { SHIPS, shipCells, COLS } from './engine.js';
 
 export const FLEET_COLORS = ['#2f6fd6', '#c8372d'];
 const OVERLAY = 1; // render layer the water's reflection camera doesn't see
+
+// The reflective sea. WaterMesh's own uniforms (normals, sun, colour, distortion) with a shader
+// that keeps three things the old Water had: its own wave clock (so the swell can run slower than
+// real time), the flatter wave normals (vec3(1.5, 1, 1.5)), and a mirror camera that sees only
+// layer 0, so grid lines and labels aren't reflected.
+class Sea extends WaterMesh {
+  constructor(geometry, options, camera) {
+    super(geometry, options);
+    this.time = uniform(0);
+    const t = this.time;
+    const uv = positionWorld.xz.mul(this.size);
+    const n = this.waterNormals.sample(uv.div(103).add(vec2(t.div(17), t.div(29))))
+      .add(this.waterNormals.sample(uv.div(107).sub(vec2(t.div(-19), t.div(31)))))
+      .add(this.waterNormals.sample(uv.div(vec2(8907, 9803)).add(vec2(t.div(101), t.div(97)))))
+      .add(this.waterNormals.sample(uv.div(vec2(1091, 1027)).sub(vec2(t.div(109), t.div(-113)))))
+      .mul(0.5)
+      .sub(1);
+    const surfaceNormal = normalize(n.xzy.mul(vec3(1.5, 1, 1.5)));
+    const worldToEye = cameraPosition.sub(positionWorld);
+    const eyeDirection = normalize(worldToEye);
+    const sunReflect = normalize(reflect(this.sunDirection.negate(), surfaceNormal));
+    const specularLight = pow(max(0, dot(eyeDirection, sunReflect)), 100).mul(this.sunColor).mul(2);
+    const diffuseLight = max(dot(this.sunDirection, surfaceNormal), 0).mul(this.sunColor).mul(0.5);
+    const distortion = surfaceNormal.xz.mul(float(0.001).add(float(1).div(length(worldToEye)))).mul(this.distortionScale);
+    const mirror = reflector({ resolutionScale: this.resolutionScale });
+    mirror.uvNode = mirror.uvNode.add(distortion);
+    mirror.reflector.getVirtualCamera(camera).layers.set(0);
+    this.add(mirror.target);
+    this.mirror = mirror;
+    const theta = max(dot(eyeDirection, surfaceNormal), 0);
+    const reflectance = pow(float(1).sub(theta), 5).mul(0.98).add(0.02);
+    const scatter = max(0, dot(surfaceNormal, eyeDirection)).mul(this.waterColor);
+    this.material.colorNode = mix(this.sunColor.mul(diffuseLight).mul(0.3).add(scatter), mirror.rgb.add(specularLight), reflectance);
+    this.material.transparent = false; // opaque like the old Water, so tinted patches and foam draw over it
+  }
+  dispose() {
+    this.mirror.dispose();
+    this.material.dispose();
+    this.geometry.dispose();
+  }
+}
 
 const ease = {
   out: (t) => 1 - (1 - t) ** 3,
@@ -408,7 +448,8 @@ class Particles {
   constructor(scene) {
     this.scene = scene;
     this.live = [];
-    this.pool = [];
+    // one pool per kind, so a recycled sprite keeps its texture and blending (no material rebuild)
+    this.pool = { fire: [], flash: [], smoke: [], spray: [] };
     this.tex = {
       fire: glowTexture('rgba(255,240,180,1)', 'rgba(255,120,20,0.7)'),
       flash: glowTexture('rgba(255,255,230,1)', 'rgba(255,170,60,0.8)'),
@@ -418,15 +459,15 @@ class Particles {
   }
   spawn(kind, pos, { vel = [0, 0, 0], life = 1, size = [0.3, 0.6], color = 0xffffff, opacity = 1, gravity = 0, spin = 0 } = {}) {
     if (this.live.length > 900) return;
-    let sp = this.pool.pop();
-    if (!sp) sp = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
     const additive = kind === 'fire' || kind === 'flash';
-    sp.material.map = this.tex[kind];
-    sp.material.blending = additive ? THREE.AdditiveBlending : THREE.NormalBlending;
+    let sp = this.pool[kind].pop();
+    if (!sp) {
+      sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.tex[kind], transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending }));
+      sp.userData.kind = kind;
+    }
     sp.material.color.set(color);
     if (additive) sp.material.color.multiplyScalar(6); // bright enough to glow
     sp.material.rotation = Math.random() * 6;
-    sp.material.needsUpdate = true;
     sp.position.copy(pos);
     sp.renderOrder = additive ? 3 : 2;
     this.scene.add(sp);
@@ -438,7 +479,7 @@ class Particles {
       const k = p.age / p.life;
       if (k >= 1) {
         this.scene.remove(p.sp);
-        this.pool.push(p.sp);
+        this.pool[p.sp.userData.kind].push(p.sp);
         return false;
       }
       p.vel.y -= p.gravity * dt;
@@ -455,9 +496,37 @@ class Particles {
 // ---------------------------------------------------------------------
 // the scene
 // ---------------------------------------------------------------------
-export function createScene(container, { onCell, onHover, quality = 'high' } = {}) {
+// Starts the renderer (asynchronous: WebGPU hands out its device through promises) and builds the
+// sea. WebGPU where the browser has a usable adapter, WebGL 2 otherwise. Asking for an adapter
+// first lets a browser without one go straight to the WebGL 2 backend instead of through the
+// renderer's own fallback (same result, minus a console warning); the renderer still falls back
+// by itself if WebGPU fails later in start-up. Rejects when neither is available.
+export async function createScene(container, options = {}) {
+  let forceWebGL = !navigator.gpu;
+  if (!forceWebGL) {
+    try {
+      forceWebGL = !(await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }));
+    } catch {
+      forceWebGL = true;
+    }
+  }
+  if (forceWebGL) {
+    const gl = document.createElement('canvas').getContext('webgl2');
+    if (!gl) throw new Error('Neither WebGPU nor WebGL 2 is available');
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+  }
+  const renderer = new THREE.WebGPURenderer({ antialias: true, powerPreference: 'high-performance', forceWebGL });
+  try {
+    await renderer.init();
+  } catch (e) {
+    renderer.dispose();
+    throw e;
+  }
+  return buildScene(container, renderer, options);
+}
+
+function buildScene(container, renderer, { onCell, onHover, quality = 'high' } = {}) {
   let high = quality !== 'low';
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, high ? 2 : 1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -468,32 +537,36 @@ export function createScene(container, { onCell, onHover, quality = 'high' } = {
   container.append(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog('#c6d9e5', 50, 190);
+  const fog = new THREE.Fog('#c6d9e5', 50, 190);
+  scene.fog = fog;
 
   // the sun sits behind the viewer's left shoulder: ships lit from the front, deep blue sea ahead
   const sunDir = new THREE.Vector3(-0.55, 0.62, 0.56).normalize();
+  // the sky's clouds drift with TSL's global `time` (seconds since the renderer started)
   const makeSky = () => {
-    const sky = new Sky();
+    const sky = new SkyMesh();
     sky.scale.setScalar(900);
-    const u = sky.material.uniforms;
-    u.turbidity.value = 2;
-    u.rayleigh.value = 2.1;
-    u.mieCoefficient.value = 0.004;
-    u.mieDirectionalG.value = 0.86;
-    u.sunPosition.value.copy(sunDir);
-    u.cloudCoverage.value = 0.24;
-    u.cloudDensity.value = 0.45;
-    u.cloudScale.value = 0.00028;
-    u.cloudSpeed.value = 0.00004;
+    sky.turbidity.value = 2;
+    sky.rayleigh.value = 2.1;
+    sky.mieCoefficient.value = 0.004;
+    sky.mieDirectionalG.value = 0.86;
+    sky.sunPosition.value.copy(sunDir);
+    sky.cloudCoverage.value = 0.24;
+    sky.cloudDensity.value = 0.45;
+    sky.cloudScale.value = 0.00028;
+    sky.cloudSpeed.value = 0.00004;
     return sky;
   };
   const sky = makeSky();
   scene.add(sky);
-  // light the scene with the sky itself
+  // light the scene with the sky itself (a second sky, baked once into a PMREM environment map)
   const pmrem = new THREE.PMREMGenerator(renderer);
   const envScene = new THREE.Scene();
-  envScene.add(makeSky());
+  const envSky = makeSky();
+  envScene.add(envSky);
   const envTarget = pmrem.fromScene(envScene);
+  envSky.geometry.dispose();
+  envSky.material.dispose();
   scene.environment = envTarget.texture;
   scene.environmentIntensity = 0.5;
 
@@ -511,30 +584,39 @@ export function createScene(container, { onCell, onHover, quality = 'high' } = {
   scene.add(flashLight);
 
   // ocean: real reflections on High, a cheaper shiny surface on Low
+  // The reflective sea samples its normals at world scale (the texture's repeat must stay 1:
+  // TSL texture nodes honour texture.repeat, the old GLSL Water ignored it). The Low surface
+  // tiles its own copy 18 times.
   const normals = waterNormals();
-  normals.repeat.set(18, 18);
+  const lowNormals = normals.clone();
+  lowNormals.repeat.set(18, 18);
   let water = null;
   function makeWater() {
     if (water) {
       scene.remove(water);
-      water.material.dispose();
-      water.geometry.dispose();
+      if (water.isWaterMesh) water.dispose();
+      else {
+        water.material.dispose();
+        water.geometry.dispose();
+      }
     }
     const geo = new THREE.PlaneGeometry(600, 600);
     if (high) {
-      water = new Water(geo, {
-        textureWidth: 512,
-        textureHeight: 512,
-        waterNormals: normals,
-        sunDirection: sunDir.clone(),
-        sunColor: 0xfff2dc,
-        waterColor: 0x0d4f6e,
-        distortionScale: 3.6,
-        fog: true,
-      });
-      water.material.uniforms.size.value = 2.2;
+      water = new Sea(
+        geo,
+        {
+          resolutionScale: 0.5,
+          waterNormals: normals,
+          sunDirection: sunDir.clone(),
+          sunColor: 0xfff2dc,
+          waterColor: 0x0d4f6e,
+          distortionScale: 3.6,
+          size: 2.2,
+        },
+        camera,
+      );
     } else {
-      water = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({ color: '#1b5f86', roughness: 0.1, metalness: 0.05, normalMap: normals, normalScale: new THREE.Vector2(0.4, 0.4), clearcoat: 1, clearcoatRoughness: 0.1 }));
+      water = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({ color: '#1b5f86', roughness: 0.1, metalness: 0.05, normalMap: lowNormals, normalScale: new THREE.Vector2(0.4, 0.4), clearcoat: 1, clearcoatRoughness: 0.1 }));
       water.receiveShadow = true;
     }
     water.rotation.x = -Math.PI / 2;
@@ -542,21 +624,23 @@ export function createScene(container, { onCell, onHover, quality = 'high' } = {
   }
   makeWater();
 
-  // bloom makes fire, flashes and lamps glow (High only)
-  let composer = null;
-  function makeComposer() {
-    composer?.dispose();
-    composer = null;
+  // bloom makes fire, flashes and lamps glow (High only): a 4x MSAA half-float scene pass plus
+  // bloom, tone mapped and converted to sRGB once at the end (the pipeline's output transform).
+  // The pipeline follows the renderer's size and pixel ratio by itself.
+  let pipeline = null;
+  let pipeNodes = [];
+  function makePipeline() {
+    pipeline?.dispose();
+    pipeNodes.forEach((n) => n.dispose());
+    pipeline = null;
+    pipeNodes = [];
     if (!high) return;
-    const w = container.clientWidth || 1, h = container.clientHeight || 1;
-    const target = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: 4 });
-    composer = new EffectComposer(renderer, target);
-    composer.setPixelRatio(renderer.getPixelRatio());
-    composer.setSize(w, h);
-    composer.addPass(new RenderPass(scene, camera));
+    const scenePass = pass(scene, camera, { samples: 4 });
+    const color = scenePass.getTextureNode('output');
     // only things brighter than sunlit white (fire, flashes, lamps) cross the glow threshold
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.75, 0.5, 4.5));
-    composer.addPass(new OutputPass());
+    const glow = bloom(color, 0.75, 0.5, 4.5);
+    pipeline = new THREE.RenderPipeline(renderer, color.add(glow));
+    pipeNodes = [glow, scenePass];
   }
 
   // distant islands for depth
@@ -1042,26 +1126,21 @@ export function createScene(container, { onCell, onHover, quality = 'high' } = {
     camera.aspect = w / Math.max(1, h);
     camera.updateProjectionMatrix();
     renderer.setSize(w, h, false);
-    composer?.setSize(w, h);
     if (!anims.some((a) => a.camera)) setFocus(focus, false);
   });
   ro.observe(container);
 
   // ---------- loop ----------
-  let raf = 0;
   const timer = new THREE.Timer();
   const smokeAt = new THREE.Vector3();
   function frame(ts) {
-    if (destroyed) return;
-    raf = requestAnimationFrame(frame);
-    if (document.hidden) return;
+    if (destroyed || document.hidden) return;
     timer.update(ts);
     const t = timer.getElapsed();
     const dt = Math.min(0.05, timer.getDelta());
     const now = performance.now();
-    if (high) water.material.uniforms.time.value += dt * 0.55;
-    else normals.offset.set(t * 0.01, t * 0.006);
-    sky.material.uniforms.time.value = t;
+    if (high) water.time.value += dt * 0.55;
+    else lowNormals.offset.set(t * 0.01, t * 0.006);
     MAT.foam.opacity = 0.45 + Math.sin(t * 1.7) * 0.15;
     for (const B of boards) {
       for (const m of B.buoys) {
@@ -1128,7 +1207,7 @@ export function createScene(container, { onCell, onHover, quality = 'high' } = {
     camera.position.x += Math.sin(t * 0.21) * 0.12;
     camera.position.y += Math.sin(t * 0.33) * 0.06;
     camera.lookAt(camState.look);
-    if (composer) composer.render(dt);
+    if (pipeline) pipeline.render();
     else renderer.render(scene, camera);
   }
   {
@@ -1137,9 +1216,38 @@ export function createScene(container, { onCell, onHover, quality = 'high' } = {
     camera.updateProjectionMatrix();
     renderer.setSize(w, h, false);
   }
-  makeComposer();
+  // Two ways to finish a frame, as under WebGL:
+  // - High: the bloom pipeline renders linear HDR and tone-maps + sRGB-encodes once at the end.
+  // - Low: no pipeline. Every material tone-maps (ACES; toneMapped: false skips it), encodes to
+  //   sRGB and then fogs toward the sRGB fog colour as it draws, the way the WebGL renderer drew
+  //   straight to the screen. With NoToneMapping + linear output on the renderer there is no
+  //   half-float framebuffer and no full-screen output pass: anti-aliasing goes straight to the
+  //   canvas, and see-through layers blend in display space as they used to.
+  // Off-screen renders (shadow maps, the sea's reflection) stay linear in both.
+  const linearContext = renderer.contextNode;
+  const fogSRGB = uniform(fog.color.clone().convertLinearToSRGB());
+  const directContext = context({
+    ...linearContext.getFlowContextData(),
+    getOutput: (color, builder) => {
+      if (builder.renderer.getRenderTarget() !== null) return color;
+      const mat = builder.material;
+      const out = renderOutput(color, mat?.toneMapped === false ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping, THREE.SRGBColorSpace);
+      out.premultipliedAlpha = !!mat?.premultipliedAlpha;
+      if (!mat || mat.fog === false) return out;
+      return vec4(mix(out.rgb, fogSRGB, rangeFogFactor(fog.near, fog.far)), out.a);
+    },
+  });
+  function applyOutputStyle() {
+    // swapping the context node changes every render object's cache key, so materials rebuild once
+    renderer.contextNode = high ? linearContext : directContext;
+    renderer.toneMapping = high ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+    renderer.outputColorSpace = high ? THREE.SRGBColorSpace : THREE.LinearSRGBColorSpace;
+    scene.fog = high ? fog : null; // on Low the fog is added in the materials' output instead
+  }
+  applyOutputStyle();
+  makePipeline(); // after applyOutputStyle: the pipeline takes the renderer's tone mapping when built
   buildBoards(10);
-  raf = requestAnimationFrame(frame);
+  renderer.setAnimationLoop(frame);
 
   return {
     get quality() {
@@ -1152,11 +1260,10 @@ export function createScene(container, { onCell, onHover, quality = 'high' } = {
       high = next;
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, high ? 2 : 1.5));
       renderer.setSize(container.clientWidth, container.clientHeight, false);
-      sun.shadow.mapSize.set(high ? 2048 : 1024, high ? 2048 : 1024);
-      sun.shadow.map?.dispose();
-      sun.shadow.map = null;
+      sun.shadow.mapSize.set(high ? 2048 : 1024, high ? 2048 : 1024); // the shadow map resizes itself
       makeWater();
-      makeComposer();
+      applyOutputStyle();
+      makePipeline();
     },
     setSize(size) {
       if (size === N && boards.length) return;
@@ -1206,16 +1313,18 @@ export function createScene(container, { onCell, onHover, quality = 'high' } = {
     setGhost,
     destroy() {
       destroyed = true;
-      cancelAnimationFrame(raf);
+      renderer.setAnimationLoop(null);
       ro.disconnect();
       el.removeEventListener('pointerdown', onDown);
       el.removeEventListener('pointerup', onUp);
       el.removeEventListener('pointermove', onMove);
-      composer?.dispose();
-      water?.material.dispose();
+      pipeline?.dispose();
+      pipeNodes.forEach((n) => n.dispose());
+      if (water?.isWaterMesh) water.dispose();
+      else water?.material.dispose();
       envTarget.dispose();
-      renderer.dispose();
       pmrem.dispose();
+      renderer.dispose();
       el.remove();
     },
   };

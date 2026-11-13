@@ -33,13 +33,20 @@ export function mount(ctx) {
   try {
     table = new Table3D(stage, { quality: ctx.prefs.get('eg-quality') || 'high' });
   } catch (err) {
-    loading.replaceChildren(h('p', 'This device could not start 3D graphics (WebGL). Try another browser.'));
+    loading.replaceChildren(h('p', 'This device could not start 3D graphics (WebGPU or WebGL). Try another browser.'));
     console.error(err);
     return { destroy() { root.remove(); } };
   }
   root.table = table;
   root.debug = () => ({ busy, waiting, queue: queue.length, tweens: table.tweens.map((t) => [t.t0, t.ms]), hidden: document.hidden, last: table.last, now: performance.now(), phase: view?.phase, step });
-  requestAnimationFrame(() => setTimeout(() => loading.classList.add('gone'), 350));
+  // the GPU starts up asynchronously: lift the curtain after the first frames, or explain why not
+  table.ready.then(
+    () => requestAnimationFrame(() => setTimeout(() => loading.classList.add('gone'), 350)),
+    (err) => {
+      loading.replaceChildren(h('p', 'This device could not start 3D graphics (WebGPU or WebGL). Try another browser.'));
+      console.error(err);
+    },
+  );
 
   let view = null;
   let seats = [];
