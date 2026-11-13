@@ -7,7 +7,7 @@ import { SEAT_NAMES } from './art.js';
 
 export default {
   id: 'hexstead',
-  version: '1.9', // shown on the home tile; bump it whenever you improve the game
+  version: '2.0', // shown on the home tile; bump it whenever you improve the game
   name: 'Hexstead',
   tagline: 'Settle a 3D hex island. Harvest, trade, build barns.',
   description:

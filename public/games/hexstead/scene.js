@@ -1,7 +1,7 @@
 // Hexstead 3D board (three.js). Everything is modelled in code — no image or model files:
-// beveled terrain tiles with painted tops, pine forests, sheep pastures, wheat fields, clay pits
-// with brick stacks, snowy quarry peaks, harbors with piers and sailboats, painted wooden
+// beveled terrain tiles with painted tops, harbors with piers and sailboats, painted wooden
 // homesteads, barns with silos, trails, a bandit in a wide-brim hat, and dice that tumble.
+// The scenery on the tiles (trees, sheep, wheat, kilns, quarries…) comes from props.js.
 import * as THREE from '../../vendor/three/three.webgpu.min.js';
 import { context, renderOutput, vec3, vec4, mix, texture, screenUV, uniform, rangeFogFactor } from '../../vendor/three/three.tsl.min.js';
 import { OrbitControls } from '../../vendor/three/addons/controls/OrbitControls.js';
@@ -9,6 +9,7 @@ import { RoomEnvironment } from '../../vendor/three/addons/environments/RoomEnvi
 import { RoundedBoxGeometry } from '../../vendor/three/addons/geometries/RoundedBoxGeometry.js';
 import { board as islandGeometry, PIPS } from './geometry.js';
 import { SEAT_COLORS, RES_ICON, RES_COLORS, svgUrl } from './art.js';
+import { makeKit, decorate, Batcher } from './props.js';
 
 const BASE = 0.12; // top of the sandy island
 const TILE_H = 0.16;
@@ -386,219 +387,7 @@ function iconTexture(svg, ring) {
   return t;
 }
 
-// ---------------------------------------------------------------------
-// shared geometry for the decorations (instanced)
-// ---------------------------------------------------------------------
-function makeKit() {
-  const g = {
-    trunk: new THREE.CylinderGeometry(0.022, 0.032, 0.12, 6).translate(0, 0.06, 0),
-    cone1: new THREE.ConeGeometry(0.13, 0.22, 7).translate(0, 0.19, 0),
-    cone2: new THREE.ConeGeometry(0.1, 0.18, 7).translate(0, 0.28, 0),
-    cone3: new THREE.ConeGeometry(0.065, 0.14, 7).translate(0, 0.36, 0),
-    sheepBody: new THREE.SphereGeometry(0.07, 12, 9).scale(1.35, 0.95, 1).translate(0, 0.085, 0),
-    sheepHead: new THREE.SphereGeometry(0.036, 10, 8).scale(1.2, 1, 0.9).translate(0.098, 0.1, 0),
-    sheepLeg: new THREE.CylinderGeometry(0.011, 0.011, 0.06, 5).translate(0, 0.03, 0),
-    stalk: new THREE.ConeGeometry(0.022, 0.13, 5).translate(0, 0.065, 0),
-    bale: new THREE.CylinderGeometry(0.06, 0.06, 0.1, 14).rotateZ(Math.PI / 2).translate(0, 0.06, 0),
-    mound: new THREE.SphereGeometry(0.15, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.45, 1),
-    brick: new THREE.BoxGeometry(0.06, 0.028, 0.03).translate(0, 0.014, 0),
-    kiln: new THREE.CylinderGeometry(0.07, 0.09, 0.14, 12).translate(0, 0.07, 0),
-    kilnTop: new THREE.ConeGeometry(0.075, 0.08, 12).translate(0, 0.18, 0),
-    peak: new THREE.IcosahedronGeometry(0.24, 0).scale(1, 1.55, 1).translate(0, 0.12, 0),
-    snow: new THREE.IcosahedronGeometry(0.105, 0).scale(1, 1.1, 1),
-    boulder: new THREE.DodecahedronGeometry(0.05, 0),
-    block: new THREE.BoxGeometry(0.07, 0.05, 0.05).translate(0, 0.025, 0),
-    dune: new THREE.SphereGeometry(0.22, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.3, 0.28, 0.8),
-    cactus: new THREE.CylinderGeometry(0.024, 0.028, 0.2, 8).translate(0, 0.1, 0),
-    cactusArm: new THREE.CylinderGeometry(0.016, 0.016, 0.08, 7).translate(0, 0.04, 0),
-    bush: new THREE.IcosahedronGeometry(0.045, 1),
-    post: new THREE.BoxGeometry(0.014, 0.07, 0.014).translate(0, 0.035, 0),
-    // leafy broadleaf trees between the pines
-    leafTrunk: new THREE.CylinderGeometry(0.018, 0.026, 0.16, 6).translate(0, 0.08, 0),
-    canopy: new THREE.IcosahedronGeometry(0.1, 1).scale(1, 0.9, 1).translate(0, 0.22, 0),
-    canopyTop: new THREE.IcosahedronGeometry(0.07, 1).translate(0.03, 0.3, -0.02),
-    // pasture wildflowers
-    flower: new THREE.IcosahedronGeometry(0.014, 0).translate(0, 0.012, 0),
-  };
-  const m = {
-    trunk: std('#6b4423'),
-    pine1: std('#2a6b3a', { flatShading: true }),
-    pine2: std('#1f5a31', { flatShading: true }),
-    pine3: std('#3a8247', { flatShading: true }),
-    leaf1: std('#4f9a3c', { flatShading: true }),
-    leaf2: std('#6aab3e', { flatShading: true }),
-    leafAutumn: std('#d98b2b', { flatShading: true }),
-    wool: std('#f7f3e8', { roughness: 1 }),
-    sheepDark: std('#2e2824'),
-    flowerWhite: std('#fbf8ef', { roughness: 0.7 }),
-    flowerYellow: std('#ffd23f', { roughness: 0.7 }),
-    flowerPink: std('#f08bb4', { roughness: 0.7 }),
-    wheat: std('#f0bf3a', { roughness: 0.7 }),
-    wheatRipe: std('#d99a22', { roughness: 0.7 }),
-    bale: std('#dcb45a'),
-    clay: std('#be5a32', { roughness: 0.95 }),
-    brick: std('#b0452a', { roughness: 0.85 }),
-    kiln: std('#94593a'),
-    kilnTop: std('#4a3328'),
-    rock: std('#8b95a1', { flatShading: true, roughness: 0.9 }),
-    rockDark: std('#69737f', { flatShading: true, roughness: 0.9 }),
-    snow: std('#f7fafc', { flatShading: true, roughness: 0.6 }),
-    block: std('#b9c1ca'),
-    sand: std('#ead09c', { roughness: 1 }),
-    cactus: std('#4f8a43', { roughness: 0.7 }),
-    redRock: std('#c06f45', { flatShading: true }),
-    bush: std('#4f9a3c', { flatShading: true }),
-    wood: std('#8a5b30', { roughness: 0.85 }),
-  };
-  return { g, m };
-}
-
-class Batcher {
-  constructor() {
-    this.sets = new Map();
-  }
-  add(geo, mat, matrix) {
-    const key = geo.uuid + mat.uuid;
-    if (!this.sets.has(key)) this.sets.set(key, { geo, mat, list: [] });
-    this.sets.get(key).list.push(matrix.clone());
-  }
-  build(parent) {
-    for (const { geo, mat, list } of this.sets.values()) {
-      const mesh = new THREE.InstancedMesh(geo, mat, list.length);
-      list.forEach((mx, i) => mesh.setMatrixAt(i, mx));
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      parent.add(mesh);
-    }
-  }
-}
-
-const M4 = new THREE.Matrix4();
-const Q = new THREE.Quaternion();
-const V = new THREE.Vector3();
-const S3 = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
-function mat(x, y, z, rotY = 0, s = 1, sy = s) {
-  Q.setFromAxisAngle(UP, rotY);
-  return M4.compose(V.set(x, y, z), Q, S3.set(s, sy, s));
-}
-
-// spots on a hex away from the number token
-function scatter(rand, n, { inner = 0.36, outer = 0.74, minGap = 0.15 } = {}) {
-  const out = [];
-  for (let tries = 0; out.length < n && tries < n * 40; tries++) {
-    const a = rand() * Math.PI * 2;
-    const d = inner + Math.sqrt(rand()) * (outer - inner);
-    const x = Math.cos(a) * d;
-    const z = Math.sin(a) * d;
-    // stay inside the hexagon
-    const ang = Math.abs((((Math.atan2(z, x) * 180) / Math.PI + 360) % 60) - 30);
-    const limit = (0.86 * Math.cos(Math.PI / 6)) / Math.cos((ang * Math.PI) / 180);
-    if (Math.hypot(x, z) > limit) continue;
-    if (out.some((p) => Math.hypot(p[0] - x, p[1] - z) < minGap)) continue;
-    out.push([x, z]);
-  }
-  return out;
-}
-
-function decorate(b, kit, type, hx, seed) {
-  const { g, m } = kit;
-  const r = seeded(seed);
-  const X = hx.x;
-  const Z = hx.z;
-  const y = TOP - 0.005;
-  if (type === 'forest') {
-    for (const [x, z] of scatter(r, 10, { minGap: 0.16 })) {
-      const s = 0.8 + r() * 0.45;
-      const rot = r() * 6;
-      if (r() < 0.3) {
-        // a broadleaf tree, now and then turning
-        const lm = r() < 0.18 ? m.leafAutumn : r() < 0.5 ? m.leaf1 : m.leaf2;
-        b.add(g.leafTrunk, m.trunk, mat(X + x, y, Z + z, rot, s));
-        b.add(g.canopy, lm, mat(X + x, y, Z + z, rot, s));
-        b.add(g.canopyTop, lm, mat(X + x, y, Z + z, rot, s));
-        continue;
-      }
-      b.add(g.trunk, m.trunk, mat(X + x, y, Z + z, rot, s));
-      const pm = [m.pine1, m.pine2, m.pine3][Math.floor(r() * 3)];
-      b.add(g.cone1, pm, mat(X + x, y, Z + z, rot, s));
-      b.add(g.cone2, pm, mat(X + x, y, Z + z, rot, s));
-      b.add(g.cone3, pm, mat(X + x, y, Z + z, rot, s));
-    }
-  } else if (type === 'pasture') {
-    // wildflowers in little clumps
-    for (const [x, z] of scatter(r, 7, { inner: 0.34, outer: 0.8, minGap: 0.12 })) {
-      const fm = [m.flowerWhite, m.flowerYellow, m.flowerPink][Math.floor(r() * 3)];
-      for (let k = 0; k < 4; k++) b.add(g.flower, fm, mat(X + x + (r() - 0.5) * 0.07, y, Z + z + (r() - 0.5) * 0.07, r() * 6, 0.8 + r() * 0.6));
-    }
-    for (const [x, z] of scatter(r, 4, { minGap: 0.22 })) {
-      const rot = r() * 6;
-      const s = 0.9 + r() * 0.25;
-      b.add(g.sheepBody, m.wool, mat(X + x, y, Z + z, rot, s));
-      b.add(g.sheepHead, m.sheepDark, mat(X + x, y, Z + z, rot, s));
-      for (const [lx, lz] of [[0.05, 0.035], [0.05, -0.035], [-0.05, 0.035], [-0.05, -0.035]]) {
-        const c = Math.cos(rot), sn = Math.sin(rot);
-        b.add(g.sheepLeg, m.sheepDark, mat(X + x + (lx * c + lz * sn) * s, y, Z + z + (-lx * sn + lz * c) * s, rot, s));
-      }
-    }
-    for (const [x, z] of scatter(r, 5, { minGap: 0.1 })) b.add(g.bush, m.bush, mat(X + x, y + 0.02, Z + z, r() * 6, 0.7 + r() * 0.6));
-    // a short fence
-    const fa = r() * Math.PI * 2;
-    for (let i = 0; i < 5; i++) {
-      const a = fa + i * 0.16;
-      b.add(g.post, m.wood, mat(X + Math.cos(a) * 0.7, y, Z + Math.sin(a) * 0.7, -a));
-    }
-  } else if (type === 'fields') {
-    const rot = 0.35;
-    const c = Math.cos(rot), sn = Math.sin(rot);
-    for (let i = -6; i <= 6; i++)
-      for (let j = -6; j <= 6; j++) {
-        const u = i * 0.11, w = j * 0.07;
-        const x = u * c - w * sn + (r() - 0.5) * 0.02;
-        const z = u * sn + w * c + (r() - 0.5) * 0.02;
-        const d = Math.hypot(x, z);
-        if (d < 0.36 || d > 0.72) continue;
-        b.add(g.stalk, r() < 0.3 ? m.wheatRipe : m.wheat, mat(X + x, y, Z + z, r() * 6, 0.8 + r() * 0.5));
-      }
-    for (const [x, z] of scatter(r, 2, { inner: 0.45, outer: 0.7, minGap: 0.3 })) b.add(g.bale, m.bale, mat(X + x, y, Z + z, r() * 6));
-  } else if (type === 'clay') {
-    for (const [x, z] of scatter(r, 3, { minGap: 0.28 })) b.add(g.mound, m.clay, mat(X + x, y, Z + z, r() * 6, 0.8 + r() * 0.5));
-    // brick stacks
-    for (const [x, z] of scatter(r, 2, { inner: 0.4, outer: 0.65, minGap: 0.3 })) {
-      const rot = r() * 3;
-      const c = Math.cos(rot), sn = Math.sin(rot);
-      for (let lv = 0; lv < 3; lv++)
-        for (let k = 0; k < 2; k++)
-          for (let q = 0; q < 2; q++) {
-            const lx = (k - 0.5) * 0.065, lz = (q - 0.5) * 0.034;
-            b.add(g.brick, m.brick, mat(X + x + lx * c + lz * sn, y + lv * 0.03, Z + z - lx * sn + lz * c, -rot));
-          }
-    }
-    const [kx, kz] = scatter(r, 1, { inner: 0.45, outer: 0.65 })[0] || [0.5, 0];
-    b.add(g.kiln, m.kiln, mat(X + kx, y, Z + kz));
-    b.add(g.kilnTop, m.kilnTop, mat(X + kx, y, Z + kz));
-  } else if (type === 'quarry') {
-    const peaks = scatter(r, 3, { inner: 0.42, outer: 0.62, minGap: 0.36 });
-    peaks.forEach(([x, z], i) => {
-      const s = 0.85 + r() * 0.4 - i * 0.08;
-      const rot = r() * 6;
-      b.add(g.peak, i % 2 ? m.rockDark : m.rock, mat(X + x, y, Z + z, rot, s));
-      b.add(g.snow, m.snow, mat(X + x, y + 0.12 + 0.24 * 1.55 * s - 0.09 * s, Z + z, rot, s));
-    });
-    for (const [x, z] of scatter(r, 6, { minGap: 0.08 })) b.add(g.boulder, m.rockDark, mat(X + x, y + 0.02, Z + z, r() * 6, 0.6 + r() * 0.8));
-    for (let i = 0; i < 3; i++) b.add(g.block, m.block, mat(X - 0.42 + i * 0.075, y, Z + 0.45, 0.1));
-  } else if (type === 'desert') {
-    for (const [x, z] of scatter(r, 3, { minGap: 0.3, inner: 0.3 })) b.add(g.dune, m.sand, mat(X + x, y, Z + z, r() * 6, 0.8 + r() * 0.4));
-    for (const [x, z] of scatter(r, 2, { minGap: 0.3, inner: 0.45 })) {
-      b.add(g.cactus, m.cactus, mat(X + x, y, Z + z));
-      Q.setFromAxisAngle(new THREE.Vector3(0, 0, 1), -0.9);
-      b.add(g.cactusArm, m.cactus, M4.compose(V.set(X + x + 0.02, y + 0.09, Z + z), Q, S3.set(1, 1, 1)));
-      Q.setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.9);
-      b.add(g.cactusArm, m.cactus, M4.compose(V.set(X + x - 0.02, y + 0.12, Z + z), Q, S3.set(1, 1, 1)));
-    }
-    for (const [x, z] of scatter(r, 4, { minGap: 0.1 })) b.add(g.boulder, m.redRock, mat(X + x, y + 0.015, Z + z, r() * 6, 0.7 + r() * 0.5));
-  }
-}
 
 // ---------------------------------------------------------------------
 // player pieces
@@ -759,15 +548,18 @@ export function createScene(container, { onPick, onHover } = {}) {
   controls.target.set(0, 0, 0.9);
 
   // lights
-  scene.add(new THREE.HemisphereLight('#d6ecff', '#6b5a3a', 0.85));
-  const sun = new THREE.DirectionalLight('#fff0d4', 2.6);
-  sun.position.set(-6, 12, 6);
+  // a warm late-morning sun, a little lower than overhead so trees, sheep and peaks throw
+  // longer shadows that show their shape; sky-blue from above, earthy bounce from below
+  const SUN_AT = new THREE.Vector3(-7, 10.5, 5.5);
+  scene.add(new THREE.HemisphereLight('#d2e8ff', '#6e5d3c', 0.8));
+  const sun = new THREE.DirectionalLight('#ffe8c2', 2.75);
+  sun.position.copy(SUN_AT);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, { left: -7.5, right: 7.5, top: 7.5, bottom: -7.5, near: 2, far: 30 });
+  sun.shadow.mapSize.set(3072, 3072);
+  Object.assign(sun.shadow.camera, { left: -6.4, right: 6.4, top: 6.4, bottom: -6.4, near: 2, far: 30 });
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.02;
-  sun.shadow.radius = 1.7; // same penumbra width as the old PCFSoftShadowMap
+  sun.shadow.radius = 1.4; // soft edges, but tight enough for a sheep's or a stalk's shadow
   scene.add(sun);
   // a soft, cool fill from the far side so the shaded faces of peaks, trees and barns keep
   // their colour instead of going muddy (no shadows: it only lifts)
@@ -837,6 +629,24 @@ export function createScene(container, { onPick, onHover } = {}) {
   scene.add(fx);
 
   const kit = makeKit();
+  // kiln smoke: a few soft puffs per chimney, cycling up and drifting with the breeze
+  const smokeTex = canvasTexture(64, 64, (g, w) => {
+    const gr = g.createRadialGradient(w / 2, w / 2, 2, w / 2, w / 2, w / 2);
+    gr.addColorStop(0, 'rgba(255,255,255,0.9)');
+    gr.addColorStop(0.5, 'rgba(255,255,255,0.45)');
+    gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, w, w);
+  });
+  let smoke = [];
+  function addSmoke([x, y, z]) {
+    const ph = Math.random();
+    for (let i = 0; i < 6; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: '#ece7df', transparent: true, depthWrite: false, opacity: 0 }));
+      board.add(sp);
+      smoke.push({ sp, x, y, z, ph: ph + i / 6 });
+    }
+  }
   const pieceGeos = makePieceGeos();
   const seatMats = SEAT_COLORS.map(pieceMaterials);
   const hexShape = new THREE.Shape();
@@ -874,6 +684,7 @@ export function createScene(container, { onPick, onHover } = {}) {
     ({ HEXES, VERTS, EDGES, HARBOR_SLOTS } = g);
     fitIsland(g);
     board.clear();
+    smoke = [];
     tiles = [];
     tokens = [];
     boats = [];
@@ -896,7 +707,7 @@ export function createScene(container, { onPick, onHover } = {}) {
       tile.userData = { kind: 'hex', id: i };
       board.add(tile);
       tiles.push(tile);
-      decorate(batch, kit, h.t, hx, i * 97 + 13);
+      for (const p of decorate(batch, kit, h.t, hx, i * 97 + 13, TOP).smoke) addSmoke(p);
       if (h.n) {
         // a little self-light keeps the numbers crisp and cream-white under the tone mapping
         const face = tokenTexture(h.n);
@@ -1217,11 +1028,11 @@ export function createScene(container, { onPick, onHover } = {}) {
     dice.forEach((d, i) => d.position.copy(DICE_REST[i]));
     const next = Math.max(rx, rz);
     const cam = sun.shadow.camera;
-    Object.assign(cam, { left: -7.5 * next, right: 7.5 * next, top: 7.5 * next, bottom: -7.5 * next, far: 30 * next });
+    Object.assign(cam, { left: -6.4 * next, right: 6.4 * next, top: 6.4 * next, bottom: -6.4 * next, far: 30 * next });
     cam.updateProjectionMatrix();
-    sun.position.set(-6, 12, 6).multiplyScalar(Math.max(1, next));
+    sun.position.copy(SUN_AT).multiplyScalar(Math.max(1, next));
     // the WebGPU shadow node resizes its map to mapSize on the next frame
-    sun.shadow.mapSize.set(next > 1.1 ? 3072 : 2048, next > 1.1 ? 3072 : 2048);
+    sun.shadow.mapSize.set(next > 1.1 ? 4096 : 3072, next > 1.1 ? 4096 : 3072);
     controls.maxDistance = 24 * next;
     fogNear.value = 22 * next;
     fogFar.value = 52 * next;
@@ -1342,6 +1153,13 @@ export function createScene(container, { onPick, onHover } = {}) {
     const t = timer.update(now).getElapsed();
     normals.offset.set(t * 0.012, t * 0.007);
     foam.material.opacity = 0.35 + Math.sin(t * 1.3) * 0.15;
+    for (const s of smoke) {
+      const a = (t * 0.16 + s.ph) % 1;
+      s.sp.position.set(s.x + a * 0.14, s.y + a * 0.55, s.z - a * 0.05);
+      const sc = 0.045 + a * 0.17;
+      s.sp.scale.set(sc, sc, 1);
+      s.sp.material.opacity = Math.sin(Math.PI * Math.sqrt(a)) * 0.42 * (1 - a * 0.5);
+    }
     for (const b of boats) {
       b.position.y = Math.sin(t * 1.4 + b.userData.phase) * 0.025;
       b.rotation.z = Math.sin(t * 1.1 + b.userData.phase) * 0.06;
