@@ -57,6 +57,7 @@ export function mount(ctx) {
   let panelMode = null; // 'money' sub-panel during a roll turn
   let stockQty = 100;
   let statementSeat = null;
+  let summaryOpen = false;
   let waiting = false;
 
   const me = () => view?.seat;
@@ -193,6 +194,8 @@ export function mount(ctx) {
     if (v.phase === 'over' && prev.phase !== 'over') {
       (v.winner === me() ? sound.win : sound.good)();
       table.burst(table.pawns[v.winner].position.clone().setY(1.5), { count: 160, color: true, power: 1.4 });
+      // let the celebration play, then show how everyone's game went
+      setTimeout(() => view?.phase === 'over' && openSummary(), 2600 * speed);
     }
     if (ev && v.turn !== prev.turn && v.turn === me() && v.phase === 'roll') sound.turn();
     table.setActive(E.actors(v)[0]);
@@ -224,6 +227,7 @@ export function mount(ctx) {
     renderTools();
     renderEcon();
     if (statementSeat != null) renderStatement(statementSeat);
+    if (summaryOpen) view.phase === 'over' ? renderSummary() : closeStatement();
     focusFirst();
   }
 
@@ -361,6 +365,7 @@ export function mount(ctx) {
           'div.eg-actions',
           ctx.rematch(),
           btn('Game Center', () => ctx.leave(), { back: true }),
+          btn('Summary', () => openSummary()),
           btn('Statements', () => openStatement(me() ?? w)),
         ),
       );
@@ -583,6 +588,7 @@ export function mount(ctx) {
   // financial statement
   // ---------------------------------------------------------------------------------------------
   function openStatement(seat) {
+    summaryOpen = false;
     statementSeat = seat;
     renderStatement(seat);
     sheet.classList.add('open');
@@ -591,9 +597,94 @@ export function mount(ctx) {
   }
   function closeStatement() {
     statementSeat = null;
+    summaryOpen = false;
     sheet.classList.remove('open');
     focusFirst();
   }
+  // ---------------------------------------------------------------------------------------------
+  // end-of-game summary: how the game went for me, and where everyone finished
+  // ---------------------------------------------------------------------------------------------
+  function openSummary() {
+    if (!view || view.phase !== 'over') return;
+    statementSeat = null;
+    summaryOpen = true;
+    renderSummary();
+    sheet.classList.add('open');
+    sound.slide();
+    setTimeout(() => {
+      sheet.querySelector('.eg-summary-actions button')?.focus({ preventScroll: true });
+      sheet.querySelector('.eg-summary').scrollTop = 0; // start at the headline, not the buttons
+    }, 50);
+  }
+  function renderSummary() {
+    const w = view.winner;
+    const mine = me();
+    const turns = view.endRound ?? Math.min(view.round, view.maxRounds ?? view.round);
+    const free = (p) => p.track === 'free';
+    const pct = (p) => Math.round(Math.min(1, E.passive(p) / Math.max(1, E.expenses(p))) * 100);
+    const passiveAtEscape = (p) => p.escapedPassive ?? E.passive(p);
+    const stat = (label, val) => h('div', h('small', label), h('strong', val));
+
+    let story = null;
+    const p = mine != null ? view.players[mine] : null;
+    if (p) {
+      const nw = stat('Net worth', money(E.netWorth(p)));
+      story = free(p)
+        ? h(
+            'div.eg-escape.free',
+            h('p.eg-summary-lead', `You broke free on turn ${p.escapedRound} with ${money(passiveAtEscape(p))}/mo passive income.`),
+            stat('Broke free', `Turn ${p.escapedRound}`),
+            stat('Passive income then', `${money(passiveAtEscape(p))}/mo`),
+            stat('Freedom income now', `${money(p.freeFlow)}/mo`),
+            p.freeFlow > p.freeStart ? stat('New income added', `${money(p.freeFlow - p.freeStart)}/mo`) : null,
+            nw,
+          )
+        : h(
+            'div.eg-escape',
+            h('p.eg-summary-lead', `You were still in the Grind after ${turns} turns. Your passive income covered ${pct(p)}% of your expenses.`),
+            stat('Passive income', `${money(E.passive(p))}/mo`),
+            stat('Expenses', `${money(E.expenses(p))}/mo`),
+            stat('Still needed', `${money(Math.max(0, E.expenses(p) - E.passive(p)))}/mo`),
+            nw,
+            h('div.eg-meter.big', h('i', { style: { width: `${pct(p)}%` } })),
+          );
+    }
+
+    const order = [...view.players].sort((a, b) => (a.seat === w ? -1 : b.seat === w ? 1 : E.rank(b) - E.rank(a)));
+    const standings = order.map((q, i) =>
+      h(
+        `div.eg-standing${q.seat === mine ? '.me' : ''}`,
+        h('span.eg-place', `${i + 1}`),
+        h('span.eg-who', h('i', { style: { background: PLAYER_COLORS[q.seat] } }), name(q.seat)),
+        h(
+          'span.eg-how',
+          q.seat === w ? h('b', 'Winner · ') : null,
+          free(q) ? `Free on turn ${q.escapedRound} with ${money(passiveAtEscape(q))}/mo passive` : `In the Grind · ${pct(q)}% of the way`,
+        ),
+        h('span.eg-nw', money(E.netWorth(q))),
+      ),
+    );
+
+    sheet.replaceChildren(
+      h(
+        'div.eg-sheet-card.eg-summary',
+        h('div.eg-tabs', h('button.eg-close', { onclick: closeStatement, dataset: { back: '1' }, 'aria-label': 'Close' }, '×')),
+        h('h2', { style: { color: PLAYER_COLORS[w] } }, w === mine ? 'You win!' : `${name(w)} wins`),
+        h('p.eg-summary-sub', `${name(w)} ${w === mine ? fixYou(view.winReason) : view.winReason} on turn ${turns}.`),
+        story,
+        h('h3', 'Final standings'),
+        h('div.eg-standings', h('div.eg-standing.head', h('span'), h('span', 'Player'), h('span', 'How it went'), h('span.eg-nw', 'Net worth')), standings),
+        h(
+          'div.eg-actions.eg-summary-actions',
+          ctx.rematch(), // a new game closes this summary by itself (see the state handler)
+          btn('Statements', () => openStatement(mine ?? w)),
+          btn('Close', closeStatement, { back: true }),
+        ),
+      ),
+    );
+    sheet.onclick = (e) => e.target === sheet && closeStatement();
+  }
+
   function renderStatement(seat) {
     const p = view.players[seat];
     const row = (label, val, cls = '') => h(`div.eg-row${cls ? '.' + cls : ''}`, h('span', label), h('b', val));

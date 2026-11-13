@@ -253,6 +253,7 @@ function newPlayer(seat, job) {
     ventures: [],
     nextId: 1,
     escapedRound: null,
+    escapedPassive: null, // passive income a month on the turn they broke out (for the end-of-game summary)
   };
 }
 
@@ -723,6 +724,7 @@ function checkEscape(s, p) {
   p.freeStart = p.freeFlow = Math.round((passive(p) * 10) / 1000) * 1000 + 20000;
   p.cash += p.freeFlow;
   p.escapedRound = s.round;
+  p.escapedPassive = passive(p);
   p.laidOff = 0;
   log(s, p.seat, `broke out of the Grind! Freedom income ${money(p.freeFlow)} a month`, 'win');
 }
@@ -730,6 +732,7 @@ function checkEscape(s, p) {
 function win(s, p, reason) {
   s.winner = p.seat;
   s.winReason = reason;
+  s.endRound = s.round;
   s.phase = 'over';
   log(s, p.seat, `wins: ${reason}`, 'win');
   return s;
@@ -758,13 +761,15 @@ function endTurn(s) {
     const ranked = [...s.players].sort((a, b) => rank(b) - rank(a));
     s.winner = ranked[0].seat;
     s.winReason = 'was furthest along when time ran out';
+    s.endRound = s.maxRounds;
     s.phase = 'over';
     log(s, ranked[0].seat, `wins on time: ${s.winReason}`, 'win');
     return;
   }
   s.phase = 'roll';
 }
-function rank(p) {
+// how far along a player is, for ordering the standings (higher is better)
+export function rank(p) {
   if (p.track === 'free') return 1e9 + (p.freeFlow - p.freeStart) * 100 + p.cash;
   return freedomProgress(p) * 1e8 + netWorth(p);
 }

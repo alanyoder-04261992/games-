@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import game from '../public/games/escape-grind/index.js';
-import { expenses, passive, legal } from '../public/games/escape-grind/engine.js';
+import { expenses, passive, legal, rank } from '../public/games/escape-grind/engine.js';
 
 const { engine, bot } = game;
 function play(seed, levels, options = {}) {
@@ -45,6 +45,27 @@ test('escape the grind: quick games stop at the round limit', () => {
     assert.ok(s.round <= 41);
     assert.ok(s.winner != null);
   }
+});
+
+test('escape the grind: finished games record what the end-of-game summary shows', () => {
+  let escaped = 0;
+  for (let seed = 1; seed <= 30; seed++) {
+    const { s } = play(seed, ['hard', 'normal', 'easy', 'normal'], { length: seed % 2 ? 'long' : 'quick' });
+    assert.ok(Number.isInteger(s.endRound) && s.endRound >= 1 && s.endRound <= s.maxRounds, `end round ${s.endRound}`);
+    for (const p of s.players) {
+      if (p.track === 'free') {
+        escaped++;
+        assert.ok(p.escapedRound >= 1 && p.escapedRound <= s.endRound, 'escape turn is within the game');
+        assert.ok(p.escapedPassive > 0, 'passive income at the escape is recorded');
+      } else {
+        assert.equal(p.escapedRound, null);
+        assert.equal(p.escapedPassive, null);
+      }
+    }
+    // a win on time goes to whoever the summary's standings put first
+    if (s.winReason.startsWith('was furthest')) assert.equal([...s.players].sort((a, b) => rank(b) - rank(a))[0].seat, s.winner);
+  }
+  assert.ok(escaped > 0, 'some players broke free');
 });
 
 test('escape the grind: views hide the decks and the seed', () => {
