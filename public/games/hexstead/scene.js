@@ -14,13 +14,16 @@ const BASE = 0.12; // top of the sandy island
 const TILE_H = 0.16;
 const BEVEL = 0.035;
 const TOP = BASE + TILE_H + BEVEL; // walking surface of a tile
+// base, dark, light. Picked so every terrain reads apart at a glance: deep woodland green vs
+// bright spring pasture, golden-amber wheat that no longer melts into the beach, warm terracotta
+// clay, cool blue-slate quarry, and pale dune desert.
 const TERRAIN_COLORS = {
-  forest: ['#2f5d2a', '#24481f', '#3c7034'],
-  pasture: ['#79b947', '#5f9c36', '#93cc5c'],
-  fields: ['#d8b04a', '#c49a34', '#e7c564'],
-  clay: ['#bf6a3d', '#a3532c', '#d07e50'],
-  quarry: ['#8a8f95', '#6f747a', '#a1a6ab'],
-  desert: ['#e2c68e', '#d1b077', '#efd8a6'],
+  forest: ['#2b5f36', '#1d4628', '#3d7a45'],
+  pasture: ['#84c24c', '#69a83a', '#a3d76a'],
+  fields: ['#e2a930', '#c58a1a', '#f2c65a'],
+  clay: ['#c8623a', '#a24726', '#de7d50'],
+  quarry: ['#86909c', '#69727e', '#a6afba'],
+  desert: ['#ecd5a6', '#dcbd86', '#f6e6c2'],
 };
 
 // ---------------------------------------------------------------------
@@ -293,31 +296,68 @@ function dieFace(value, red) {
   });
 }
 
+// A round harbor sign: parchment face, a thick ring in the resource's colour (navy for the 3:1
+// "any" harbors), the resource icon, and the rate on a dark ribbon so it reads from across the
+// board. Drawn at 256px; the icon is painted in once its SVG has loaded.
 function harborSign(type) {
-  return canvasTexture(256, 256, (g, w) => {
-    const c = w / 2;
-    g.fillStyle = 'rgba(0,0,0,0)';
-    g.clearRect(0, 0, w, w);
-    g.fillStyle = '#f6edd6';
-    g.strokeStyle = '#6d4524';
-    g.lineWidth = 10;
+  const S = 256, c = S / 2;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const g = cv.getContext('2d');
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  const ring = type === 'any' ? '#2b4f7a' : RES_COLORS[type][0];
+  // drop shadow, ring, face
+  g.fillStyle = 'rgba(0,0,0,0.28)';
+  g.beginPath();
+  g.arc(c + 3, c + 6, c - 8, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#ffffff';
+  g.beginPath();
+  g.arc(c, c, c - 8, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = ring;
+  g.beginPath();
+  g.arc(c, c, c - 15, 0, Math.PI * 2);
+  g.fill();
+  const face = g.createRadialGradient(c - 20, c - 30, 10, c, c, c - 34);
+  face.addColorStop(0, '#fffaf0');
+  face.addColorStop(1, '#efe2c2');
+  g.fillStyle = face;
+  g.beginPath();
+  g.arc(c, c, c - 34, 0, Math.PI * 2);
+  g.fill();
+  const ribbon = (text, y, h, size) => {
+    g.fillStyle = '#21180f';
     g.beginPath();
-    g.arc(c, c, c - 10, 0, Math.PI * 2);
+    g.roundRect(c - 70, y - h / 2, 140, h, h / 2);
     g.fill();
-    g.stroke();
-    g.fillStyle = '#3b2412';
+    g.fillStyle = '#ffffff';
+    g.font = `900 ${size}px "Roboto Slab", Georgia, serif`;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    if (type === 'any') {
-      g.font = '900 92px "Roboto Slab", Georgia, serif';
-      g.fillText('3:1', c, c - 4);
-      g.font = '700 30px Inter, sans-serif';
-      g.fillText('ANY', c, c + 62);
-    } else {
-      g.font = '900 64px "Roboto Slab", Georgia, serif';
-      g.fillText('2:1', c, c + 72);
-    }
-  });
+    g.fillText(text, c, y + 3);
+  };
+  if (type === 'any') {
+    g.fillStyle = '#21180f';
+    g.font = '900 96px "Roboto Slab", Georgia, serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('3:1', c, c - 24);
+    g.fillStyle = ring;
+    g.font = '900 40px Inter, system-ui, sans-serif';
+    g.fillText('ANY', c, c + 50);
+  } else {
+    ribbon('2:1', c + 56, 58, 48);
+    const img = new Image();
+    img.onload = () => {
+      g.drawImage(img, c - 54, c - 88, 108, 108);
+      t.needsUpdate = true;
+    };
+    img.src = svgUrl(RES_ICON[type]);
+  }
+  return t;
 }
 
 // draw an SVG icon onto a sprite texture once it has loaded
@@ -373,28 +413,41 @@ function makeKit() {
     cactusArm: new THREE.CylinderGeometry(0.016, 0.016, 0.08, 7).translate(0, 0.04, 0),
     bush: new THREE.IcosahedronGeometry(0.045, 1),
     post: new THREE.BoxGeometry(0.014, 0.07, 0.014).translate(0, 0.035, 0),
+    // leafy broadleaf trees between the pines
+    leafTrunk: new THREE.CylinderGeometry(0.018, 0.026, 0.16, 6).translate(0, 0.08, 0),
+    canopy: new THREE.IcosahedronGeometry(0.1, 1).scale(1, 0.9, 1).translate(0, 0.22, 0),
+    canopyTop: new THREE.IcosahedronGeometry(0.07, 1).translate(0.03, 0.3, -0.02),
+    // pasture wildflowers
+    flower: new THREE.IcosahedronGeometry(0.014, 0).translate(0, 0.012, 0),
   };
   const m = {
     trunk: std('#6b4423'),
-    pine1: std('#2d6a33', { flatShading: true }),
-    pine2: std('#245a2b', { flatShading: true }),
-    pine3: std('#3a7d3c', { flatShading: true }),
-    wool: std('#f5f1e6', { roughness: 1 }),
+    pine1: std('#2a6b3a', { flatShading: true }),
+    pine2: std('#1f5a31', { flatShading: true }),
+    pine3: std('#3a8247', { flatShading: true }),
+    leaf1: std('#4f9a3c', { flatShading: true }),
+    leaf2: std('#6aab3e', { flatShading: true }),
+    leafAutumn: std('#d98b2b', { flatShading: true }),
+    wool: std('#f7f3e8', { roughness: 1 }),
     sheepDark: std('#2e2824'),
-    wheat: std('#e6be4f', { roughness: 0.7 }),
-    bale: std('#d6b35d'),
-    clay: std('#b4532e', { roughness: 0.95 }),
-    brick: std('#a8432a', { roughness: 0.85 }),
-    kiln: std('#8f5a3b'),
+    flowerWhite: std('#fbf8ef', { roughness: 0.7 }),
+    flowerYellow: std('#ffd23f', { roughness: 0.7 }),
+    flowerPink: std('#f08bb4', { roughness: 0.7 }),
+    wheat: std('#f0bf3a', { roughness: 0.7 }),
+    wheatRipe: std('#d99a22', { roughness: 0.7 }),
+    bale: std('#dcb45a'),
+    clay: std('#be5a32', { roughness: 0.95 }),
+    brick: std('#b0452a', { roughness: 0.85 }),
+    kiln: std('#94593a'),
     kilnTop: std('#4a3328'),
-    rock: std('#8d9298', { flatShading: true, roughness: 0.9 }),
-    rockDark: std('#6c7177', { flatShading: true, roughness: 0.9 }),
+    rock: std('#8b95a1', { flatShading: true, roughness: 0.9 }),
+    rockDark: std('#69737f', { flatShading: true, roughness: 0.9 }),
     snow: std('#f7fafc', { flatShading: true, roughness: 0.6 }),
-    block: std('#b9bec4'),
-    sand: std('#e4c78c', { roughness: 1 }),
+    block: std('#b9c1ca'),
+    sand: std('#ead09c', { roughness: 1 }),
     cactus: std('#4f8a43', { roughness: 0.7 }),
-    redRock: std('#b46a43', { flatShading: true }),
-    bush: std('#4a8f3a', { flatShading: true }),
+    redRock: std('#c06f45', { flatShading: true }),
+    bush: std('#4f9a3c', { flatShading: true }),
     wood: std('#8a5b30', { roughness: 0.85 }),
   };
   return { g, m };
@@ -455,9 +508,17 @@ function decorate(b, kit, type, hx, seed) {
   const Z = hx.z;
   const y = TOP - 0.005;
   if (type === 'forest') {
-    for (const [x, z] of scatter(r, 9, { minGap: 0.17 })) {
+    for (const [x, z] of scatter(r, 10, { minGap: 0.16 })) {
       const s = 0.8 + r() * 0.45;
       const rot = r() * 6;
+      if (r() < 0.3) {
+        // a broadleaf tree, now and then turning
+        const lm = r() < 0.18 ? m.leafAutumn : r() < 0.5 ? m.leaf1 : m.leaf2;
+        b.add(g.leafTrunk, m.trunk, mat(X + x, y, Z + z, rot, s));
+        b.add(g.canopy, lm, mat(X + x, y, Z + z, rot, s));
+        b.add(g.canopyTop, lm, mat(X + x, y, Z + z, rot, s));
+        continue;
+      }
       b.add(g.trunk, m.trunk, mat(X + x, y, Z + z, rot, s));
       const pm = [m.pine1, m.pine2, m.pine3][Math.floor(r() * 3)];
       b.add(g.cone1, pm, mat(X + x, y, Z + z, rot, s));
@@ -465,6 +526,11 @@ function decorate(b, kit, type, hx, seed) {
       b.add(g.cone3, pm, mat(X + x, y, Z + z, rot, s));
     }
   } else if (type === 'pasture') {
+    // wildflowers in little clumps
+    for (const [x, z] of scatter(r, 7, { inner: 0.34, outer: 0.8, minGap: 0.12 })) {
+      const fm = [m.flowerWhite, m.flowerYellow, m.flowerPink][Math.floor(r() * 3)];
+      for (let k = 0; k < 4; k++) b.add(g.flower, fm, mat(X + x + (r() - 0.5) * 0.07, y, Z + z + (r() - 0.5) * 0.07, r() * 6, 0.8 + r() * 0.6));
+    }
     for (const [x, z] of scatter(r, 4, { minGap: 0.22 })) {
       const rot = r() * 6;
       const s = 0.9 + r() * 0.25;
@@ -492,7 +558,7 @@ function decorate(b, kit, type, hx, seed) {
         const z = u * sn + w * c + (r() - 0.5) * 0.02;
         const d = Math.hypot(x, z);
         if (d < 0.36 || d > 0.72) continue;
-        b.add(g.stalk, m.wheat, mat(X + x, y, Z + z, r() * 6, 0.8 + r() * 0.5));
+        b.add(g.stalk, r() < 0.3 ? m.wheatRipe : m.wheat, mat(X + x, y, Z + z, r() * 6, 0.8 + r() * 0.5));
       }
     for (const [x, z] of scatter(r, 2, { inner: 0.45, outer: 0.7, minGap: 0.3 })) b.add(g.bale, m.bale, mat(X + x, y, Z + z, r() * 6));
   } else if (type === 'clay') {
@@ -703,6 +769,11 @@ export function createScene(container, { onPick, onHover } = {}) {
   sun.shadow.normalBias = 0.02;
   sun.shadow.radius = 1.7; // same penumbra width as the old PCFSoftShadowMap
   scene.add(sun);
+  // a soft, cool fill from the far side so the shaded faces of peaks, trees and barns keep
+  // their colour instead of going muddy (no shadows: it only lifts)
+  const fill = new THREE.DirectionalLight('#bcd8ff', 0.55);
+  fill.position.set(7, 5, -6);
+  scene.add(fill);
 
   // ocean
   const normals = waterNormals();
@@ -718,8 +789,8 @@ export function createScene(container, { onPick, onHover } = {}) {
     new THREE.MeshBasicMaterial({
       map: canvasTexture(512, 8, (g, w) => {
         const gr = g.createLinearGradient(0, 0, w, 0);
-        gr.addColorStop(0, 'rgba(120,225,215,0.75)');
-        gr.addColorStop(0.35, 'rgba(70,190,200,0.35)');
+        gr.addColorStop(0, 'rgba(110,232,214,0.82)');
+        gr.addColorStop(0.35, 'rgba(60,196,206,0.4)');
         gr.addColorStop(1, 'rgba(40,140,180,0)');
         g.fillStyle = gr;
         g.fillRect(0, 0, w, 8);
@@ -827,7 +898,9 @@ export function createScene(container, { onPick, onHover } = {}) {
       tiles.push(tile);
       decorate(batch, kit, h.t, hx, i * 97 + 13);
       if (h.n) {
-        const tok = new THREE.Mesh(tokenGeo, [tokenSide, std('#ffffff', { map: tokenTexture(h.n), roughness: 0.55 }), tokenSide]);
+        // a little self-light keeps the numbers crisp and cream-white under the tone mapping
+        const face = tokenTexture(h.n);
+        const tok = new THREE.Mesh(tokenGeo, [tokenSide, std('#ffffff', { map: face, emissive: '#ffffff', emissiveMap: face, emissiveIntensity: 0.28, roughness: 0.55 }), tokenSide]);
         tok.position.set(hx.x, TOP + 0.022, hx.z);
         tok.rotation.y = Math.PI / 2;
         tok.castShadow = true;
@@ -870,17 +943,18 @@ export function createScene(container, { onPick, onHover } = {}) {
         g.castShadow = g.receiveShadow = true;
         board.add(g);
       }
-      const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: harborSign(hb.type), depthWrite: false }));
-      sign.scale.set(0.5, 0.5, 1);
-      sign.position.set(slot.x + slot.nx * 0.95, 0.55, slot.z + slot.nz * 0.95);
+      // shown in its own colours (no tone mapping) and never faded by the haze, so the far
+      // harbors' rates stay as readable as the near ones
+      const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: harborSign(hb.type), depthWrite: false, toneMapped: false, fog: false }));
+      sign.scale.set(0.66, 0.66, 1);
+      sign.position.set(slot.x + slot.nx * 0.95, 0.62, slot.z + slot.nz * 0.95);
+      sign.renderOrder = 2;
       board.add(sign);
-      if (hb.type !== 'any') {
-        const icon = new THREE.Sprite(new THREE.SpriteMaterial({ map: iconTexture(RES_ICON[hb.type]), depthWrite: false }));
-        icon.scale.set(0.26, 0.26, 1);
-        icon.position.copy(sign.position).add(new THREE.Vector3(0, 0.07, 0));
-        icon.renderOrder = 2;
-        board.add(icon);
-      }
+      // a post holding the sign up from the water
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.018, 0.34, 6), postMat);
+      pole.position.set(sign.position.x, 0.13, sign.position.z);
+      pole.castShadow = true;
+      board.add(pole);
       const boat = buildBoat(r);
       boat.position.set(slot.x + slot.nx * 1.35 + slot.nz * 0.35, 0, slot.z + slot.nz * 1.35 - slot.nx * 0.35);
       boat.rotation.y = -ang + Math.PI / 2 + (r() - 0.5);

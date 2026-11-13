@@ -87,17 +87,26 @@ export function mount(ctx) {
   const name = (q) => (q === me() ? 'You' : seats[q]?.name || SEAT_NAMES[q]);
   const nameEl = (q) => h('b.hx-name', { style: { '--c': SEAT_COLORS[q] } }, name(q));
   const resIcon = (r, cls = '') => h('span.hx-ricon' + cls, { html: RES_ICON[r], title: RES_LABEL[r] });
-  const costChips = (cost) =>
+  // one light chip per resource: the icon on parchment, underlined in the resource's colour,
+  // with the count beside it. `have` (my hand) marks the ones I'm short of.
+  const resChip = (r, n, have) =>
+    h(
+      'span.hx-cc' + (have && have[r] < n ? '.short' : ''),
+      { style: { '--rc': RES_COLORS[r][0] }, title: `${n} ${RES_LABEL[r]}${have && have[r] < n ? ` (you have ${have[r]})` : ''}` },
+      h('span.hx-cc-i', { html: RES_ICON[r] }),
+      n > 1 || have ? h('b', n) : null,
+    );
+  const costChips = (cost, have) =>
     h(
       'span.hx-cost',
-      Object.entries(cost).flatMap(([r, n]) => Array.from({ length: n }, () => resIcon(r, '.sm'))),
+      Object.entries(cost).map(([r, n]) => resChip(r, n, have)),
     );
   const resList = (obj) =>
     h(
       'span.hx-reslist',
       Object.entries(obj || {})
         .filter(([, n]) => n > 0)
-        .map(([r, n]) => h('span.hx-resn', String(n), resIcon(r, '.sm'))),
+        .map(([r, n]) => resChip(r, n)),
     );
   function act(move) {
     if (pending) return;
@@ -339,11 +348,11 @@ export function mount(ctx) {
       case 'card':
         return [P(e.p), ' played ', h('b', CARDS[e.card].label), e.card === 'harvest' ? [' for ', resList(Object.fromEntries(RES.map((r) => [r, (e.res || []).filter((x) => x === r).length])))] : ''];
       case 'market':
-        return [P(e.p), ` collected ${e.n} `, resIcon(e.res, '.sm')];
+        return [P(e.p), ' collected ', resList({ [e.res]: e.n })];
       case 'bandit':
         return [P(e.p), ` sent the bandit to ${TERRAIN[view.hexes[e.hex].t].label}${view.hexes[e.hex].n ? ' (' + view.hexes[e.hex].n + ')' : ''}`];
       case 'steal':
-        return [P(e.p), ' took ', e.res ? resIcon(e.res, '.sm') : 'a card', ' from ', P(e.from)];
+        return [P(e.p), ' took ', e.res ? resList({ [e.res]: 1 }) : 'a card', ' from ', P(e.from)];
       case 'discard':
         return [P(e.p), ` discarded ${e.n}`];
       case 'bank':
@@ -491,7 +500,7 @@ export function mount(ctx) {
         },
         h('span.hx-build-icon', { html: PIECE_ICON[kind](SEAT_COLORS[p]) }),
         h('span.hx-build-label', label),
-        costChips(COST[kind]),
+        costChips(COST[kind], view.players[p].res),
       );
     };
     actionsBar.replaceChildren(
@@ -660,7 +669,7 @@ export function mount(ctx) {
               ['homestead', 'Homestead', '1 point · collects 1 per roll'],
               ['town', 'Barn', '2 points · upgrade a homestead, collects 2'],
               ['card', 'Almanac card', 'a surprise from the deck'],
-            ].map(([k, label, note]) => h('div.hx-cost-row', h('span.hx-build-icon', { html: PIECE_ICON[k](SEAT_COLORS[p ?? 0]) }), h('div', h('strong', label), h('small', note)), costChips(COST[k]))),
+            ].map(([k, label, note]) => h('div.hx-cost-row', h('span.hx-build-icon', { html: PIECE_ICON[k](SEAT_COLORS[p ?? 0]) }), h('div', h('strong', label), h('small', note)), costChips(COST[k], p != null ? view.players[p]?.res : null))),
           ),
           h('p.hx-hint', `First to ${view.target} points on their own turn wins. Longest Trail (5+) and Big Posse (3+ Sheriffs) are worth 2 each.`),
         ];
@@ -699,6 +708,7 @@ export function mount(ctx) {
             return h(
               'button.hx-pick' + (give === r ? '.on' : ''),
               { disabled: pl.res[r] < n, onclick: () => ((sheet.bankGive = r), sheet.bankGet === r && (sheet.bankGet = null), renderSheet()), style: { '--a': RES_COLORS[r][0], '--b': RES_COLORS[r][1] } },
+              h('b.hx-rate' + (n < 4 ? '.deal' : ''), `${n}:1`),
               h('span', { html: RES_ICON[r] }),
               `${n} ${RES_LABEL[r]}`,
               h('small', `have ${pl.res[r]}`),
