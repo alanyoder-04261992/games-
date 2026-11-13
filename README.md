@@ -9,6 +9,11 @@ Plain HTML, CSS and JavaScript modules — no build step, hosts anywhere static 
   original app (45-card deck with the Bird, bids 100–200 plus solo 400/800, first lead names
   trump, 1000 to win). Animated dealing and tricks, original card art, Monte Carlo computer
   players, a coach, auto-play helpers and online play for up to four people.
+- **Euchre** — the classic partnership game for four: order up or turn down the up-card, name
+  trump in round two, ride the right and left bowers, go alone for 4, euchre the makers for 2.
+  Table options for 5/10/15 points, stick the dealer, and going alone. Animated dealing and
+  tricks, original card art, computer players at three levels (Expert tries each card on many
+  possible deals), a coach and online play for up to four people.
 - **Hexstead** — an original island-settling game in full 3D (three.js): roll for timber, brick,
   wool, grain and stone, lay trails, raise homesteads and upgrade them to barns, trade with the
   table or the harbors, play almanac cards, and keep the bandit off your fields. Every tile,
@@ -92,6 +97,7 @@ public/                 ← the website (deploy this folder)
   core/                 shell, rooms & networking, sound, helpers
   games/index.js        list of games
   games/rook/           Rook: engine.js, ai.js, ui.js, cards.js (art), rook.css, rules.html
+  games/euchre/         Euchre: engine.js, ai.js, ui.js, cards.js (art), euchre.css, rules.html
   games/hexstead/       Hexstead: engine.js, ai.js, geometry.js, scene.js (3D board), ui.js, art.js
   games/escape-grind/   Escape the Grind: engine.js, ai.js, cards.js (decks, jobs), scene.js (3D),
                         textures.js (painted-in-code textures), ui.js (HUD, controller), escape.css
