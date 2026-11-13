@@ -67,10 +67,17 @@ Computer pilots always fly the empty seats in a free-for-all. Their skill follow
 
 - **World.** About 30 km of procedural terrain. It has hills and ridges inland, chalk cliffs and beaches along the coast, a river with its estuary, a mountain lake, forests, a patchwork of fields with hedges, farms with barns and sheds, a harbour town with a church and fishing boats, and a lighthouse. The sea uses a wave shader, the sky has a sun, and there are sprite cumulus clouds you can fly through.
 - **Airfield.** A marked runway (36/18), apron, three hangars, a control tower, a windsock, fuel tanks and two parked fighters.
-- **Two aircraft.** You can fly either one, and the enemy flies the other.
+- **Six aircraft.** Four 1940s fighters and two modern jets.
   - *Kestrel Mk IX*: elliptical wing, low wing loading, turns tightly, two cannon and four MGs.
   - *Falke G-6*: small wing, faster with a better climb, a nose cannon and two cowl MGs.
-  - Both have a spinning propeller (it blurs to a disc at speed), moving ailerons, elevator and rudder, retracting gear, a canopy with a pilot inside, and a cockpit view with working gauges.
+  - *Ranger D-20*: bare-metal long-range escort with a laminar wing and belly radiator; fast, six heavy machine guns.
+  - *Swift A6*: feather-light, with a radial engine; out-turns anything, but it does not take punishment. Two cowl MGs and two wing cannon.
+  - *Lancer F-2* (modern jet): single engine, cropped-delta wing, quick roll, a rotary cannon (50 rounds a second) and six missiles.
+  - *Talon T-27* (modern jet): twin engines, twin canted fins, big wing, long range and tough.
+  - The jets have afterburners (hold boost at full throttle; it burns fuel three times as fast instead of running out), fly-by-wire that pulls to 9 g and no further, a transonic drag rise that holds them to about 740 mph, tricycle gear, and two more missiles and four more flares than the 1940s fighters.
+  - Raiders fly the other side's aircraft of your era: pick a 1940s fighter and you meet 1940s fighters, pick a jet and you meet jets.
+  - The picker shows each aircraft with a small picture rendered from the game (`node tools/dogfight-plane-thumbs.cjs` remakes `public/games/dogfight/planes/*.jpg` after a model changes; it needs `npm start` running and Playwright), its top speed, guns and missiles, and two fun facts.
+  - Every aircraft has moving ailerons (flaperons on the jets), elevators (all-moving tailplanes on the jets) and rudders, retracting gear, a canopy with a pilot inside, and a cockpit view with working gauges. The propellers blur to a disc at speed; the jets' nozzles glow with the throttle and show an afterburner plume.
 - **Guns.** Rounds are ballistic, with muzzle velocity and gravity drop. Wing guns converge at 300 m. Every second or third round is a tracer.
 - **Damage model.** Each part has its own hit points: engine, fuel tank, left wing, right wing, tail, pilot and fuselage.
   - An engine hit loses power, then smokes, and can catch fire or seize.
@@ -82,7 +89,8 @@ Computer pilots always fly the empty seats in a free-for-all. Their skill follow
 - **Mission.** Take off, fight three escalating waves, then return to base and land. The debrief shows score, kills, accuracy, damage taken, flight time, how good the landing was, and a grade.
 - **Cameras.** Chase view, cockpit view, and a slow-motion kill camera (you can turn this off).
 - **HUD.** Gun reticle, a lead indicator on the nearest target, target brackets with range, off-screen arrows, a heading-up radar drawn over the terrain map, a damage diagram, an artificial horizon (sky blue above, earth brown below, with INVERTED when you're upside down; the cockpit panel has its own), flight data, and warnings for stall, pull-up, fire, fuel, gear overspeed and leaving the sector. It also shows the effects of high G: blackout, redout, wingtip vapour and the stall horn.
-- **Sound.** All sound is generated with WebAudio: the engine follows RPM, plus wind, guns, hits, bullet cracks, explosions, nearby enemy engines and the stall horn.
+- **Sound.** All sound is generated with WebAudio: the engine follows RPM (a jet has turbine whine, roar and an afterburner rumble), plus wind, guns, hits, bullet cracks, nearby enemy engines and the stall horn. A missile leaves its rail with a clunk, lights with a crack and a rising whoosh, and its motor roars past you, panned and Doppler-shifted, then whistles after burnout. Explosions arrive after their flash by the time sound takes to travel: a crack up close, a falling boom, a sub-bass thump, a long rumble and wreckage pattering down.
+- **Explosions.** A white-hot flash, a fireball that swells and rises, a shock ring racing outward, sparks arcing down, burning wreckage tumbling away trailing smoke, and dark smoke billowing upward; crashes add a dirt plume or a column of spray, and nearby blasts shake the camera.
 
 ## Controls
 

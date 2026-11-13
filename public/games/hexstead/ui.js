@@ -453,7 +453,7 @@ export function mount(ctx) {
     if (view.phase === 'over') {
       actionsBar.replaceChildren(
         h('button.btn.ghost', { onclick: () => openSheet({ type: 'scores' }) }, 'Final scores'),
-        ctx.client.isHost ? h('button.btn.gold', { onclick: () => ctx.client.send({ t: 'rematch' }) }, 'Play again') : h('small.hx-wait', 'Waiting for the host…'),
+        ctx.rematch(),
         h('button.btn.ghost', { onclick: () => ctx.leave() }, 'Game Center'),
       );
       return;

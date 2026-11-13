@@ -433,3 +433,14 @@ html { overscroll-behavior-y: contain; } /* our pull replaces the browser's, so 
 @keyframes gc-spin { to { transform: rotate(360deg); } }
 body.gc-reloading { opacity: 0.6; transition: opacity 0.2s; }
 @media (prefers-reduced-motion: reduce) { .gc-update, .gc-pull.back { transition: none; } .gc-update-dot, .gc-pull.spin .gc-pull-ring { animation: none; } }
+
+/* ---- shared Rematch button (core/rematch.js) ---- */
+.gc-rematch { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 10px; max-width: 100%; }
+.gc-rematch-note { color: var(--muted); font-size: 12.5px; line-height: 1.3; max-width: 15em; }
+.gc-rematch-btn[disabled] { opacity: 0.75; cursor: default; filter: saturate(0.7); }
+.gc-rematch-bar {
+  position: absolute; left: 50%; bottom: calc(14px + var(--safe-bottom)); transform: translateX(-50%); z-index: 40;
+  padding: 12px 18px; border-radius: 18px; background: rgba(15, 29, 51, 0.94); border: 1px solid var(--line);
+  box-shadow: var(--shadow); animation: gc-rise 0.3s ease;
+}
+@keyframes gc-rise { from { opacity: 0; transform: translate(-50%, 12px); } }
