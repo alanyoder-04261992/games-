@@ -30,6 +30,10 @@ Plain HTML, CSS and JavaScript modules — no build step, hosts anywhere static 
   recession and recovery. Deal prices, buyer offers, business income and loan rates follow it, and
   a live stock market lets players buy the dip, sell the boom, and short stocks to profit from a fall.
 - **Four in a Row** — a small, complete example of how a game plugs in, with a 3D board (three.js on WebGPU) and a flat one.
+- **Chinese Checkers** — race your marbles across the star by stepping and chaining jumps. 2, 3, 4 or
+  6 players (online or computer players at three levels), 10 marbles or a quick 6, and an option to
+  play on for 2nd, 3rd… A 3D maple board with swirled glass marbles (three.js on WebGPU) or a flat
+  one; your own point is always nearest you.
 - **Coastal Dogfight** — a real-time 3D flight game: 1940s fighters over a 20 km coastline.
   Up to four pilots team up against waves of raiders (you pick how many per wave and how
   many waves) or fight a free-for-all. Phone touch controls, mouse aim, keyboard and gamepad.
