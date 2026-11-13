@@ -461,3 +461,20 @@ body.gc-reloading { opacity: 0.6; transition: opacity 0.2s; }
   pointer-events: auto; font: 700 14px var(--font); color: var(--gold); background: none;
   border: 1px solid rgba(240, 195, 90, 0.5); border-radius: 999px; padding: 4px 12px; cursor: pointer;
 }
+
+/* ---- settings pop-up from a tile's Single player / Multiplayer buttons ---- */
+.gc-play-sheet { display: flex; flex-direction: column; gap: 14px; }
+.gc-play-head { display: flex; align-items: center; gap: 14px; padding-right: 30px; }
+.gc-play-head h2 { margin: 0 !important; font-size: 26px !important; }
+.gc-play-head small { color: var(--muted); }
+.gc-play-art { flex: none; width: 76px; height: 54px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+.gc-play-art svg { width: 100%; height: 100%; display: block; }
+.gc-play-note { margin: 0; color: var(--muted); font-size: 13px; }
+.gc-play-sheet .gc-actions { margin-top: 4px; }
+@media (max-width: 480px) { .gc-play-sheet .gc-actions .btn { flex: 1 1 100%; } }
+.gc-play-sheet .gc-field { margin-bottom: 0; }
+/* keep Continue in reach when a game has many settings (the pop-up scrolls above it) */
+.gc-play-sheet .gc-actions {
+  position: sticky; bottom: -24px; z-index: 1; margin: 4px -24px -24px; padding: 14px 24px calc(18px + var(--safe-bottom));
+  background: linear-gradient(180deg, rgba(15, 28, 49, 0), #0f1c31 26%);
+}
