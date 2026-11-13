@@ -7,6 +7,7 @@ export const GAME_MODULES = [
   () => import('./broadside/index.js'),
   () => import('./escape-grind/index.js'),
   () => import('./four-in-a-row/index.js'),
+  () => import('./liars-dice/index.js'),
   () => import('./dogfight/index.js'),
   () => import('./rally/index.js'),
 ];

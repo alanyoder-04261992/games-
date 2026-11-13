@@ -1,0 +1,37 @@
+<h2>Liar's Dice</h2>
+<p>Everyone has a cup of dice that only they can see. Bid on what's under <em>all</em> the cups together, call out a
+bluff, and be the last player with dice left.</p>
+
+<h3>1. Roll</h3>
+<p>Each round, every player shakes their cup and peeks at their own dice. Everyone starts with the same number of dice
+(5 unless the table chose otherwise).</p>
+
+<h3>2. Bid</h3>
+<p>A bid is a guess about every die on the table: <strong>"7 × four"</strong> means "there are at least seven fours
+under all the cups put together". Going around the table, each player must either raise the bid or call it.</p>
+<p>A raise is either</p>
+<ul>
+  <li>a <strong>bigger number</strong> on any face (7 fours → 8 twos), or</li>
+  <li>the <strong>same number</strong> on a <strong>higher face</strong> (7 fours → 7 fives).</li>
+</ul>
+<p><strong>Wild ones</strong> (on by default): every 1 counts as whatever face was bid, so nobody bids on ones.</p>
+
+<h3>3. Call</h3>
+<ul>
+  <li><strong>Liar!</strong> You think the last bid is too high. Everyone lifts their cup and the dice are counted.
+    If there are fewer than the bid said, the bidder loses a die. If the bid was good, you lose one.</li>
+  <li><strong>Spot on</strong> (if the table allows it): you think the bid is <em>exactly</em> right. If it is, every
+    other player loses a die. If it isn't, you lose one.</li>
+</ul>
+<p>Whoever lost a die starts the next round. Run out of dice and you're out. The last player with dice wins.</p>
+
+<h3>On screen</h3>
+<ul>
+  <li>On your turn, set the number with <em>−</em> and <em>+</em>, tap a face, then <em>Bid</em>. Or tap
+    <em>Liar!</em> or <em>Spot on</em>.</li>
+  <li>Keyboard: ↑ ↓ change the number, ← → or 1–6 pick a face, Enter bids, L calls liar.</li>
+  <li><em>Show the odds</em> (in Settings) gives the chance a bid is true, worked out from your own dice only. It
+    can't see anyone else's cup, and it doesn't guess what the other players' bids give away.</li>
+  <li>Computer players: <em>Easy</em> goes mostly by its own dice and bluffs a lot, <em>Normal</em> starts to read the
+    other bids, and <em>Expert</em> reads the table closely and picks its calls carefully.</li>
+</ul>
