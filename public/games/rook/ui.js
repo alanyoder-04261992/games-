@@ -1493,7 +1493,7 @@ class RookTable {
     return h(
       'div.rk-bid-actions',
       h('button.btn.ghost.big', { onclick: () => this.ctx.leave() }, 'Game Center'),
-      this.client.isHost ? h('button.btn.gold.big', { onclick: () => this.client.send({ t: 'rematch' }) }, 'Play again') : h('small', 'Waiting for the host to start a new game'),
+      this.ctx.rematch({ big: true }),
     );
   }
 

@@ -363,7 +363,7 @@ export function mount(ctx) {
         h('div.eg-prompt.win', h('strong', w === me() ? 'You win!' : `${name(w)} wins!`), h('span', `${name(w)} ${w === me() ? fixYou(view.winReason) : view.winReason}.`)),
         h(
           'div.eg-actions',
-          ctx.client.isHost ? btn('Play again', () => ctx.client.send({ t: 'rematch' }), { primary: true }) : h('small.eg-wait', 'Waiting for the host…'),
+          ctx.rematch(),
           btn('Game Center', () => ctx.leave(), { back: true }),
           btn('Summary', () => openSummary()),
           btn('Statements', () => openStatement(me() ?? w)),
@@ -676,7 +676,7 @@ export function mount(ctx) {
         h('div.eg-standings', h('div.eg-standing.head', h('span'), h('span', 'Player'), h('span', 'How it went'), h('span.eg-nw', 'Net worth')), standings),
         h(
           'div.eg-actions.eg-summary-actions',
-          ctx.client.isHost ? btn('Play again', () => (closeStatement(), ctx.client.send({ t: 'rematch' })), { primary: true }) : null,
+          ctx.rematch(), // a new game closes this summary by itself (see the state handler)
           btn('Statements', () => openStatement(mine ?? w)),
           btn('Close', closeStatement, { back: true }),
         ),
