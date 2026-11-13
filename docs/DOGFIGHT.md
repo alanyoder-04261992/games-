@@ -26,7 +26,7 @@ npm start        # Game Center at http://localhost:8080, Coastal Dogfight is a t
 
 ## Graphics
 
-Rendering uses ACES tone mapping. The aircraft have metallic and glossy materials that reflect a blurred copy of the sky, and their paint is weathered with panel lines, rivets and chipped seams. The water shades shallow water turquoise and shows surf along the shore, using a depth map baked from the terrain. Trees are layered conifers and multi-crown broadleaves with trunks, with lone trees dotted among the fields. Clouds have shaded bases, high cirrus streaks run across the sky, and contrails form above 2,700 m. Muzzle flashes light the wings, and the field of view widens with speed.
+Rendering uses ACES tone mapping. The aircraft have metallic and glossy materials that reflect a blurred copy of the sky, and their paint is weathered with panel lines, rivets and chipped seams. The sea sums fifteen wave trains spread round the wind, each faded out before it is finer than a pixel so the distance never shimmers, with rougher and calmer wind patches, a sun glint that broadens with distance, light through the wave crests and gusty patches of whitecaps. Far out it fades to a sea haze darker than the sky. It shades shallow water turquoise and shows surf along the shore, using a depth map baked from the terrain. Trees are layered conifers and multi-crown broadleaves with trunks, with lone trees dotted among the fields. The sky runs from horizon haze to a deeper blue overhead, with light scattered round the sun, a sun disc and drifting wisps of high cirrus drawn with noise. Clouds have shaded bases, and contrails form above 2,700 m. Muzzle flashes light the wings, and the field of view widens with speed.
 
 The **High** graphics setting adds bloom, which makes the sun, tracers, fires and explosions glow. It also turns on 4× multisampling, finer terrain and textures, and more trees. Phones default to Medium.
 
@@ -38,6 +38,7 @@ The game's menu has:
 - **Waves**: 1, 2, 3, 5 or 8. Skill rises through the sortie, and the last wave brings an ace.
 - **Difficulty**, **Missile lock** (auto or manual) and **Corner map** are in the same menu and in the pause menu.
 - **Phone mode**: Auto turns the touch controls on for phones. On forces them, which is useful on a tablet or a touch laptop. Off hides them in favour of the keyboard and mouse. The same switch is in the pause menu.
+- **Rudder buttons** (touch, off by default): two hold buttons above the stick, ◀ RUD and RUD ▶, that yaw the nose for fine aiming and for steering on the runway. Keyboard and gamepad already have rudder (Q / E, right stick).
 
 ## Multiplayer
 
@@ -60,7 +61,7 @@ Computer pilots always fly the empty seats in a free-for-all. Their skill follow
 - **Hits are decided by the shooter.** Every device draws everyone's tracers, but only rounds fired by your own device count. A hit on an aircraft another device flies becomes a `hit` message to that device, which applies the damage through the normal damage model.
 - **Shoot-downs are announced by the victim's device.** It sends a `down` event naming the aircraft that last hit it, so everyone gets the same kill credit and messages.
 - **The bridge to the Game Center.** `ui.js` shows `play.html?embed=1` in a frame and passes messages through `postMessage`. Ending a round is a normal Game Center action (`{ type: 'finish', results }`), so the table, rematches and saving behave like the other games.
-- **Pausing doesn't stop the round.** The menu doesn't pause an online round: your aircraft holds level flight while it is open.
+- **Pausing with friends doesn't stop the round.** When another person is connected to the table, the menu can't pause the round for them: your aircraft holds level flight while it is open. With only computer pilots at the table, pausing freezes everything, the same as playing alone.
 
 ## What's in it
 
@@ -80,7 +81,7 @@ Computer pilots always fly the empty seats in a free-for-all. Their skill follow
 - **Enemy AI.** Bandits pursue with lead and fire in bursts. They break when you get on their tail, extend after an overshoot, avoid head-on collisions, avoid terrain and stay inside the sector. There are three skill levels: rookie, veteran and ace (the ace has a red nose).
 - **Mission.** Take off, fight three escalating waves, then return to base and land. The debrief shows score, kills, accuracy, damage taken, flight time, how good the landing was, and a grade.
 - **Cameras.** Chase view, cockpit view, and a slow-motion kill camera (you can turn this off).
-- **HUD.** Gun reticle, a lead indicator on the nearest target, target brackets with range, off-screen arrows, a heading-up radar drawn over the terrain map, a damage diagram, flight data, and warnings for stall, pull-up, fire, fuel, gear overspeed and leaving the sector. It also shows the effects of high G: blackout, redout, wingtip vapour and the stall horn.
+- **HUD.** Gun reticle, a lead indicator on the nearest target, target brackets with range, off-screen arrows, a heading-up radar drawn over the terrain map, a damage diagram, an artificial horizon (sky blue above, earth brown below, with INVERTED when you're upside down; the cockpit panel has its own), flight data, and warnings for stall, pull-up, fire, fuel, gear overspeed and leaving the sector. It also shows the effects of high G: blackout, redout, wingtip vapour and the stall horn.
 - **Sound.** All sound is generated with WebAudio: the engine follows RPM, plus wind, guns, hits, bullet cracks, explosions, nearby enemy engines and the stall horn.
 
 ## Controls
@@ -94,6 +95,7 @@ Computer pilots always fly the empty seats in a free-for-all. Their skill follow
 | Fire | Hold **FIRE** |
 | Gear / flaps | **GEAR**, **FLAP** |
 | Camera / pause | **CAM**, **II** |
+| Rudder (optional) | hold **◀ RUD** or **RUD ▶**; turn on *Rudder buttons* in the menu or pause menu |
 
 The control style is set in the pause menu:
 

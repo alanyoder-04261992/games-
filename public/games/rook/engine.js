@@ -3,11 +3,11 @@
 //
 // House rules (carried over from the original card-game app):
 //   * 45 cards: red, green, yellow, black 5-14 and 1, plus the Bird. The 1 is high.
-//     Optional short deck drops the 6s, 7s and 8s (33 cards).
+//     (There are no 2s, 3s or 4s.) Optional short deck also drops the 6s, 7s and 8s (33 cards).
 //   * 4 players, partners across. 10 cards each (7 with the short deck), 5 in the nest.
 //   * Bidding from 100 in 5s to 200, plus solo bids of 400 and 800. Dealer is stuck if all pass.
 //   * The bidder's first lead sets trump. Leading the Bird means naming the color.
-//   * The Bird is trump, ranked between the 10 and the 11.
+//   * The Bird is trump, ranked between the 10 and the 11 (setting: or highest, or lowest trump).
 //   * Points: 5s=5, 10s=10, 14s=10, 1s=15, Bird=20, last trick 20 (+ the discards).
 //   * Made: score what you took. Set: lose the bid. Solo: the other team must take nothing.
 //   * First team to 1000 wins.
@@ -16,9 +16,16 @@ export const COLORS = ['red', 'green', 'yellow', 'black'];
 export const BIRD = 'bird';
 const RANKS_FULL = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 1];
 const RANKS_SHORT = [5, 9, 10, 11, 12, 13, 14, 1];
-// Strength order, low to high. Trump order places the Bird between 10 and 11.
+// Strength order, low to high. The 'bird' setting says where the Bird sits in trump:
+// between the 10 and the 11 (the default), above the 1, or below the 5.
 const PLAIN_ORDER = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 1];
-const TRUMP_ORDER = [5, 6, 7, 8, 9, 10, BIRD, 11, 12, 13, 14, 1];
+export const BIRD_RANKS = ['middle', 'high', 'low'];
+const TRUMP_ORDERS = {
+  middle: [5, 6, 7, 8, 9, 10, BIRD, 11, 12, 13, 14, 1],
+  high: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 1, BIRD],
+  low: [BIRD, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 1],
+};
+const trumpOrder = (bird) => TRUMP_ORDERS[bird] || TRUMP_ORDERS.middle;
 const POINTS = { 5: 5, 10: 10, 14: 10, 1: 15 };
 export const BIRD_POINTS = 20;
 export const NEST_SIZE = 5;
@@ -29,7 +36,7 @@ export const SOLO_BIDS = [400, 800];
 export const LAST_TRICK_BONUS = 20;
 export const SEAT_NAMES = ['South', 'West', 'North', 'East'];
 
-export const DEFAULT_OPTIONS = { lowCards: true, winScore: 1000 };
+export const DEFAULT_OPTIONS = { lowCards: true, bird: 'middle', winScore: 1000 };
 
 // ---------- cards ----------
 export const colorOf = (c) => (c === BIRD ? null : c.slice(0, c.indexOf('-')));
@@ -39,8 +46,9 @@ export const cardPoints = (c) => (c === BIRD ? BIRD_POINTS : POINTS[rankOf(c)] |
 export const sumPoints = (cards) => cards.reduce((s, c) => s + cardPoints(c), 0);
 export const isTrump = (c, trump) => c === BIRD || (trump != null && colorOf(c) === trump);
 
-export function strength(card, trump) {
-  if (isTrump(card, trump)) return 100 + TRUMP_ORDER.indexOf(card === BIRD ? BIRD : rankOf(card));
+// `bird` is the game's bird setting (options.bird); left out, the Bird is between 10 and 11.
+export function strength(card, trump, bird) {
+  if (isTrump(card, trump)) return 100 + trumpOrder(bird).indexOf(card === BIRD ? BIRD : rankOf(card));
   return PLAIN_ORDER.indexOf(rankOf(card));
 }
 
@@ -55,7 +63,7 @@ export function fullDeck(options = DEFAULT_OPTIONS) {
 const SORT_INDEX = new Map(fullDeck({ lowCards: true }).map((c, i) => [c, i]));
 // Sort a hand by color then rank, high cards on the right. With trump known, trump goes last
 // and the Bird sits inside it in its true order.
-export function sortHand(cards, trump = null) {
+export function sortHand(cards, trump = null, bird) {
   const colorRank = (c) => {
     const col = suitOf(c, trump);
     if (col == null) return 4; // Bird before trump is known: far right
@@ -65,7 +73,7 @@ export function sortHand(cards, trump = null) {
   return [...cards].sort((a, b) => {
     const ca = colorRank(a), cb = colorRank(b);
     if (ca !== cb) return ca - cb;
-    if (trump != null && ca === 5) return strength(a, trump) - strength(b, trump);
+    if (trump != null && ca === 5) return strength(a, trump, bird) - strength(b, trump, bird);
     return (SORT_INDEX.get(a) ?? 99) - (SORT_INDEX.get(b) ?? 99);
   });
 }
@@ -217,13 +225,13 @@ export function check(state, seat, action) {
   return legal(state, seat).some((a) => key(a) === key(action)) ? null : 'That move is not allowed';
 }
 
-export function trickWinner(plays, trump) {
+export function trickWinner(plays, trump, bird) {
   const led = suitOf(plays[0].card, trump);
   let best = plays[0];
   const score = (p) => {
     const s = suitOf(p.card, trump);
-    if (s === trump) return 1000 + strength(p.card, trump);
-    return s === led ? strength(p.card, trump) : -1;
+    if (s === trump) return 1000 + strength(p.card, trump, bird);
+    return s === led ? strength(p.card, trump, bird) : -1;
   };
   for (const p of plays) if (score(p) > score(best)) best = p;
   return best.seat;
@@ -324,7 +332,7 @@ function doPlay(state, seat, { card, trump }) {
   state.hands[seat] = state.hands[seat].filter((c) => c !== card);
   if (state.trump == null) {
     state.trump = card === BIRD ? trump : colorOf(card);
-    state.hands = state.hands.map((h) => sortHand(h, state.trump));
+    state.hands = state.hands.map((h) => sortHand(h, state.trump, state.options.bird));
   }
   state.trick.plays.push({ seat, card });
   const size = state.sittingOut == null ? 4 : 3;
@@ -334,7 +342,7 @@ function doPlay(state, seat, { card, trump }) {
     state.turn = n;
     return;
   }
-  const winner = trickWinner(state.trick.plays, state.trump);
+  const winner = trickWinner(state.trick.plays, state.trump, state.options.bird);
   const done = { ...state.trick, winner, points: sumPoints(state.trick.plays.map((p) => p.card)) };
   state.tricks.push(done);
   state.lastTrick = done;
@@ -478,8 +486,9 @@ export function canClaim(state) {
   const hand = state.hands[leader];
   if (hand.length < 2) return false;
   const trump = state.trump;
+  const bird = state.options.bird;
   const others = state.hands.flatMap((h, s) => (s === leader ? [] : h));
-  const myTrumps = hand.filter((c) => isTrump(c, trump)).sort((a, b) => strength(b, trump) - strength(a, trump));
+  const myTrumps = hand.filter((c) => isTrump(c, trump)).sort((a, b) => strength(b, trump, bird) - strength(a, trump, bird));
   const maxOtherTrumps = Math.max(
     0,
     ...state.hands.map((h, s) => (s === leader ? 0 : h.filter((c) => isTrump(c, trump)).length)),
@@ -487,23 +496,23 @@ export function canClaim(state) {
   const otherTrumps = others.filter((c) => isTrump(c, trump));
   if (maxOtherTrumps > 0) {
     if (myTrumps.length < maxOtherTrumps) return false;
-    const topOther = Math.max(...otherTrumps.map((c) => strength(c, trump)));
-    for (let i = 0; i < maxOtherTrumps; i++) if (strength(myTrumps[i], trump) < topOther) return false;
+    const topOther = Math.max(...otherTrumps.map((c) => strength(c, trump, bird)));
+    for (let i = 0; i < maxOtherTrumps; i++) if (strength(myTrumps[i], trump, bird) < topOther) return false;
   }
   for (const c of hand) {
     if (isTrump(c, trump)) continue;
     const col = colorOf(c);
-    const beat = others.some((o) => !isTrump(o, trump) && colorOf(o) === col && strength(o, trump) > strength(c, trump));
+    const beat = others.some((o) => !isTrump(o, trump) && colorOf(o) === col && strength(o, trump, bird) > strength(c, trump, bird));
     if (beat) return false;
   }
   return true;
 }
 
 // Order the leader would play a claimed hand: trumps high to low, then side winners.
-export function claimOrder(hand, trump) {
+export function claimOrder(hand, trump, bird) {
   return [...hand].sort((a, b) => {
     const ta = isTrump(a, trump), tb = isTrump(b, trump);
     if (ta !== tb) return ta ? -1 : 1;
-    return strength(b, trump) - strength(a, trump);
+    return strength(b, trump, bird) - strength(a, trump, bird);
   });
 }

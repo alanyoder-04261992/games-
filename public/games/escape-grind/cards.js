@@ -77,18 +77,20 @@ export const RING = [
   'fpay', 'ven', 'drm', 'ven', 'ven', 'fpay',
   'drm', 'set', 'ven', 'fpay', 'drm', 'ven',
 ];
+// Each kind of space has its own hue (no two spaces on the same loop look alike) that matches its
+// deck where it has one; colors are deep enough to stay saturated under the table's lighting.
 export const SPACE_INFO = {
-  pay: { label: 'Payday', color: '#2f9e5b' },
-  opp: { label: 'Opportunity', color: '#2c6fd1' },
-  mkt: { label: 'Market', color: '#7a4fd0' },
-  spl: { label: 'Splurge', color: '#d6463b' },
-  chr: { label: 'Give', color: '#e0a526' },
-  kid: { label: 'New Baby', color: '#e46aa8' },
-  lay: { label: 'Laid Off', color: '#4a4f5c' },
-  fpay: { label: 'Freedom Payday', color: '#25a36a' },
-  ven: { label: 'Venture', color: '#1f7fb8' },
-  drm: { label: 'Dream', color: '#d9a21b' },
-  set: { label: 'Setback', color: '#b73a3a' },
+  pay: { label: 'Payday', color: '#17914c' },
+  opp: { label: 'Opportunity', color: '#1c58c9' },
+  mkt: { label: 'Market', color: '#7434cf' },
+  spl: { label: 'Splurge', color: '#e0521f' },
+  chr: { label: 'Give', color: '#0b8f8a' },
+  kid: { label: 'New Baby', color: '#d63f8c' },
+  lay: { label: 'Laid Off', color: '#3b414d' },
+  fpay: { label: 'Freedom Payday', color: '#138a4e' },
+  ven: { label: 'Venture', color: '#0a7fae' },
+  drm: { label: 'Dream', color: '#dc9a06' },
+  set: { label: 'Setback', color: '#b3202b' },
 };
 
 // Dreams sit on fixed Dream spaces of the Freedom Ring (in RING order).
