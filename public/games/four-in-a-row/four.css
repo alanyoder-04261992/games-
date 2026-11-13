@@ -1,4 +1,5 @@
-/* Four in a Row: molded plastic rack on a wooden table */
+/* Four in a Row. The flat board: a molded plastic rack on a wooden table, all in CSS.
+   The 3D board (scene.js) draws into .f4-host when .f4 has the class .three; see the end. */
 .f4 {
   --cell: min(10.4vw, 8.4vh, 76px);
   --disc: calc(var(--cell) * 0.8);
@@ -18,9 +19,11 @@
 }
 .f4-wood::after { content: ''; position: absolute; inset: 0; box-shadow: inset 0 0 180px 50px rgba(0, 0, 0, 0.6); }
 .f4-lamp { position: absolute; inset: 0; z-index: 0; background: radial-gradient(ellipse 55% 50% at 50% 42%, rgba(255, 228, 170, 0.22), transparent 70%); pointer-events: none; }
-.f4 > *:not(.f4-wood):not(.f4-lamp) { position: relative; z-index: 1; }
+.f4-top, .f4-host, .f4-after { position: relative; z-index: 1; }
 
 /* ---------- players & status ---------- */
+.f4-top { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.f4-host { display: flex; justify-content: center; }
 .f4-players { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
 .f4-player { display: flex; align-items: center; gap: 10px; padding: 7px 14px 7px 7px; border-radius: 999px; background: rgba(20, 10, 4, 0.55); border: 1px solid rgba(255, 255, 255, 0.12); backdrop-filter: blur(6px); transition: box-shadow 0.3s, border-color 0.3s; }
 .f4-player small { display: block; color: rgba(255, 236, 210, 0.7); font-size: 12px; }
@@ -92,6 +95,9 @@
 @keyframes f4bounce { 30% { transform: translateY(calc(var(--cell) * -0.14)); } 60% { transform: translateY(0); } 80% { transform: translateY(calc(var(--cell) * -0.04)); } }
 .f4-disc.win { animation: f4win 0.9s ease-in-out 0.4s infinite alternate; }
 @keyframes f4win { to { box-shadow: inset 0 -4px 6px rgba(0, 0, 0, 0.3), 0 0 0 3px rgba(255, 255, 255, 0.95), 0 0 26px 8px rgba(255, 255, 255, 0.75); } }
+/* a new game: the old checkers fall out of the bottom of the rack */
+.f4-disc.out { z-index: 1; animation: f4out 0.7s cubic-bezier(0.55, 0, 1, 0.45) var(--delay, 0s) forwards; }
+@keyframes f4out { to { transform: translateY(calc((7 - var(--r)) * var(--cell))); opacity: 0; } }
 .f4-disc.chip { position: relative; left: auto; top: auto; --disc: 22px; display: inline-block; }
 .f4-disc.chip::after { inset: 26%; }
 
@@ -125,3 +131,17 @@
   .f4-player { padding: 5px 10px 5px 5px; }
 }
 .f4-player.speaking .avatar { box-shadow: 0 0 0 2px #0b1424, 0 0 0 5px #4ade80, 0 0 18px 3px rgba(74, 222, 128, 0.75); }
+
+/* ---------- the 3D board ---------- */
+/* the canvas fills the screen; the players, status and buttons float over it */
+.f4.three { justify-content: flex-start; background: #140b06; }
+.f4.three .f4-wood, .f4.three .f4-lamp { display: none; }
+.f4.three .f4-host { position: absolute; inset: 0; z-index: 0; display: block; }
+.f4.three .f4-top, .f4.three .f4-after { pointer-events: none; }
+.f4.three .f4-after { margin-top: auto; }
+.f4.three .f4-after > * { pointer-events: auto; }
+.f4-gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+.f4.loading .f4-host::after { content: 'Setting up the table…'; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: rgba(255, 236, 210, 0.7); font-weight: 600; }
+/* keyboard and screen-reader buttons for the 3D board: invisible, but Tab and Enter work */
+.f4-keys { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.f4:not(.three) .f4-keys { display: none; }

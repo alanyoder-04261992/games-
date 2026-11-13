@@ -1,6 +1,6 @@
 // Offline support. Network first (so updates show up right away), falling back to the
 // cached copy when offline. Bump VERSION to clear old caches.
-const VERSION = 'gc-v4';
+const VERSION = 'gc-v5';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)))).then(() => self.clients.claim()));

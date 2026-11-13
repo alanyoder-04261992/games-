@@ -5,7 +5,7 @@ home page, **Step-by-step guide** in the lobby, the **?** button at the table, o
 `…/#/help`.
 
 ## Start a table (the host)
-1. On the home page, pick a game and tap **Play online**. A 5-letter table code appears.
+1. On the home page, pick a game and tap **Multiplayer**. A 5-letter table code appears.
 2. Tap **Invite** to text or email the link, or read the code out loud.
 3. Friends appear in seats as they join. In Rook the first friend sits across from you as
    your partner. Use **Sit here**, **Add computer** or **Remove** to arrange the table.

@@ -1,4 +1,11 @@
-# The website is the public/ folder; there is no build step.
+# The website is the public/ folder. The only build step writes public/build.json (this
+# deploy's id and each game's version) so open pages can offer "tap to reload" on updates.
 [build]
   publish = "public"
-  command = ""
+  command = "node tools/stamp-build.mjs"
+
+# never cache build.json: it's how open pages notice a new deploy
+[[headers]]
+  for = "/build.json"
+  [headers.values]
+    Cache-Control = "no-store"

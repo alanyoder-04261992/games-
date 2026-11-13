@@ -10,6 +10,7 @@ const tile = `<svg viewBox="0 0 400 240" preserveAspectRatio="xMidYMid slice" ar
 
 export default {
   id: 'broadside',
+  version: '1.6', // shown on the home tile; bump it whenever you improve the game
   name: 'Broadside',
   tagline: 'Hide your fleet, then trade shots on a 3D sea.',
   description:

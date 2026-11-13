@@ -10,8 +10,10 @@ the same things for free:
 
 Your game only has to describe its rules, its computer player and its screen.
 
-`public/games/four-in-a-row/` is a small, complete example (about 150 lines of rules and
-250 of screen). `public/games/rook/` is the full-size one.
+`public/games/four-in-a-row/` is a small, complete example: about 150 lines of rules
+(`index.js`), 190 of screen (`ui.js`), a flat HTML/CSS board (`board2d.js`) and a 3D board
+(`scene.js`, three.js on WebGPU) that a setting switches between. `public/games/rook/` is the
+full-size one.
 
 ## 1. Make the folder
 
@@ -20,6 +22,7 @@ public/games/my-game/
   index.js     the manifest (required)
   ui.js        the screen (required)
   my-game.css  styles (optional)
+  scene.js     a 3D board (optional, see "3D games" below)
   rules.html   shown by the ? button at the table (optional)
 ```
 
@@ -28,6 +31,7 @@ public/games/my-game/
 ```js
 export default {
   id: 'my-game',                 // folder name, used in saves and URLs
+  version: '1.0',                // shown on the home tile; bump it every time you improve the game
   name: 'My Game',
   tagline: 'One line for the home page tile.',
   description: 'A paragraph for the setup page.',
@@ -113,42 +117,88 @@ an action like `{ type: 'finish', results }` can end the round so rematches work
 See `public/games/dogfight/` for a full example. It runs the game in a frame and bridges
 these messages with `postMessage`.
 
-## 3D games: the shared three.js (r187)
+## 3D games: the shared three.js (r187) and WebGPU
 
 Every 3D game in the Game Center runs on the **same three.js — r187**, kept in
-`public/vendor/three/`. Don't load three.js from a CDN or keep your own copy: one shared
-version means every game works offline, loads it once, and gets upgraded together.
+`public/vendor/three/`, and draws with **WebGPU** through `THREE.WebGPURenderer`. On a
+device or browser without WebGPU, that renderer switches to WebGL2 by itself, so everyone
+can still play. Don't load three.js from a CDN or keep your own copy: one shared version
+means every game works offline, loads it once, and gets upgraded together.
 
 ```js
 // in public/games/my-game/scene.js
-import * as THREE from '../../vendor/three/three.module.min.js';
+import * as THREE from '../../vendor/three/three.webgpu.min.js';
+import { pass, uniform, color, time } from '../../vendor/three/three.tsl.min.js';
 import { OrbitControls } from '../../vendor/three/addons/controls/OrbitControls.js';
+import { bloom } from '../../vendor/three/addons/tsl/display/BloomNode.js';
 // add-ons keep the same path they have in three's examples/jsm folder
+
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+await renderer.init();                       // or start drawing with renderer.setAnimationLoop
+const pipeline = new THREE.RenderPipeline(renderer);   // optional glow
+const scenePass = pass(scene, camera);
+pipeline.outputNode = scenePass.add(bloom(scenePass, 0.6, 0.4, 0.85));
+renderer.setAnimationLoop(() => pipeline.render());    // or renderer.render(scene, camera)
 ```
 
+- **Shaders and effects are written in TSL** (three's node language), never GLSL:
+  node materials such as `MeshStandardNodeMaterial` with `colorNode`/`positionNode` instead of
+  `ShaderMaterial` or `onBeforeCompile`; `THREE.RenderPipeline` with `pass()`, `bloom()` and
+  `ao()` instead of `EffectComposer`; `WaterMesh`/`SkyMesh` instead of `Water`/`Sky`;
+  `THREE.RenderTarget` instead of `WebGLRenderTarget`.
 - **Need another add-on?** Add its path (e.g. `loaders/GLTFLoader.js`) to
   `public/vendor/three/addons.json` and run `npm run update-three`. The script copies it and
   everything it imports, and rewrites its imports to the shared build.
 - **Game in its own page (`<iframe>`)?** Give that page an import map pointing at the shared
   copy, like `public/games/dogfight/play.html`:
-  `{"imports":{"three":"../../vendor/three/three.module.min.js","three/addons/":"../../vendor/three/addons/"}}`
+  `{"imports":{"three":"../../vendor/three/three.webgpu.min.js","three/webgpu":"../../vendor/three/three.webgpu.min.js","three/tsl":"../../vendor/three/three.tsl.min.js","three/addons/":"../../vendor/three/addons/"}}`
 - **Write current API:** `THREE.Timer` instead of `THREE.Clock`; `PCFShadowMap` (or
   `VSMShadowMap`) because `PCFSoftShadowMap` was removed; `texture.colorSpace` instead of
-  `encoding`. A running game should log no `THREE.` warnings.
-- **WebGPU:** the shared folder also has `three.webgpu.min.js` (WebGPURenderer, node materials,
-  `RenderPipeline`) and `three.tsl.min.js` (TSL), built on the same `three.core.min.js`. A WebGPU
-  game imports only those two (`tsl/display/...` add-ons work too). WebGPURenderer runs on WebGL 2
-  where a device has no WebGPU, so don't keep a WebGL code path: shade in TSL, do glow and other
-  post effects with `RenderPipeline`. `public/games/rook/scene.js` is the example. To try real
-  WebGPU headless in Chromium/Playwright use `--enable-unsafe-webgpu --enable-features=Vulkan
-  --use-vulkan=swiftshader --use-angle=swiftshader --use-webgpu-adapter=swiftshader` (without
-  `--use-vulkan=swiftshader` the adapter appears but nothing draws), and
-  `--disable-features=WebGPU` to test the WebGL 2 fallback.
+  `encoding`; `RenderPipeline`, not the deprecated `PostProcessing`. A running game should log
+  no `THREE.` warnings.
+- **Test both ways:** with WebGPU, and with it switched off so the WebGL2 fallback runs. In
+  Chromium/Playwright, WebGPU works even without a GPU via
+  `--enable-unsafe-webgpu --enable-features=Vulkan --use-angle=swiftshader --use-webgpu-adapter=swiftshader`;
+  `--disable-features=WebGPU` forces the fallback.
 - **Upgrading three.js** happens for every game at once: `npm run update-three -- <version>`,
   bump `REQUIRED_REVISION` in `tests/three.test.mjs`, fix each 3D game's console warnings, and
   run `npm test`.
-- `tests/three.test.mjs` fails if any game imports three.js from anywhere else or uses an
-  add-on that isn't vendored.
+- `tests/three.test.mjs` fails if any game imports three.js from anywhere else, uses an
+  add-on that isn't vendored, or still uses WebGL-only code.
+
+### A small 3D board to copy: Four in a Row
+
+`public/games/four-in-a-row/scene.js` is a short, commented 3D board. Things it shows:
+
+```js
+// WebGPU where the browser has it, WebGL 2 everywhere else. Choosing ourselves keeps the
+// console clean (left alone, three logs a warning when it falls back).
+const adapter = navigator.gpu ? await navigator.gpu.requestAdapter().catch(() => null) : null;
+const renderer = new THREE.WebGPURenderer({ antialias: true, forceWebGL: !adapter });
+await renderer.init(); // rejects on a device with neither: show a flat board instead
+
+// a uniform is a value JavaScript sets each frame; the TSL shader reads it
+const glow = uniform(0);
+const mat = new THREE.MeshPhysicalNodeMaterial({ roughness: 0.3 });
+mat.emissiveNode = color('#e0362b').mul(glow);
+```
+
+- `await renderer.compileAsync(scene, camera)` before the first frame, so the first move
+  doesn't stutter while shaders compile.
+- Work animations out from the time since they started rather than adding up per-frame steps,
+  so a slow phone shows the same motion as a fast computer (see `dropDisc`).
+- Keep the 3D board behind a small interface, with a 2D board that has the same interface.
+  Four in a Row's `ui.js` loads `scene.js` only when the "3D board" setting is on (saved with
+  `ctx.prefs`), shows the flat board if 3D can't start, and offers the switch in
+  `settings()`:
+
+```js
+settings: () => [{ label: '3D board', value: want3d, set: (v) => (ctx.prefs.set('four.3d', v), useBoard(v)) }],
+```
+
+- If headless Chromium's WebGPU canvas stays blank (the device is lost at once), add
+  `--use-vulkan=swiftshader` to the flags above. Software rendering runs at a few frames a
+  second, so give animations time before taking screenshots.
 
 ## 4. Register it
 

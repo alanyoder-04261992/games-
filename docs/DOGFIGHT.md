@@ -2,7 +2,7 @@
 
 A browser air-combat game. You fly a 1940s propeller fighter over a 20 × 20 km stretch of coast. Take off from the airfield, beat three waves of raiders that come in from the sea, then land back on the runway.
 
-The game is part of the Game Center. It is one file, `public/games/dogfight/play.html`, which needs no build step and no assets. Three.js r187 comes from the Game Center's shared copy in `public/vendor/three/` through an import map (see the 3D section of [ADDING_A_GAME.md](ADDING_A_GAME.md)), and the terrain, aircraft, textures and sound are all generated in code when the page loads.
+The game is part of the Game Center. It is one file, `public/games/dogfight/play.html`, which needs no build step and no assets. Three.js r187 comes from the Game Center's shared copy in `public/vendor/three/` through an import map and draws with WebGPU (`WebGPURenderer`, which falls back to WebGL2 where WebGPU is missing) (see the 3D section of [ADDING_A_GAME.md](ADDING_A_GAME.md)), and the terrain, aircraft, textures and sound are all generated in code when the page loads.
 
 It works on phones as well as desktops, alone or with up to four pilots online.
 
@@ -41,7 +41,7 @@ The game's menu has:
 
 ## Multiplayer
 
-In the Game Center, choose **Play online** (or **Host an online table**). Friends join with the 5-letter code or the invite link, using the same lobby, chat and seats as the other games. The table options are:
+In the Game Center, choose **Multiplayer** on its tile or options page. Friends join with the 5-letter code or the invite link, using the same lobby, chat and seats as the other games. The table options are:
 
 | Option | Choices |
 |---|---|

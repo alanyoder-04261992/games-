@@ -2,7 +2,7 @@
 
 A browser racing game. Race country roads over hills, farms and lakeshores, against computer cars, against up to three friends online, or against your own ghost in a time trial.
 
-The game is part of the Game Center. It is one file, `public/games/rally/play.html`, with no build step and no assets. Three.js r187 comes from the Game Center's shared copy in `public/vendor/three/` through an import map (see the 3D section of [ADDING_A_GAME.md](ADDING_A_GAME.md)), and the circuits, cars, textures and sound are all generated in code when the page loads.
+The game is part of the Game Center. It is one file, `public/games/rally/play.html`, with no build step and no assets. Three.js r187 comes from the Game Center's shared copy in `public/vendor/three/` through an import map and draws with WebGPU (`WebGPURenderer`, which falls back to WebGL2 where WebGPU is missing) (see the 3D section of [ADDING_A_GAME.md](ADDING_A_GAME.md)), and the circuits, cars, textures and sound are all generated in code when the page loads.
 
 ## Running it
 
@@ -40,16 +40,19 @@ Each car is a two-axle model with slip-angle tyres. Weight shifts under braking 
 
 They follow a racing line that cuts to the inside of each corner. They steer by pure pursuit toward a point down the line, with a pull back toward the line from where the car is now. They brake for the slowest corner within braking distance, catch slides, and move over to pass. Difficulty sets how close they run to the grip limit (Easy 80 %, Pro 100 %).
 
-## Graphics (Three.js r187)
+## Graphics (Three.js r187, WebGPU)
 
-- **Sky:** the r187 physical `Sky`, with Rayleigh and Mie scattering and its built-in drifting cloud layer. Each circuit sets the sun angle, haze and cloud cover.
+The game draws with `WebGPURenderer`: WebGPU where the browser has it, WebGL2 otherwise (it checks for a GPU adapter first and picks the backend itself). Custom shading is written in TSL node materials.
+
+
+- **Sky:** the r187 physical `SkyMesh` (the WebGPU version of `Sky`), with Rayleigh and Mie scattering and its built-in drifting cloud layer. Each circuit sets the sun angle, haze and cloud cover.
 - **Auto-exposure:** at load, the game renders the sky a pixel at a time all the way round the horizon. It sets the sky's brightness from the log-average, like a camera's meter, so a sunset glow doesn't black out the rest. The fog takes the horizon colour, so the hills fade into the actual sky behind them, and the lake reflects it too.
 - **Reflections:** cars and road reflect a pre-filtered environment map made from that same sky, clouds included.
 - **Car models:** bodies are lofted. A rounded cross-section is swept from nose to tail, following each model's side profile, with sills that rise to cut real wheel arches and wings that swell into fenders. The glasshouse is a second, narrower loft that tumbles in toward the roof, framed by body-coloured A-, B- and C-pillars and a roof panel. Details: slim headlamps that follow the bonnet, a full-width tail-light bar that brightens when braking, a grille, number plates, mirrors, exhausts, a splitter, a diffuser and side skirts. The hatch has a roof spoiler, the V8 a ducktail and the GT a wing and bonnet vents. Wheels have lathed tyres with rounded shoulders, five-spoke rims (silver, black or gold by model), brake discs and calipers.
 - **Car paint:** `MeshPhysicalMaterial` with a clear coat. The livery is projected from the side onto the flanks (stripe, door lines, roundel) and from above onto the bonnet, roof and deck (twin racing stripes, roof number). A soft contact shadow sits under every car.
-- **High setting:** adds sun shadows (r187's `PCFShadowMap`), ground-truth ambient occlusion (`GTAOPass`) for soft shading under cars and buildings and among the trees, a light bloom on the sun, lights and glints, 4× multisampling, a finer terrain and more trees.
+- **High setting:** adds sun shadows (r187's `PCFShadowMap`) and a `RenderPipeline`: half-resolution ground-truth ambient occlusion (the TSL `ao()` node, denoised) for soft shading under cars and buildings and among the trees, and a light `bloom()` on the sun, lights and glints, plus 4× multisampling, a finer terrain and more trees.
 
-Phones default to Medium. Terrain and tree detail change the next time a circuit loads.
+Medium and Low skip the post chain entirely: each material tone-maps itself and draws straight to the screen, as WebGL did, so there is no extra full-screen pass. Phones default to Medium. Terrain and tree detail change the next time a circuit loads.
 
 ## Phone layout
 

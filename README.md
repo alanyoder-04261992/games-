@@ -29,7 +29,7 @@ Plain HTML, CSS and JavaScript modules — no build step, hosts anywhere static 
   **Real-life economy** (advanced option): a market index runs through expansion, boom, slowdown,
   recession and recovery. Deal prices, buyer offers, business income and loan rates follow it, and
   a live stock market lets players buy the dip, sell the boom, and short stocks to profit from a fall.
-- **Four in a Row** — a small, complete example of how a game plugs in.
+- **Four in a Row** — a small, complete example of how a game plugs in, with a 3D board (three.js on WebGPU) and a flat one.
 - **Coastal Dogfight** — a real-time 3D flight game: 1940s fighters over a 20 km coastline.
   Up to four pilots team up against waves of raiders (you pick how many per wave and how
   many waves) or fight a free-for-all. Phone touch controls, mouse aim, keyboard and gamepad.
@@ -38,6 +38,15 @@ Plain HTML, CSS and JavaScript modules — no build step, hosts anywhere static 
   (farmland, a lakeside at sunset, a wooded hollow), three cars, up to four drivers online
   plus computer cars, and a time trial against your own ghost. Phone touch controls, keyboard
   and gamepad. Details in [docs/RALLY.md](docs/RALLY.md).
+
+## Versions, updates and graphics
+
+- Each game's version (for example `v1.7`) is shown small in the corner of its home tile and
+  on its options page. It goes up whenever the game is improved.
+- When a new version is published while the site is open, a bar says what improved; tap it to
+  reload. On phones you can also pull down on the home page to refresh.
+- The 3D games draw with **WebGPU** (three.js `WebGPURenderer`), and switch to WebGL2 by
+  themselves on devices that don't have WebGPU yet.
 
 ## Online play
 
@@ -83,10 +92,11 @@ public/                 ← the website (deploy this folder)
   games/dogfight/       Coastal Dogfight: play.html (the game), index.js, ui.js (frame bridge)
   games/rally/          Ridgeline Rally: play.html (the game), index.js, ui.js
   vendor/peerjs.min.js
-  vendor/three/         three.js r187 (MIT), shared by every 3D game, + the add-ons they use
-                        (update with `npm run update-three`; see docs/ADDING_A_GAME.md)
+  vendor/three/         three.js r187 (MIT), shared by every 3D game (WebGPU build + TSL, and
+                        the classic build), + the add-ons they use (`npm run update-three`)
+  core/updates.js       "update ready — tap to reload" bar and pull to refresh
 tests/                  node --test
-tools/                  local server, local PeerJS server
+tools/                  local server, local PeerJS server, update-three, stamp-build (deploy)
 docs/ADDING_A_GAME.md   how to add a game
 ```
 
@@ -102,10 +112,13 @@ npm test
 
 Connect the repository in Cloudflare Pages with:
 
-- Build command: *(none)*
+- Build command: `node tools/stamp-build.mjs`
 - Build output directory: `public`
 
 Netlify picks this up from `netlify.toml` (publish directory `public`). Any other static host works the same way: publish the `public` folder.
+The build command only writes `public/build.json` (this deploy's id and each game's version).
+Pages that are open when a new deploy goes live use it to show **"Improved: Hexstead v1.8 —
+Tap to reload"**. Without it the site works the same, just without that bar.
 
 ## Adding games
 

@@ -6,6 +6,7 @@ import { HostRoom, GuestClient, SPEEDS } from './room.js';
 import { GAME_MODULES } from '../games/index.js';
 import { onlineGuide } from './guide.js';
 import { Voice } from './voice.js';
+import { startUpdates } from './updates.js';
 
 const app = document.getElementById('app');
 const GAMES = new Map();
@@ -40,6 +41,8 @@ async function boot() {
   window.addEventListener('hashchange', route);
   route();
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  // "update ready" bar + pull to refresh (not at the table: dragging there belongs to the game)
+  startUpdates({ games: GAMES, allowPull: () => !/^#\/?table/.test(location.hash) });
 }
 
 function go(hash) {
@@ -181,15 +184,15 @@ function showHome() {
     h(
       'article.gc-tile',
       { style: { '--accent': g.accent || '#3b82f6' } },
-      h('a.gc-tile-art', { href: `#/game/${g.id}`, html: g.tile, 'aria-label': g.name }),
+      h('a.gc-tile-art', { href: `#/game/${g.id}`, html: g.tile, 'aria-label': g.name }, g.version ? h('span.gc-ver', { title: `${g.name} version ${g.version}` }, `v${g.version}`) : null),
       h(
         'div.gc-tile-body',
         h('div.gc-tile-head', h('h3', g.name), h('span.gc-pill', g.players)),
         h('p', g.tagline),
         h(
           'div.gc-tile-actions',
-          h('button.btn.gold', { onclick: () => needName(() => startSolo(g)) }, 'Play now'),
-          h('button.btn.ghost', { onclick: () => needName(() => hostOnline(g)) }, h('span', { html: ICON.wifi }), 'Play online'),
+          h('button.btn.gold', { onclick: () => needName(() => startSolo(g)), title: 'Play against computer players' }, 'Single player'),
+          h('button.btn.ghost', { onclick: () => needName(() => hostOnline(g)), title: 'Host an online table for friends' }, h('span', { html: ICON.people }), 'Multiplayer'),
           h('a.btn.text', { href: `#/game/${g.id}` }, 'Options'),
         ),
       ),
@@ -362,7 +365,7 @@ function showSetup(game) {
         h('div.gc-setup-art', { html: game.tile }),
         h(
           'div.gc-setup-body',
-          h('h1', game.name),
+          h('h1', game.name, game.version ? h('span.gc-ver.inline', `v${game.version}`) : null),
           h('p.lead', game.description),
           ...(game.options || []).map((o) => select(o.label, () => options[o.key], o.choices, (v) => (options[o.key] = v))),
           game.botLevels
@@ -371,8 +374,8 @@ function showSetup(game) {
           select('Game speed', () => settings.speed, Object.entries(SPEEDS).map(([value, s]) => ({ value, label: s.label })), (v) => (settings.speed = v)),
           h(
             'div.gc-actions',
-            h('button.btn.gold.big', { onclick: () => needName(() => startSolo(game, options, settings)) }, 'Play vs computer'),
-            h('button.btn.ghost.big', { onclick: () => needName(() => hostOnline(game, options, settings)) }, h('span', { html: ICON.wifi }), 'Host an online table'),
+            h('button.btn.gold.big', { onclick: () => needName(() => startSolo(game, options, settings)) }, 'Single player'),
+            h('button.btn.ghost.big', { onclick: () => needName(() => hostOnline(game, options, settings)) }, h('span', { html: ICON.people }), 'Multiplayer'),
           ),
           save && !save.over ? h('button.btn.text', { onclick: () => resumeHost(game, save) }, `Continue your saved game (${ago(save.savedAt)})`) : null,
         ),
