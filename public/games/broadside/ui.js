@@ -45,7 +45,10 @@ export function mount(ctx) {
         const s = await createScene(stage, { onCell, onHover, quality: ctx.prefs.get('bs.quality') ?? 'high' });
         if (gone) return s.destroy();
         scene = s;
-        if (view) sync(true);
+        if (view) {
+          sync(true);
+          drawAll(); // the mini-map and the battle dock need the sea, so draw them now it's here
+        }
       } catch (e) {
         if (gone) return;
         console.error(e);
@@ -128,11 +131,14 @@ export function mount(ctx) {
     plan.selected = view.fleet.find((id) => !plan.ships[id]) || null;
     drawPlacement();
   }
+  // after any change to the plan: the banner (which ship is next, or "ready?") and the dock
+  // (picked ship, Ready button) follow it even before the 3D sea has started
   function drawPlacement() {
+    drawBanner();
+    drawDock();
     if (!scene) return;
     scene.syncShips(0, planList(), FLEET_COLORS[mySide()]);
     showGhost();
-    drawDock();
   }
 
   // ---------------------------------------------------------------------
@@ -239,14 +245,21 @@ export function mount(ctx) {
     if (manualFocus != null) return manualFocus;
     return view.turn === mySide() ? 1 : 0;
   }
+  // Every camera move goes through here, so the dock button ("View my fleet" / "View enemy
+  // waters") and the mini-map (the grid you're not looking at) always match the camera.
+  function focusTo(b, animate = true) {
+    if (!scene) return;
+    scene.setFocus(b, animate);
+    drawMini();
+    drawDock();
+  }
   function focusDesired(animate = true) {
     const f = desiredFocus();
-    if (scene && scene.focus() !== f) scene.setFocus(f, animate);
+    if (scene && scene.focus() !== f) focusTo(f, animate);
   }
   function setFocusManual(b) {
     manualFocus = b;
-    scene?.setFocus(b);
-    drawMini();
+    focusTo(b);
   }
 
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -256,7 +269,7 @@ export function mount(ctx) {
     const key = `${lb}:${shot.i}`;
     manualFocus = null;
     if (scene.focus() !== lb) {
-      scene.setFocus(lb);
+      focusTo(lb);
       await wait(900);
     }
     sound.cannon();
