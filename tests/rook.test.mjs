@@ -127,3 +127,29 @@ test('claim detection is sound', () => {
   }
   console.log('claims checked', checked);
 });
+
+test('easy computer only makes legal bids, even when it has to bid', () => {
+  // The Easy level adds random noise to its bid limit. That noise used to be any whole number,
+  // so when everyone else passed and it had to bid, it could bid 143 (bids go up by 5).
+  const real = Math.random;
+  let forced = 0;
+  try {
+    for (let seed = 1; seed <= 12; seed++) {
+      let s = R.setup({ seed, firstDealer: 0 });
+      // everyone passes until one seat is left with no choice but to bid
+      while (R.legal(s, R.actors(s)[0]).some((a) => a.type === 'pass')) s = R.apply(s, R.actors(s)[0], { type: 'pass' });
+      const seat = R.actors(s)[0];
+      const legal = R.legal(s, seat);
+      for (let k = 1; k <= 6; k++) {
+        let x = seed * 7919 + k;
+        Math.random = () => ((x = (x * 16807) % 2147483647) / 2147483647);
+        const a = chooseAction(R.view(s, seat), legal, 'easy');
+        forced++;
+        assert.ok(legal.some((l) => l.type === a.type && l.amount === a.amount), `seed ${seed}: illegal bid ${JSON.stringify(a)}`);
+      }
+    }
+  } finally {
+    Math.random = real;
+  }
+  assert.ok(forced >= 60);
+});
