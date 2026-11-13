@@ -128,6 +128,11 @@ export const sound = {
     burst({ freq: 1100, q: 0.45, dur: 0.5, gain: 0.45 });
     burst({ freq: 2600, q: 0.7, dur: 0.25, gain: 0.2, delay: 0.05 });
   },
+  // dice rattling in a cup, then tumbling out (Liar's Dice)
+  dice() {
+    for (let i = 0; i < 14; i++) burst({ freq: 900 + Math.random() * 1600, q: 2.2, dur: 0.035, gain: 0.22, delay: i * 0.035 + Math.random() * 0.02 });
+    for (let i = 0; i < 5; i++) burst({ freq: 1400 + Math.random() * 900, q: 2.5, dur: 0.05, gain: 0.3, delay: 0.6 + i * 0.07 + Math.random() * 0.03 });
+  },
   pop() {
     tone({ freq: 520, dur: 0.08, gain: 0.12, slide: 1.8 });
   },

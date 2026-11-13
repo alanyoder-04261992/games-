@@ -1,0 +1,190 @@
+/* Liar's Dice: a lamp-lit felt table, leather cups and ivory dice, all in CSS. */
+.ld {
+  --die: 30px;
+  --felt-1: #2e8a57; --felt-2: #1b6340; --felt-3: #0b2f1f;
+  --brass: #e6c27a;
+  position: absolute; inset: 0; overflow: hidden auto; display: flex; flex-direction: column; align-items: center;
+  gap: 10px; padding: 12px 16px calc(14px + var(--safe-bottom, 0px)); user-select: none; -webkit-user-select: none; color: #f6f1e4;
+}
+.ld-felt {
+  position: fixed; inset: 0; z-index: 0;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .22 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse 80% 70% at 50% 45%, var(--felt-1), var(--felt-2) 60%, var(--felt-3));
+}
+.ld-felt::after { content: ''; position: absolute; inset: 0; box-shadow: inset 0 0 160px 40px rgba(0, 0, 0, 0.55); }
+.ld-lamp { position: fixed; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(ellipse 50% 45% at 50% 40%, rgba(255, 231, 176, 0.18), transparent 70%); }
+.ld > :not(.ld-felt):not(.ld-lamp) { position: relative; z-index: 1; }
+
+/* ---------- dice ---------- */
+.ld-die {
+  --s: var(--die);
+  width: var(--s); height: var(--s); flex: none; border-radius: calc(var(--s) * 0.2); padding: calc(var(--s) * 0.12);
+  display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); place-items: center;
+  background: linear-gradient(145deg, #fffdf6, #f0e7d2 60%, #d8caa9);
+  box-shadow: inset 0 -2px 3px rgba(80, 55, 20, 0.35), inset 0 2px 2px rgba(255, 255, 255, 0.9), 0 2px 4px rgba(0, 0, 0, 0.45);
+  transition: transform 0.25s, opacity 0.3s, filter 0.3s;
+}
+.ld-die i { width: calc(var(--s) * 0.17); height: calc(var(--s) * 0.17); border-radius: 50%; background: radial-gradient(circle at 35% 30%, #4a4a55, #111116); box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.6); }
+.ld-die[data-f='1'] i { width: calc(var(--s) * 0.26); height: calc(var(--s) * 0.26); background: radial-gradient(circle at 35% 30%, #ff6b5a, #a3211a); }
+.ld-die.tiny { --s: 20px; padding: 2px; border-radius: 5px; }
+.ld-die.mid { --s: 46px; }
+.ld-dicerow.big .ld-die { --s: clamp(40px, 12vw, 58px); }
+
+/* rolling in at the start of a round */
+.ld-die.roll { animation: ldroll 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; animation-delay: calc(var(--i, 0) * 0.06s); }
+@keyframes ldroll {
+  0% { transform: translate(calc(-40px + var(--i, 0) * 12px), -30px) rotate(-200deg) scale(0.6); opacity: 0; }
+  60% { opacity: 1; }
+  100% { transform: none; }
+}
+/* the cups come up: dice that count glow, the rest dim */
+.reveal .ld-die.hit { box-shadow: inset 0 -2px 3px rgba(80, 55, 20, 0.35), 0 0 0 2px #ffd36b, 0 0 16px 3px rgba(255, 205, 90, 0.7); animation: ldhit 0.45s ease-out both; animation-delay: calc(0.35s + var(--i, 0) * 0.08s); }
+.reveal .ld-die.miss { opacity: 0.45; filter: saturate(0.4); }
+@keyframes ldhit { 0% { transform: scale(1); } 50% { transform: scale(1.18) translateY(-4px); } 100% { transform: none; } }
+
+/* ---------- cups ---------- */
+.ld-cupzone { display: flex; flex-direction: column; align-items: center; gap: 5px; min-height: 58px; justify-content: flex-end; }
+.ld-cup {
+  width: 46px; height: 44px; position: relative;
+  clip-path: polygon(14% 0, 86% 0, 100% 100%, 0 100%);
+  border-radius: 6px 6px 3px 3px;
+  background:
+    linear-gradient(180deg, transparent 18%, rgba(230, 179, 92, 0.75) 18% 23%, transparent 23% 76%, rgba(230, 179, 92, 0.75) 76% 81%, transparent 81%),
+    linear-gradient(90deg, #3a1b0c, #8b4a22 35%, #6a3416 70%, #3a1b0c);
+  filter: drop-shadow(0 5px 4px rgba(0, 0, 0, 0.5));
+}
+.ld-cup::after { content: ''; position: absolute; left: 22%; top: 8%; width: 9%; height: 80%; border-radius: 4px; background: rgba(255, 255, 255, 0.16); transform: skewX(-6deg); }
+.ld-cup.shake { animation: ldshake 0.55s ease-in-out 2; }
+@keyframes ldshake { 25% { transform: rotate(-9deg) translateY(-3px); } 75% { transform: rotate(9deg) translateY(-3px); } }
+.ld-dots { display: flex; gap: 4px; }
+.ld-dots i { width: 7px; height: 7px; border-radius: 2px; background: rgba(255, 248, 230, 0.75); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
+/* a lifted cup floats away above the dice */
+.ld-dicerow { position: relative; display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; min-height: 58px; align-items: flex-end; max-width: 190px; }
+.ld-dicerow.big { gap: 8px; max-width: none; min-height: 0; }
+.ld-cup.up { position: absolute; left: 50%; bottom: 6px; margin-left: -23px; animation: ldlift 0.7s cubic-bezier(0.3, 0, 0.3, 1) forwards; pointer-events: none; z-index: 2; }
+@keyframes ldlift { 0% { transform: none; opacity: 1; } 100% { transform: translateY(-46px) rotate(-14deg); opacity: 0; } }
+
+/* ---------- opponents ---------- */
+.ld-opps { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; width: 100%; max-width: 980px; padding-top: 30px; }
+.ld-seat {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  min-width: 132px; flex: 0 1 172px; padding: 10px 10px 12px; border-radius: 16px;
+  background: rgba(6, 24, 15, 0.5); border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(4px);
+  transition: border-color 0.3s, box-shadow 0.3s, opacity 0.3s;
+}
+.ld-who { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
+.ld-who > div { min-width: 0; }
+.ld-who strong { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ld-who small { display: block; color: rgba(246, 241, 228, 0.65); font-size: 12px; }
+.ld-seat.turn { border-color: rgba(255, 211, 107, 0.9); box-shadow: 0 0 22px rgba(255, 200, 90, 0.35); }
+.ld-seat.out { opacity: 0.45; }
+.ld-seat.won { border-color: #fff; box-shadow: 0 0 30px rgba(255, 255, 255, 0.45); }
+.ld-seat.speaking .avatar { box-shadow: 0 0 0 2px #0b1424, 0 0 0 5px #4ade80, 0 0 18px 3px rgba(74, 222, 128, 0.75); }
+.ld-say {
+  position: absolute; top: -26px; left: 50%; transform: translateX(-50%); z-index: 3; white-space: nowrap;
+  display: flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 12px;
+  background: #fffaf0; color: #2a1a10; font-weight: 800; font-size: 14px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+  animation: ldsay 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+.ld-say::after { content: ''; position: absolute; bottom: -6px; left: 50%; margin-left: -6px; border: 6px solid transparent; border-bottom: 0; border-top-color: #fffaf0; }
+.ld-say:not(.current):not(.call) { opacity: 0.6; }
+.ld-say.call { background: #c0392b; color: #fff; letter-spacing: 0.02em; }
+.ld-say.call::after { border-top-color: #c0392b; }
+@keyframes ldsay { from { transform: translateX(-50%) scale(0.6); opacity: 0; } }
+.ld-minus {
+  position: absolute; right: -6px; top: -10px; z-index: 4; padding: 2px 8px; border-radius: 999px; background: #c0392b; color: #fff; font-weight: 800; font-size: 12px;
+  animation: ldminus 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.4) 0.9s both; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+@keyframes ldminus { from { transform: scale(0); opacity: 0; } }
+
+/* ---------- the bid in the middle ---------- */
+.ld-center { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: auto 0; padding: 8px 0; text-align: center; }
+.ld-bid {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: min(360px, 100%); padding: 14px 22px; border-radius: 20px;
+  background: rgba(6, 24, 15, 0.55); border: 1px solid rgba(230, 194, 122, 0.35); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+.ld-bid small { color: rgba(246, 241, 228, 0.72); font-size: 13px; }
+.ld-count { display: flex; align-items: center; gap: 12px; font-family: var(--display); font-size: clamp(30px, 6vw, 42px); font-weight: 800; line-height: 1.1; }
+.ld-count.empty { font-size: 24px; color: rgba(246, 241, 228, 0.7); }
+.ld-status { font-family: var(--display); font-size: clamp(18px, 2.8vw, 24px); font-weight: 700; min-height: 30px; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6); max-width: 560px; }
+.ld.reveal.correct .ld-bid { border-color: rgba(255, 211, 107, 0.7); }
+.ld-odds { color: #bfe8cf !important; }
+
+/* ---------- you ---------- */
+.ld-me { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; max-width: 620px; padding: 14px 14px 16px; border-radius: 22px; background: rgba(6, 24, 15, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); }
+.ld-me.turn { border-color: rgba(255, 211, 107, 0.8); box-shadow: 0 0 30px rgba(255, 200, 90, 0.25); }
+.ld-me.watching { display: none; }
+.ld-me.gone .ld-tray small { color: rgba(246, 241, 228, 0.7); }
+.ld.over .ld-me.gone .ld-tray, .ld.over .ld-me.gone .ld-note { display: none; }
+.ld-tray { position: relative; display: flex; justify-content: center; min-height: 48px; align-items: center; }
+.ld-tray .ld-minus { top: -10px; right: -40px; }
+.ld-note { font-size: 13px; color: rgba(246, 241, 228, 0.7); min-height: 16px; text-align: center; }
+.ld-controls { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+.ld-controls:empty, .ld-after:empty { display: none; }
+.ld-pick { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.ld-qty { display: flex; align-items: center; gap: 8px; }
+.ld-qty .btn.round { width: 40px; height: 40px; font-size: 22px; }
+.ld-qty-n { min-width: 46px; text-align: center; font-family: var(--display); font-size: 34px; font-weight: 800; }
+.ld-x { font-size: 22px; opacity: 0.6; }
+.ld-faces { display: flex; gap: 6px; }
+.ld-face { padding: 4px; border-radius: 10px; border: 2px solid transparent; background: rgba(255, 255, 255, 0.05); cursor: pointer; transition: border-color 0.2s, transform 0.15s, background 0.2s; }
+.ld-face .ld-die { --s: 36px; }
+.ld-face:hover:not(:disabled) { transform: translateY(-2px); }
+.ld-face.on { border-color: #ffd36b; background: rgba(255, 211, 107, 0.16); }
+.ld-face:disabled { opacity: 0.35; cursor: not-allowed; }
+.ld-face:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.ld-buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.ld-buttons .btn { padding: 12px 20px; font-size: 16px; border-radius: 14px; font-weight: 800; }
+.ld-go { display: inline-flex; align-items: center; gap: 8px; }
+.ld-liar { background: linear-gradient(180deg, #e2543f, #b3291c); border-color: #e2543f; color: #fff; }
+.ld-liar:hover { background: linear-gradient(180deg, #ee6650, #c0392b); }
+.ld-spot { background: rgba(255, 255, 255, 0.08); }
+.ld-after { display: flex; justify-content: center; }
+.ld-actions { display: flex; gap: 10px; align-items: center; }
+.ld-wait { color: rgba(246, 241, 228, 0.7); }
+.ld.over .ld-me { border-color: rgba(255, 211, 107, 0.5); }
+
+/* spectators and players who are out: no tray, the table gets the room */
+.ld.over .ld-controls { display: none; }
+
+@media (max-width: 560px) {
+  .ld { --die: 22px; gap: 8px; padding: 8px 12px calc(10px + var(--safe-bottom, 0px)); }
+  .ld-opps { gap: 8px; padding-top: 28px; }
+  .ld-seat { min-width: 0; flex: 1 1 30%; max-width: 48%; padding: 8px 6px 10px; gap: 6px; }
+  .ld-opps[data-n='1'] .ld-seat { max-width: 70%; }
+  .ld-who .avatar { display: none; }
+  .ld-who { text-align: center; justify-content: center; }
+  .ld-cup { width: 36px; height: 34px; }
+  .ld-cupzone, .ld-dicerow { min-height: 46px; }
+  .ld-cup.up { margin-left: -18px; }
+  .ld-say { font-size: 12px; padding: 3px 8px; top: -24px; }
+  .ld-bid { padding: 10px 14px; min-width: 0; width: 100%; }
+  .ld-face { padding: 2px; }
+  .ld-face .ld-die { --s: 30px; }
+  .ld-buttons .btn { padding: 11px 14px; font-size: 15px; }
+  .ld-me { padding: 10px 10px 12px; gap: 8px; }
+  .ld-dicerow.big .ld-die { --s: 42px; }
+  .ld-tray { min-height: 42px; }
+  .ld-center { gap: 4px; padding: 4px 0; }
+  .ld-bid { gap: 3px; border-radius: 16px; }
+  .ld-bid small { font-size: 12px; }
+  .ld-count { font-size: 28px; }
+  .ld-die.mid { --s: 34px; }
+  .ld-status { font-size: 17px; min-height: 22px; }
+  .ld-qty .btn.round { width: 36px; height: 36px; }
+  .ld-qty-n { font-size: 28px; min-width: 38px; }
+  .ld-pick { gap: 6px 8px; }
+  .ld-odds { font-size: 12px; }
+}
+/* short phones: a slimmer table so the bid buttons stay in reach */
+@media (max-width: 560px) and (max-height: 760px) {
+  .ld-cup { width: 30px; height: 28px; }
+  .ld-cup.up { margin-left: -15px; }
+  .ld-cupzone, .ld-dicerow { min-height: 38px; }
+  .ld-seat { gap: 4px; }
+  .ld-who strong { font-size: 13px; }
+  .ld-dicerow:not(.big) .ld-die { --s: 18px; }
+  .ld-dicerow:not(.big) { gap: 3px; }
+  .ld-note { display: none; }
+}
