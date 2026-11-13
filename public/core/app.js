@@ -192,8 +192,8 @@ function showHome() {
         h('p', g.tagline),
         h(
           'div.gc-tile-actions',
-          h('button.btn.gold', { onclick: () => needName(() => startSolo(g)), title: 'Play against computer players' }, 'Single player'),
-          h('button.btn.ghost', { onclick: () => needName(() => hostOnline(g)), title: 'Host an online table for friends' }, h('span', { html: ICON.people }), 'Multiplayer'),
+          h('button.btn.gold', { onclick: () => needName(() => playSheet(g, 'solo')), title: 'Play against computer players' }, 'Single player'),
+          h('button.btn.ghost', { onclick: () => needName(() => playSheet(g, 'online')), title: 'Host an online table for friends' }, h('span', { html: ICON.people }), 'Multiplayer'),
           h('a.btn.text', { href: `#/game/${g.id}` }, 'Options'),
         ),
       ),
@@ -330,9 +330,9 @@ function showAddGame() {
 // ---------------------------------------------------------------------
 // game setup page
 // ---------------------------------------------------------------------
-function showSetup(game) {
-  leaveCurrent(false);
-  document.title = `${game.name} · Game Center`;
+// The game's table options, computer skill and speed, remembered per game. Used by the game's
+// Options page and by the pop-up that opens from a tile's Single player / Multiplayer buttons.
+function setupForm(game) {
   const saved = prefs.get(`setup.${game.id}`) || {};
   const options = {};
   for (const o of game.options || []) options[o.key] = saved.options?.[o.key] ?? o.default;
@@ -362,7 +362,55 @@ function showSetup(game) {
         ),
       ),
     );
+  const fields = [
+    ...(game.options || []).map((o) => select(o.label, () => options[o.key], o.choices, (v) => (options[o.key] = v))),
+    game.botLevels
+      ? select('Computer players', () => settings.botLevel, Object.entries(game.botLevels).map(([value, label]) => ({ value, label })), (v) => (settings.botLevel = v))
+      : null,
+    select('Game speed', () => settings.speed, Object.entries(SPEEDS).map(([value, sp]) => ({ value, label: sp.label })), (v) => (settings.speed = v)),
+  ];
+  return { fields, options, settings };
+}
 
+// Tapping Single player or Multiplayer on a tile: check the game's settings first, then Continue.
+function playSheet(game, mode) {
+  const { fields, options, settings } = setupForm(game);
+  const solo = mode === 'solo';
+  const save = solo ? store.get(`gc.save.${game.id}`) : null;
+  const hasSave = save && !save.over;
+  const sheet = modal(
+    h(
+      'div.gc-play-sheet',
+      { style: { '--accent': game.accent } },
+      h('div.gc-play-head', h('span.gc-play-art', { html: game.tile }), h('div', h('h2', game.name), h('small', solo ? 'Single player · against the computer' : 'Multiplayer · friends join with a code'))),
+      ...fields,
+      hasSave ? h('p.gc-play-note', `Continue starts a new game and replaces your saved one from ${ago(save.savedAt)}.`) : null,
+      h(
+        'div.gc-actions',
+        h(
+          'button.btn.gold.big',
+          {
+            onclick: () => {
+              sheet.close();
+              solo ? startSolo(game, options, settings, { replace: true }) : hostOnline(game, options, settings);
+            },
+          },
+          'Continue',
+        ),
+        hasSave
+          ? h('button.btn.ghost.big', { onclick: () => (sheet.close(), resumeHost(game, save)) }, 'Resume saved game')
+          : h('button.btn.text', { onclick: () => sheet.close() }, 'Cancel'),
+      ),
+    ),
+    { cls: 'play' },
+  );
+  setTimeout(() => sheet.el.querySelector('.btn.gold')?.focus({ preventScroll: true }), 60);
+}
+
+function showSetup(game) {
+  leaveCurrent(false);
+  document.title = `${game.name} · Game Center`;
+  const { fields, options, settings } = setupForm(game);
   const save = store.get(`gc.save.${game.id}`);
   app.replaceChildren(
     h(
@@ -376,11 +424,7 @@ function showSetup(game) {
           'div.gc-setup-body',
           h('h1', game.name, game.version ? h('span.gc-ver.inline', `v${game.version}`) : null),
           h('p.lead', game.description),
-          ...(game.options || []).map((o) => select(o.label, () => options[o.key], o.choices, (v) => (options[o.key] = v))),
-          game.botLevels
-            ? select('Computer players', () => settings.botLevel, Object.entries(game.botLevels).map(([value, label]) => ({ value, label })), (v) => (settings.botLevel = v))
-            : null,
-          select('Game speed', () => settings.speed, Object.entries(SPEEDS).map(([value, s]) => ({ value, label: s.label })), (v) => (settings.speed = v)),
+          ...fields,
           h(
             'div.gc-actions',
             h('button.btn.gold.big', { onclick: () => needName(() => startSolo(game, options, settings)) }, 'Single player'),
@@ -402,12 +446,12 @@ function showSetup(game) {
 // ---------------------------------------------------------------------
 // sessions
 // ---------------------------------------------------------------------
-function startSolo(game, options, settings) {
+function startSolo(game, options, settings, { replace = false } = {}) {
   const saved = prefs.get(`setup.${game.id}`) || {};
   options = options || saved.options || {};
   settings = settings || { speed: saved.speed || 'normal', botLevel: saved.botLevel || 'normal' };
   const existing = store.get(`gc.save.${game.id}`);
-  if (existing && !existing.over && !confirm(`Start a new ${game.name} game? Your saved game will be replaced.`)) return;
+  if (existing && !existing.over && !replace && !confirm(`Start a new ${game.name} game? Your saved game will be replaced.`)) return;
   leaveCurrent(false);
   const room = new HostRoom({ game, profile: { ...profile(), name: displayName() }, online: false, options, settings });
   current = { game, room, client: room.local, mode: 'solo' };
