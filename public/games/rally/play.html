@@ -169,6 +169,7 @@ table.res i{display:inline-block;width:10px;height:10px;border-radius:2px;margin
       </label>
       <label for="setPhone">Phone mode<select id="setPhone"><option value="auto">Auto (on for phones)</option><option value="on">On · touch controls</option><option value="off">Off · keyboard</option></select></label>
       <label for="setQuality">Graphics<select id="setQuality"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
+      <label for="setCam">Camera<select id="setCam"><option value="0">Chase</option><option value="2">Far chase</option><option value="3">In car (cockpit)</option><option value="1">Bonnet</option><option value="4">Bumper</option></select></label>
       <label for="setMap">Corner map<select id="setMap"><option value="on">On</option><option value="off">Off</option></select></label>
       <label for="setVolume">Sound volume<input type="range" id="setVolume" min="0" max="1" step="0.05"></label>
       <label class="check" for="setAssist"><input type="checkbox" id="setAssist"> Driving assist</label>
@@ -218,7 +219,7 @@ table.res i{display:inline-block;width:10px;height:10px;border-radius:2px;margin
 // Three.js r187 drawing with WebGPU (WebGPURenderer falls back to WebGL2 by itself), through
 // the import map above so the add-ons share one copy of it. Shaders are written in TSL.
 import * as THREE from 'three/webgpu';
-import { Fn, uniform, texture, pmremTexture, diffuseColor, normalWorld, uv, vec2, vec3, vec4, float, mix, smoothstep, pow, exp, dot, normalize, reflect, cos, positionWorld, positionGeometry, normalGeometry, cameraPosition, positionView, screenDPR, fract, floor, abs, hash, step, instancedDynamicBufferAttribute, pass, mrt, normalView, rtt, context, renderOutput, densityFogFactor } from 'three/tsl';
+import { Fn, uniform, texture, pmremTexture, diffuseColor, normalWorld, uv, vec2, vec3, vec4, float, mix, smoothstep, pow, exp, dot, normalize, reflect, cos, positionWorld, positionGeometry, normalGeometry, cameraPosition, positionView, screenDPR, fract, floor, abs, hash, step, frontFacing, instancedDynamicBufferAttribute, pass, mrt, normalView, rtt, context, renderOutput, densityFogFactor } from 'three/tsl';
 import { SkyMesh } from 'three/addons/objects/SkyMesh.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -732,56 +733,102 @@ function addTiled(geo, mat, items, set, opts = {}) {
     im.castShadow = !!opts.cast; im.receiveShadow = !!opts.receive; im.computeBoundingSphere(); world.add(im);
   }
 }
-// Trees: a spruce of drooping, ragged tiers or a broadleaf of lumpy leaf clusters on a trunk
-// with branches. The foliage is shaded with normals pointing out from the crown's middle, so
-// it reads as one soft rounded mass of leaves, darker underneath and inside, not as facets.
+// Trees, built the way racing games do it: a solid inner core so a crown never looks hollow,
+// wrapped in many textured cards with see-through edges, so the outline is ragged leaves and
+// needles. Broadleaf crowns are clusters of leaf sprays; spruces are drooping fronds (each a
+// crossed pair of cards, so they read from the side too) round a dark cone of needles.
+// One texture atlas holds the five patterns; the vertex colours only shade (darker inside and
+// underneath), and each tree gets its own tint from its instance colour.
+const ATLAS = { leaf: 0, frond: 1, leafMass: 2, needleMass: 3, bark: 4, n: 5 };
+let _treeAtlas = null;
+function treeAtlas() {
+  if (_treeAtlas) return _treeAtlas;
+  const S = 256, c = document.createElement('canvas'); c.width = S * ATLAS.n; c.height = S; const x = c.getContext('2d'); const r = mulberry32(77);
+  const leafCol = (l = 0) => `hsl(${78 + r() * 34},${34 + r() * 26}%,${17 + r() * 22 + l}%)`;
+  const leaf = (px, py, len, wid, a, col) => { x.save(); x.translate(px, py); x.rotate(a); x.fillStyle = col; x.beginPath(); x.ellipse(0, 0, len, wid, 0, 0, 6.283); x.fill(); x.fillStyle = 'rgba(255,255,220,0.12)'; x.beginPath(); x.ellipse(-len * 0.2, -wid * 0.3, len * 0.6, wid * 0.4, 0, 0, 6.283); x.fill(); x.restore(); };
+  // 0: a spray of leaves on twigs, dense in the middle, ragged at the edge
+  { const ox = ATLAS.leaf * S; x.strokeStyle = '#3b2d1f'; x.lineWidth = 2;
+    for (let i = 0; i < 7; i++) { const a = r() * 6.283; x.beginPath(); x.moveTo(ox + 128, 128); x.quadraticCurveTo(ox + 128 + Math.cos(a + 0.4) * 50, 128 + Math.sin(a + 0.4) * 50, ox + 128 + Math.cos(a) * 105, 128 + Math.sin(a) * 105); x.stroke(); }
+    for (let i = 0; i < 620; i++) { const a = r() * 6.283, d = Math.pow(r(), 0.65) * 112; leaf(ox + 128 + Math.cos(a) * d, 128 + Math.sin(a) * d, 6 + r() * 6, 3 + r() * 2.6, r() * 6.283, leafCol(d < 50 ? -6 : 0)); } }
+  // 1: a spruce frond: stem down the middle, needles angled outwards, tapering to the tip
+  { const ox = ATLAS.frond * S; x.lineCap = 'round';
+    for (let y = 8; y < 248; y += 1.6) { const f = y / 248, half = 18 + 92 * Math.sin(Math.min(1, f * 1.15) * Math.PI * 0.5) * (1 - f * 0.55);
+      for (const sd of [-1, 1]) for (let k = 0; k < 2; k++) { const l = half * (0.4 + r() * 0.6), a = sd * (0.9 + r() * 0.5); x.strokeStyle = `hsl(${128 + r() * 34},${17 + r() * 18}%,${10 + r() * 15}%)`; x.lineWidth = 1.2 + r(); x.beginPath(); const sx = ox + 128 + sd * r() * 4; x.moveTo(sx, y); x.lineTo(sx + Math.sin(a) * l, y + Math.cos(a) * l * 0.35); x.stroke(); } }
+    x.strokeStyle = '#3a2b1e'; x.lineWidth = 3; x.beginPath(); x.moveTo(ox + 128, 4); x.lineTo(ox + 128, 244); x.stroke(); }
+  // 2 and 3: solid masses of leaves / needles for the cores
+  { const ox = ATLAS.leafMass * S; x.fillStyle = '#26331a'; x.fillRect(ox, 0, S, S); for (let i = 0; i < 1500; i++) leaf(ox + 6 + r() * (S - 12), 6 + r() * (S - 12), 5 + r() * 5, 2.5 + r() * 2, r() * 6.283, leafCol(-4)); }
+  { const ox = ATLAS.needleMass * S; x.fillStyle = '#16231a'; x.fillRect(ox, 0, S, S); for (let i = 0; i < 4000; i++) { const px = ox + 4 + r() * (S - 8), py = 4 + r() * (S - 8), a = r() * 6.283, l = 4 + r() * 7; x.strokeStyle = `hsl(${125 + r() * 35},${20 + r() * 20}%,${9 + r() * 15}%)`; x.lineWidth = 1.3; x.beginPath(); x.moveTo(px, py); x.lineTo(px + Math.cos(a) * l, py + Math.sin(a) * l); x.stroke(); } }
+  // 4: bark, grey-brown with vertical fissures
+  { const ox = ATLAS.bark * S; x.fillStyle = '#4a3d31'; x.fillRect(ox, 0, S, S); for (let i = 0; i < 260; i++) { const px = ox + r() * S, w = 1 + r() * 4; x.fillStyle = r() < 0.5 ? `rgba(28,22,17,${0.4 + r() * 0.4})` : `rgba(120,108,94,${0.25 + r() * 0.3})`; x.fillRect(px, r() * S * 0.5, w, 40 + r() * 160); } }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = Math.min(8, renderer.getMaxAnisotropy()); return _treeAtlas = t;
+}
 function treeGeo(kind, hi, seed) {
-  const r = mulberry32(seed * 7919), pos = [], nor = [], col = [];
-  const put = (geo, colorAt, normalAt, jitter) => {
+  const r = mulberry32(seed * 7919), pos = [], nor = [], col = [], uvs = [];
+  const U = (cell, u) => (cell + 0.015 + clamp(u, 0, 1) * 0.97) / ATLAS.n;
+  const unit = (x, y, z) => { const l = Math.hypot(x, y, z) || 1; return [x / l, y / l, z / l]; };
+  // a solid piece (core or trunk): its own UVs into one atlas cell, normals by rule, shade per vertex
+  const solid = (geo, cell, shadeAt, normalAt, jitter) => {
     const g = geo.index ? geo.toNonIndexed() : geo; g.computeVertexNormals();
-    const P = g.attributes.position.array, Nn = g.attributes.normal.array, wob = new Map();
-    for (let i = 0; i < P.length; i += 3) {
+    const P = g.attributes.position.array, Nn = g.attributes.normal.array, UV = g.attributes.uv.array, wob = new Map();
+    for (let i = 0, j = 0; i < P.length; i += 3, j += 2) {
       let x = P[i], y = P[i + 1], z = P[i + 2];
       if (jitter) { const key = `${x.toFixed(3)},${y.toFixed(3)},${z.toFixed(3)}`; if (!wob.has(key)) wob.set(key, jitter(x, y, z)); const d = wob.get(key); x += d[0]; y += d[1]; z += d[2]; }
-      const n = normalAt ? normalAt(x, y, z, Nn[i], Nn[i + 1], Nn[i + 2]) : [Nn[i], Nn[i + 1], Nn[i + 2]];
-      const c = colorAt(x, y, z, n);
-      pos.push(x, y, z); nor.push(n[0], n[1], n[2]); col.push(c[0], c[1], c[2]);
+      const n = normalAt ? normalAt(x, y, z, Nn[i], Nn[i + 1], Nn[i + 2]) : [Nn[i], Nn[i + 1], Nn[i + 2]], k = shadeAt(x, y, z, n);
+      pos.push(x, y, z); nor.push(...n); col.push(k, k, k); uvs.push(U(cell, UV[j]), UV[j + 1]);
     }
   };
-  const unit = (x, y, z) => { const l = Math.hypot(x, y, z) || 1; return [x / l, y / l, z / l]; };
-  const bark = (x, y, z, n) => { const k = 0.8 + 0.25 * Math.max(0, n[0] * 0.6 + n[2] * 0.4); return [0.075 * k, 0.058 * k, 0.045 * k]; };
+  // a card: four corners (two triangles), v = 1 at a/b and 0 at c/d
+  const card = (a, b, c, d, cell, normalAt, shadeAt) => {
+    const corner = [[a, 0, 1], [b, 1, 1], [c, 1, 0], [d, 0, 0]];
+    for (const k of [0, 1, 2, 0, 2, 3]) { const [p, u, v] = corner[k]; pos.push(...p); nor.push(...normalAt(p)); const sh = shadeAt(p); col.push(sh, sh, sh); uvs.push(U(cell, u), v); }
+  };
+  const barkShade = (x, y, z, n) => 0.75 + 0.3 * Math.max(0, n[0] * 0.6 + n[2] * 0.4);
   if (kind === 'con') {
-    const H = 12.5 + r() * 2.5, tiers = hi ? 8 : 6, seg = hi ? 9 : 7;
-    put(new THREE.CylinderGeometry(0.14, 0.34, H * 0.55, 6).translate(0, H * 0.275, 0), bark);
+    const H = 12.5 + r() * 2.5, tiers = hi ? 13 : 8, fronds = hi ? 8 : 6;
+    solid(new THREE.CylinderGeometry(0.12, 0.36, H * 0.75, 7).translate(0, H * 0.375, 0), ATLAS.bark, barkShade);
+    // a slim dark spire of needles up the middle, so the tree is never see-through
+    solid(new THREE.ConeGeometry(1.25, H - 1.6, hi ? 9 : 7, 3, true).translate(0, 1.6 + (H - 1.6) / 2, 0), ATLAS.needleMass, (x, y) => 0.45 + 0.4 * (y / H), (x, y, z) => unit(x, 0.5, z),
+      (x, y, z) => { const rr = Math.hypot(x, z); return rr < 0.05 ? [0, 0, 0] : [x / rr * (r() - 0.5) * 0.4, 0, z / rr * (r() - 0.5) * 0.4]; });
     for (let t = 0; t < tiers; t++) {
-      const f = t / tiers, rad = 3.3 * Math.pow(1 - f, 0.95) + 0.3, h = 2.4 + 1.6 * (1 - f), y0 = 1.6 + f * (H - 3.4);
-      const tilt = r() * 6.28;
-      put(new THREE.ConeGeometry(rad, h, seg, 1).rotateY(tilt).translate(0, y0 + h / 2, 0),
-        (x, y, z, n) => { // darker at the bottom of the tree and on the underside of each tier
-          const up = (y - y0) / h, under = n[1] < -0.3 ? 0.45 : 1, k = (0.55 + 0.45 * f + 0.25 * up) * under * (0.9 + 0.2 * r());
-          return [0.032 * k, 0.083 * k, 0.04 * k];
-        },
-        (x, y, z, nx, ny, nz) => ny < -0.5 ? [0, -1, 0] : unit(x, 0.55 + (y - y0) / h * 0.4, z),
-        (x, y, z) => { const rr = Math.hypot(x, z); if (rr < 0.05) return [0, 0, 0]; const k = (r() - 0.5) * 0.36 * rr; return [x / rr * k, (y < y0 + 0.2 ? -0.35 * r() : 0), z / rr * k]; });
+      const f = t / tiers, rad = 3.4 * Math.pow(1 - f, 0.9) + 0.5, h = 2.0, y0 = 1.4 + f * (H - 2.6);
+      // drooping fronds all round the spire, longest at the bottom
+      for (let k = 0; k < fronds; k++) {
+        const a = (k + r() * 0.8) / fronds * 6.283 + t * 1.3, len = rad * (0.9 + r() * 0.35), droop = len * (0.3 + r() * 0.25), wid = len * (0.55 + r() * 0.15);
+        const ca = Math.cos(a), sa = Math.sin(a), by = y0 + h * (0.45 + r() * 0.2), bx = ca * 0.25, bz = sa * 0.25, tx = ca * len, tz = sa * len, ty = by - droop;
+        const shade = p => 0.55 + 0.35 * f + 0.25 * clamp(Math.hypot(p[0], p[2]) / len, 0, 1);
+        const nrm = p => unit(p[0], 0.5 + (p[1] - y0) / h * 0.3, p[2]);
+        // flat card (tangent across) and upright card (vertical across)
+        card([bx - sa * wid * 0.5, by, bz + ca * wid * 0.5], [bx + sa * wid * 0.5, by, bz - ca * wid * 0.5], [tx + sa * wid * 0.25, ty, tz - ca * wid * 0.25], [tx - sa * wid * 0.25, ty, tz + ca * wid * 0.25], ATLAS.frond, nrm, shade);
+        card([bx, by + wid * 0.4, bz], [bx, by - wid * 0.4, bz], [tx, ty - wid * 0.2, tz], [tx, ty + wid * 0.2, tz], ATLAS.frond, nrm, shade);
+      }
     }
   } else {
-    const cy = 6.6 + r() * 0.8, CR = 3.2 + r() * 0.5;
-    put(new THREE.CylinderGeometry(0.2, 0.42, cy, 7).translate(0, cy / 2, 0), bark);
-    for (let b = 0; b < 3; b++) { const a = b * 2.1 + r(), L = 2.4 + r(); put(new THREE.CylinderGeometry(0.07, 0.16, L, 5).translate(0, L / 2, 0).rotateZ(0.75 + r() * 0.3).rotateY(a).translate(0, cy * 0.55 + b * 0.5, 0), bark); }
-    const clusters = hi ? 6 : 5, detail = hi ? 1 : 0;
-    for (let k = 0; k < clusters; k++) {
-      const a = k / clusters * 6.28 + r() * 0.7, d = k === 0 ? 0 : CR * (0.45 + r() * 0.35), ccx = Math.cos(a) * d, ccz = Math.sin(a) * d, ccy = cy + 0.4 + (k === 0 ? 1.2 : (r() - 0.35) * 2.2);
-      const rad = (k === 0 ? 2.9 : 1.8 + r() * 0.8) * (hi ? 1 : 1.12), tone = 0.85 + r() * 0.3, warm = r() * 0.025;
-      put(new THREE.IcosahedronGeometry(rad, detail).translate(ccx, ccy, ccz),
-        (x, y, z, n) => { // sunlit top, shaded bottom and middle
-          const up = clamp((y - (cy - 1.5)) / (CR * 2), 0, 1), out = clamp(Math.hypot(x, z) / CR, 0, 1), k2 = (0.5 + 0.55 * up + 0.2 * out) * tone;
-          return [(0.07 + warm) * k2, 0.135 * k2, 0.035 * k2];
-        },
-        (x, y, z, nx, ny, nz) => { const c = unit(x, y - cy - 0.6, z); return unit(c[0] * 0.75 + nx * 0.25, c[1] * 0.75 + ny * 0.25, c[2] * 0.75 + nz * 0.25); },
-        () => [(r() - 0.5) * rad * 0.34, (r() - 0.5) * rad * 0.3, (r() - 0.5) * rad * 0.34]);
+    const cy = 6.4 + r() * 0.8, CR = 3.3 + r() * 0.5, CH = 2.5 + r() * 0.4, ccy = cy + 1.0;
+    solid(new THREE.CylinderGeometry(0.2, 0.42, cy + 0.6, 8).translate(0, (cy + 0.6) / 2, 0), ATLAS.bark, barkShade);
+    for (let b = 0; b < 4; b++) { const a = b * 1.7 + r(), L = 2.2 + r() * 1.2; solid(new THREE.CylinderGeometry(0.06, 0.15, L, 5).translate(0, L / 2, 0).rotateZ(0.7 + r() * 0.35).rotateY(a).translate(0, cy * 0.6 + b * 0.45, 0), ATLAS.bark, barkShade); }
+    const crownN = (x, y, z) => unit(x / CR, (y - ccy) / CH + 0.25, z / CR);
+    const crownShade = (x, y, z) => { const up = clamp((y - (ccy - CH)) / (CH * 2), 0, 1), out = clamp(Math.hypot(x / CR, (y - ccy) / CH, z / CR), 0, 1.2); return (0.42 + 0.5 * up) * (0.65 + 0.4 * out); };
+    // a few solid lumps of leaves inside the crown
+    const lumps = hi ? 4 : 3;
+    for (let k = 0; k < lumps; k++) {
+      const a = k / lumps * 6.28 + r(), d = k === 0 ? 0 : CR * 0.4, rad = (k === 0 ? 2.4 : 1.7) + r() * 0.4;
+      solid(new THREE.IcosahedronGeometry(rad, hi ? 1 : 0).translate(Math.cos(a) * d, ccy + (k === 0 ? 0.3 : (r() - 0.5) * 1.2), Math.sin(a) * d), ATLAS.leafMass,
+        (x, y, z) => crownShade(x, y, z) * 0.8, (x, y, z) => crownN(x, y, z), () => [(r() - 0.5) * rad * 0.3, (r() - 0.5) * rad * 0.25, (r() - 0.5) * rad * 0.3]);
+    }
+    // leaf sprays all over the crown, facing every which way
+    const sprays = hi ? 46 : 26;
+    for (let k = 0; k < sprays; k++) {
+      const u = r() * 2 - 1, th = r() * 6.283, rr = Math.sqrt(1 - u * u), d = 0.55 + Math.pow(r(), 0.5) * 0.5;
+      const px = Math.cos(th) * rr * CR * d, py = ccy + u * CH * d, pz = Math.sin(th) * rr * CR * d, sz = (hi ? 1.7 : 2.3) * (0.8 + r() * 0.5);
+      const ax = unit(r() - 0.5, r() - 0.5, r() - 0.5), n0 = unit(px, (py - ccy) * 0.6, pz);
+      let bx = [n0[1] * ax[2] - n0[2] * ax[1], n0[2] * ax[0] - n0[0] * ax[2], n0[0] * ax[1] - n0[1] * ax[0]]; bx = unit(...bx);
+      const by = unit(n0[1] * bx[2] - n0[2] * bx[1], n0[2] * bx[0] - n0[0] * bx[2], n0[0] * bx[1] - n0[1] * bx[0]);
+      const tilt = 0.5 + r() * 0.5; const vx = bx, vy = by.map((v, i) => v * tilt + n0[i] * (1 - tilt) * 0.6);
+      const P = (sx, sy) => [px + (vx[0] * sx + vy[0] * sy) * sz, py + (vx[1] * sx + vy[1] * sy) * sz, pz + (vx[2] * sx + vy[2] * sy) * sz];
+      card(P(-0.5, 0.5), P(0.5, 0.5), P(0.5, -0.5), P(-0.5, -0.5), ATLAS.leaf, p => crownN(...p), p => crownShade(...p));
     }
   }
-  const m = new THREE.BufferGeometry(); m.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); m.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); m.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  const m = new THREE.BufferGeometry(); m.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); m.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); m.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); m.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   m.computeBoundingSphere(); return m;
 }
 function buildTrees(tr, count) {
@@ -795,10 +842,7 @@ function buildTrees(tr, count) {
     list.push({ x, z, h, s: 0.75 + r() * 0.8, con: !lone && r() < 0.35 + smooth(40, 200, h) * 0.5, c: r() });
   }
   // two shapes of each kind, so neighbouring trees differ; each instance is turned, sized and tinted
-  // leaves and needles: a fine dappled pattern laid over the crowns (and a rougher one on bark)
-  const LP = positionWorld, dt = makeDetailTexture();
-  const leafy = texture(dt, LP.xz.mul(0.85).add(LP.y.mul(0.61))).r.mul(texture(dt, LP.zy.mul(0.47).add(LP.x.mul(0.3))).r).mul(1.6).add(0.5);
-  const leafMat = lambert({ vertexColors: true, colorNode: vec4(vec3(leafy), 1) });
+  const leafMat = lambert({ map: treeAtlas(), vertexColors: true, alphaTest: 0.42, side: THREE.DoubleSide });
   const hi = BOOTQ.bloom, kinds = [[treeGeo('con', hi, 1), true, 0], [treeGeo('con', hi, 2), true, 1], [treeGeo('dec', hi, 3), false, 0], [treeGeo('dec', hi, 4), false, 1]];
   for (const [geo, sel, v] of kinds) {
     const items = list.filter(t => t.con === sel && (t.c * 997 | 0) % 2 === v); if (!items.length) continue;
@@ -943,10 +987,13 @@ function carGeometry(key) {
   const shoulder = t => Math.max(top(t) - 0.015, arch(zt(t), RA + 0.12), sill(t) + 0.1);
   const stations = n => Array.from({ length: n + 1 }, (_, i) => 0.5 - 0.5 * Math.cos(Math.PI * i / n));
   // lower body: tucked-under sill, slab side, rounded shoulder, crowned bonnet and deck
-  const lower = loft(stations(84).map(t => {
-    const w = hw(t), yb = sill(t), ys = shoulder(t), yc = top(t);
-    return { z: zt(t), pts: mirrorPts([[-w * 0.9, yb], [-w * 0.975, yb + Math.min(0.06, (ys - yb) * 0.3)], [-w, lerp(yb, ys, 0.45)], [-w * 0.99, lerp(yb, ys, 0.8)], [-w * 0.955, ys - 0.012], [-w * 0.88, ys + 0.004], [-w * 0.62, lerp(ys, yc, 0.75)], [-w * 0.3, yc + 0.012], [0, yc + 0.018]]) };
-  }), true);
+  const lowerSec = (t, open) => {
+    const w = hw(t), yb = sill(t), ys = shoulder(t), yc = top(t), fl = yb + 0.06;
+    // open: inside the cabin the top of the body is the floor, so the in-car camera sees the dash
+    return { z: zt(t), pts: mirrorPts([[-w * 0.9, yb], [-w * 0.975, yb + Math.min(0.06, (ys - yb) * 0.3)], [-w, lerp(yb, ys, 0.45)], [-w * 0.99, lerp(yb, ys, 0.8)], [-w * 0.955, ys - 0.012], [-w * 0.88, ys + 0.004], open ? [-w * 0.84, fl] : [-w * 0.62, lerp(ys, yc, 0.75)], open ? [-w * 0.3, fl] : [-w * 0.3, yc + 0.012], open ? [0, fl] : [0, yc + 0.018]]) };
+  };
+  const lower = loft(stations(84).map(t => lowerSec(t, false)), true);
+  const lowerOpen = loft(stations(84).map(t => lowerSec(t, t > tA + 0.01 && t < tC - 0.01)), true);
   // glasshouse: base just inside the shoulders, tumbling home toward a crowned roof
   const roofY = t => H - 0.03 * ((t - (tR1 + tR2) / 2) / ((tR2 - tR1) / 2 + 0.2)) ** 2;
   const cabY = t => { const b = top(t) - 0.03; let f = t <= tR1 ? (t - tA) / (tR1 - tA) : t <= tR2 ? 1 : (tC - t) / (tC - tR2); f = 1 - (1 - clamp(f, 0, 1)) ** 1.5; return b + (roofY(t) - b) * f; };
@@ -955,7 +1002,7 @@ function carGeometry(key) {
   const span = (a, b, n) => Array.from({ length: n + 1 }, (_, i) => a + (b - a) * i / n);
   const glass = loft(span(tA, tC, 40).map(t => ({ z: zt(t), pts: mirrorPts(glassHalf(t).pts) })), false);
   // body-coloured roof panel and the pillars that frame the windows
-  const paint = [lower];
+  const paint = [lower], paintRest = [];
   paint.push(loft(span(tR1 - 0.025, tR2 + 0.02, 16).map(t => { const q = glassHalf(t); return { z: zt(t), pts: mirrorPts([[-q.wt * 0.94, q.b + q.h * 0.86], [-q.wt * 0.9, q.yt + 0.0], [-q.wt * 0.5, q.yt + 0.024], [0, q.yt + 0.028]]) }; }), false));
   for (const sx of [-1, 1]) {
     const pil = span(tA, tC, 40).map(t => { const q = glassHalf(t), o = 0.014; const p = [[-lerp(q.wb, q.wt, 0.82) - o, q.b + q.h * 0.82], [-q.wt - o, q.b + q.h * 0.92], [-q.wt * 0.86 - o * 0.5, q.yt + 0.012]]; return { z: zt(t), pts: (sx < 0 ? p : p.map(([x, y]) => [-x, y]).reverse()) }; });
@@ -988,7 +1035,13 @@ function carGeometry(key) {
   const plates = [new THREE.PlaneGeometry(0.42, 0.11).rotateY(Math.PI).translate(0, sill(0) + 0.1, -L / 2 - 0.012), new THREE.PlaneGeometry(0.42, 0.11).translate(0, sill(1) + 0.17, L / 2 + 0.012)];
   plates[0].rotateY(0); // front plate faces forward (-z) after the flip above
   const grille = box(W * 0.46, 0.13, 0.03, 0, sill(0) + 0.2, -L / 2 - 0.004);
-  const out = { paint: mergeGeometries(paint), glass, trim: mergeGeometries(trim), head: mergeGeometries(head), tail: mergeGeometries(tail), chrome: mergeGeometries(chrome), plates: mergeGeometries(plates), grille, lower };
+  // where things sit inside, for the in-car camera: the driver's eyes (left seat, under the front
+  // of the roof), the windscreen base the dash tucks under, door and roof heights
+  const tE = tR1 + (tR2 - tR1) * 0.4, tEnd = Math.min(tC, tE + 0.14);
+  const cab = { zA: zt(tA), yA: top(tA) - 0.03, hwA: hw(tA) * B.wb, tE, zE: zt(tE), hwE: hw(tE) * B.wb, sillE: sill(tE), shE: top(tE) - 0.03, roofE: cabY(tE), zR1: zt(tR1), roofR1: cabY(tR1), zR2: zt(tR2), wtE: hw(tE) * B.wt, zEnd: zt(tEnd),
+    eye: new V3(-W * 0.2, Math.min(cabY(tE) - 0.2, top(tA) + 0.27), zt(tE)) };
+  paintRest.push(...paint.slice(1));
+  const out = { paint: mergeGeometries(paint), paintOpen: mergeGeometries([lowerOpen, ...paintRest]), glass, trim: mergeGeometries(trim), head: mergeGeometries(head), tail: mergeGeometries(tail), chrome: mergeGeometries(chrome), plates: mergeGeometries(plates), grille, lower, cab };
   CARGEO.set(key, out); return out;
 }
 // wheels: a lathed tyre with rounded shoulders, five-spoke rims, discs and calipers
@@ -1029,7 +1082,7 @@ function paintMaterial(tex, s, ghost) {
   const uvS = vec2(P.x.lessThan(0).select(zn, zn.oneMinus()), hn.mul(0.48).add(0.51));
   const uvT = vec2(zn, P.x.div(s.wid).add(0.5).clamp(0, 1).mul(0.48).add(0.01));
   const wTop = smoothstep(0.55, 0.85, normalize(normalGeometry).y.abs());
-  const m = new THREE.MeshPhysicalNodeMaterial({ colorNode: mix(texture(tex, uvS), texture(tex, uvT), wTop), roughness: 0.36, metalness: 0.5, clearcoat: ghost ? 0 : 1, clearcoatRoughness: 0.05, envMapIntensity: 1.15, side: ghost ? THREE.FrontSide : THREE.DoubleSide });
+  const m = new THREE.MeshPhysicalNodeMaterial({ colorNode: frontFacing.select(mix(texture(tex, uvS), texture(tex, uvT), wTop), vec4(0.035, 0.036, 0.04, 1)), roughness: 0.36, metalness: 0.5, clearcoat: ghost ? 0 : 1, clearcoatRoughness: 0.05, envMapIntensity: 1.15, side: ghost ? THREE.FrontSide : THREE.DoubleSide });
   if (ghost) { m.transparent = true; m.opacity = 0.35; m.depthWrite = false; }
   return m;
 }
@@ -1068,6 +1121,76 @@ function makeCarModel(key, colorIdx, num, ghost) {
   // a soft contact shadow so cars sit on the road even where real shadows are off
   if (!ghost) { const sh2 = new THREE.Mesh(new THREE.PlaneGeometry(s.wid + 0.9, s.len + 1.0).rotateX(-Math.PI / 2), blobMat()); sh2.position.y = 0.09; sh2.renderOrder = 1; g.add(sh2); }
   return { group: g, parts };
+}
+// --- the cockpit, built once for your own car the first time you pick the in-car camera
+const COCKPIT_MATS = {};
+function cockpitMats() {
+  if (COCKPIT_MATS.dash) return COCKPIT_MATS;
+  const std = (color, roughness, metalness = 0) => new THREE.MeshStandardMaterial({ color, roughness, metalness });
+  return Object.assign(COCKPIT_MATS, { dash: std(0x1a1b1e, 0.86), panel: std(0x2a2c31, 0.8), liner: std(0x7d7f84, 0.95), grip: std(0x121214, 0.7), metal: std(0x9ea3aa, 0.25, 0.9), mirror: std(0xb8c4d0, 0.04, 1), accent: std(0xb02a20, 0.45) });
+}
+function drawGauges(ck, rpm, mph, gear) {
+  const x = ck.gctx, W = 512, H = 176;
+  x.fillStyle = '#060708'; x.fillRect(0, 0, W, H);
+  const dial = (cx, cy, R, frac, max, step, label, red) => {
+    x.strokeStyle = '#2a2c30'; x.lineWidth = 3; x.beginPath(); x.arc(cx, cy, R, 0, 6.283); x.stroke();
+    const a0 = Math.PI * 0.75, span = Math.PI * 1.5;
+    if (red) { x.strokeStyle = '#c8261c'; x.lineWidth = 7; x.beginPath(); x.arc(cx, cy, R - 8, a0 + span * red, a0 + span); x.stroke(); }
+    x.fillStyle = '#e9e6dc'; x.font = '600 15px Arial, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    for (let v = 0; v <= max + 1e-6; v += step) { const a = a0 + span * v / max, c = Math.cos(a), s = Math.sin(a); x.strokeStyle = '#e9e6dc'; x.lineWidth = 2.5; x.beginPath(); x.moveTo(cx + c * (R - 4), cy + s * (R - 4)); x.lineTo(cx + c * (R - 15), cy + s * (R - 15)); x.stroke(); x.fillText(String(Math.round(v / (max > 100 ? 1 : 1))), cx + c * (R - 30), cy + s * (R - 30)); }
+    x.fillStyle = '#8c8e93'; x.font = '600 12px Arial, sans-serif'; x.fillText(label, cx, cy + R * 0.42);
+    const a = a0 + span * clamp(frac, 0, 1); x.strokeStyle = '#ff5a1f'; x.lineWidth = 4; x.beginPath(); x.moveTo(cx - Math.cos(a) * 10, cy - Math.sin(a) * 10); x.lineTo(cx + Math.cos(a) * (R - 10), cy + Math.sin(a) * (R - 10)); x.stroke();
+    x.fillStyle = '#1c1d20'; x.beginPath(); x.arc(cx, cy, 9, 0, 6.283); x.fill();
+  };
+  dial(118, 92, 80, rpm / 8000, 8, 1, '×1000 RPM', 6.8 / 8);
+  dial(394, 92, 80, mph / 180, 180, 20, 'MPH');
+  x.fillStyle = '#0d0e10'; x.fillRect(214, 58, 84, 64); x.strokeStyle = '#2a2c30'; x.strokeRect(214, 58, 84, 64);
+  x.fillStyle = '#ffb21f'; x.font = '700 40px Arial, sans-serif'; x.fillText(String(gear), 256, 92);
+  x.fillStyle = '#e9e6dc'; x.font = '700 15px Arial, sans-serif'; x.fillText(String(Math.round(mph)), 256, 140);
+  ck.gtex.needsUpdate = true;
+}
+function makeCockpit(c) {
+  const s = c.spec, k = carGeometry(c.key).cab, M = cockpitMats(), g = new THREE.Group(), e = k.eye;
+  const add = (geo, mat, parent = g) => { const m = new THREE.Mesh(geo, mat); m.castShadow = false; m.receiveShadow = true; parent.add(m); return m; };
+  // the dash runs from the windscreen base back to just in front of the wheel
+  const dRear = e.z - 0.6, depth = Math.max(0.3, dRear - k.zA), dw = k.hwA * 1.9;
+  add(new THREE.BoxGeometry(dw, 0.3, depth).translate(0, k.yA - 0.17, k.zA + depth / 2), M.dash);
+  add(new THREE.BoxGeometry(dw * 0.96, 0.22, 0.1).translate(0, k.yA - 0.36, dRear + 0.02), M.panel); // lower dash
+  // instrument binnacle and live gauges in front of the driver
+  add(new THREE.BoxGeometry(0.52, 0.05, 0.24).translate(e.x, k.yA + 0.075, dRear - 0.06), M.dash); // hood over the gauges
+  add(new THREE.BoxGeometry(0.5, 0.13, 0.18).translate(e.x, k.yA - 0.005, dRear - 0.08), M.dash);
+  const gc = document.createElement('canvas'); gc.width = 512; gc.height = 176; const gtex = new THREE.CanvasTexture(gc); gtex.colorSpace = THREE.SRGBColorSpace;
+  const face = add(new THREE.PlaneGeometry(0.46, 0.158).rotateX(-0.22).translate(e.x, k.yA - 0.0, dRear + 0.016), new THREE.MeshBasicMaterial({ map: gtex, fog: false }));
+  // centre stack: two vents and a small screen; console and gear lever between the seats
+  add(new THREE.BoxGeometry(0.26, 0.2, 0.03).translate(0, k.yA - 0.17, dRear + 0.016), M.panel);
+  add(new THREE.BoxGeometry(0.2, 0.08, 0.01).translate(0, k.yA - 0.13, dRear + 0.033), new THREE.MeshBasicMaterial({ color: 0x0d2433, fog: false }));
+  for (const sx of [-1, 1]) add(new THREE.BoxGeometry(0.1, 0.05, 0.02).translate(sx * 0.07, k.yA - 0.22, dRear + 0.035), M.grip);
+  add(new THREE.BoxGeometry(0.22, 0.2, 0.75).translate(0, k.sillE + 0.12, dRear + 0.4), M.dash);
+  add(new THREE.CylinderGeometry(0.012, 0.015, 0.16, 8).rotateX(-0.25).translate(0, k.sillE + 0.29, dRear + 0.36), M.metal);
+  add(new THREE.SphereGeometry(0.035, 12, 8).translate(0, k.sillE + 0.37, dRear + 0.34), M.grip);
+  // steering wheel on its column, tilted towards the driver; it turns with the front wheels
+  const col = new THREE.Group(); col.position.set(e.x, e.y - 0.43, e.z - 0.44); col.rotation.x = -0.38; g.add(col);
+  add(new THREE.CylinderGeometry(0.03, 0.04, 0.3, 10).rotateX(Math.PI / 2).translate(0, 0, -0.16), M.grip, col);
+  const wheel = new THREE.Group(); col.add(wheel);
+  add(new THREE.TorusGeometry(0.175, 0.019, 10, 40), M.grip, wheel);
+  add(new THREE.CylinderGeometry(0.058, 0.058, 0.05, 20).rotateX(Math.PI / 2), M.grip, wheel);
+  for (const a of [0, Math.PI, -Math.PI / 2]) add(new THREE.BoxGeometry(0.13, 0.03, 0.02).translate(0.09, 0, 0).rotateZ(a), M.panel, wheel);
+  add(new THREE.BoxGeometry(0.04, 0.012, 0.022).translate(0, 0.172, 0.004), M.accent, wheel); // top-centre stripe
+  // door panels with an armrest, a headliner, and the rear-view mirror
+  const doorTop = k.shE - 0.02, doorBot = k.sillE + 0.12, dz0 = k.zA + 0.1, dz1 = k.zEnd + 0.2;
+  for (const sx of [-1, 1]) {
+    const xi = sx * (k.hwE - 0.04);
+    add(new THREE.BoxGeometry(0.05, doorTop - doorBot, dz1 - dz0).translate(xi, (doorTop + doorBot) / 2, (dz0 + dz1) / 2), M.panel);
+    add(new THREE.BoxGeometry(0.1, 0.05, (dz1 - dz0) * 0.6).translate(xi - sx * 0.06, doorTop - 0.14, (dz0 + dz1) / 2 + 0.1), M.dash);
+  }
+  add(new THREE.PlaneGeometry(k.wtE * 1.9, k.zR2 - k.zR1 + 0.1).rotateX(Math.PI / 2).translate(0, k.roofE - 0.035, (k.zR1 + k.zR2) / 2), M.liner);
+  const my = k.roofR1 - 0.1, mz = k.zR1 + 0.06;
+  add(new THREE.CylinderGeometry(0.008, 0.008, 0.07, 6).translate(0, my + 0.05, mz), M.grip);
+  add(new THREE.BoxGeometry(0.26, 0.075, 0.025).translate(0, my, mz), M.grip);
+  add(new THREE.PlaneGeometry(0.235, 0.058).translate(0, my, mz + 0.0135), M.mirror);
+  c.model.group.add(g);
+  const ck = { group: g, wheel, eye: e.clone(), gctx: gc.getContext('2d'), gtex, last: '' };
+  drawGauges(ck, 900, 0, 1); return ck;
 }
 let _blob = null;
 function blobMat() {
@@ -1556,7 +1679,10 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => { keys.clear(); touch.gas = touch.brake = touch.hand = false; if (G.state === 'race' && !NET.on) pause(true); });
 document.addEventListener('visibilitychange', () => { if (document.hidden && G.state === 'race' && !NET.on) pause(true); });
-function cycleCam() { G.cam.mode = (G.cam.mode + 1) % 3; settings.cam = G.cam.mode; saveSettings(); }
+// cameras, in the order C / CAM / Y steps through them (the numbers are what settings remember)
+const CAMS = [[0, 'Chase'], [2, 'Far chase'], [3, 'In car'], [1, 'Bonnet'], [4, 'Bumper']];
+function setCam(mode, say = true) { G.cam.mode = mode; G.cam.q = null; settings.cam = mode; saveSettings(); if ($('setCam')) $('setCam').value = String(mode); const n = CAMS.find(([m]) => m === mode); if (say && n && G.state === 'race') msg(`Camera: ${n[1]}`, 'info', 1.6); }
+function cycleCam() { const i = CAMS.findIndex(([m]) => m === G.cam.mode); setCam(CAMS[(i + 1) % CAMS.length][0]); }
 function toggleMap() { settings.map = settings.map === 'on' ? 'off' : 'on'; saveSettings(); $('setMap').value = settings.map; }
 const steerZone = $('steerZone'), steerKnob = $('steerKnob');
 steerZone.addEventListener('pointerdown', e => { e.preventDefault(); if (settings.control !== 'slide' || touch.id !== null) return; touch.id = e.pointerId; touch.ox = e.clientX; steerZone.setPointerCapture(e.pointerId); });
@@ -1646,6 +1772,7 @@ const Sfx = {
 //  Camera
 // =====================================================================
 const _cp = new V3(), _ct = new V3();
+const _he = new THREE.Euler(), _hq = new THREE.Quaternion();
 function updateCamera(dt) {
   const c = RACE.player || RACE.cars[0]; if (!c) return;
   const [fx, fz] = c.fwd(); const V = c.speed;
@@ -1654,7 +1781,27 @@ function updateCamera(dt) {
   const camYawT = c.yaw + wrapA(travel - c.yaw) * 0.45;
   G.cam.yaw = G.cam.q == null ? camYawT : G.cam.yaw + wrapA(camYawT - G.cam.yaw) * Math.min(1, dt * 5); G.cam.q = 1;
   const sy = Math.sin(G.cam.yaw), cy = Math.cos(G.cam.yaw);
-  if (G.cam.mode === 1) { // bonnet
+  const inCar = G.cam.mode === 3;
+  if (c.player || c === RACE.player) {
+    if (inCar && !c.cockpit) c.cockpit = makeCockpit(c);
+    if (c.cockpit) { c.cockpit.group.visible = inCar; const want = inCar ? carGeometry(c.key).paintOpen : carGeometry(c.key).paint; if (c.model.parts.body && c.model.parts.body.geometry !== want) c.model.parts.body.geometry = want; }
+  }
+  const near = inCar ? 0.06 : 0.3; if (camera.near !== near) { camera.near = near; camera.updateProjectionMatrix(); }
+  if (inCar || G.cam.mode === 4) { // in the driver's seat, or low on the front bumper: fixed to the car
+    const m = c.model.group; m.updateMatrixWorld();
+    if (inCar) {
+      const ck = c.cockpit; camera.position.copy(ck.eye).applyMatrix4(m.matrixWorld);
+      // the head leans against the g-forces and looks a little into the corner
+      _he.set(-0.085 + clamp(-c.ax * 0.003, -0.05, 0.05), clamp((c.steerVis ?? c.steer) * 0.22, -0.14, 0.14), clamp(c.ay * 0.0045, -0.05, 0.05), 'YXZ');
+      camera.quaternion.copy(m.quaternion).multiply(_hq.setFromEuler(_he));
+      ck.wheel.rotation.z = clamp((c.steerVis ?? c.steer) * 5.5, -2.6, 2.6);
+      const mph = Math.round(V * MPH), key = `${Math.round(c.rpm / 50)}|${mph}|${c.gear}`;
+      if (key !== ck.last && (G.frame & 1) === 0) { ck.last = key; drawGauges(ck, c.rpm, mph, c.gear); }
+    } else {
+      camera.position.set(0, 0.52, -c.spec.len / 2 - 0.12).applyMatrix4(m.matrixWorld);
+      camera.quaternion.copy(m.quaternion);
+    }
+  } else if (G.cam.mode === 1) { // bonnet
     camera.position.set(c.x + fx * (-0.2), c.y + 1.15, c.z + fz * (-0.2));
     camera.rotation.set(c.pitch * 0.8, c.yaw, c.roll * 0.8, 'YXZ');
   } else {
@@ -1664,7 +1811,7 @@ function updateCamera(dt) {
     _ct.set(c.x - sy * 6, c.y + 1.1, c.z - cy * 6); camera.up.set(0, 1, 0); camera.lookAt(_ct);
   }
   if (G.shake > 0) { camera.position.x += (Math.random() - 0.5) * G.shake * 0.25; camera.position.y += (Math.random() - 0.5) * G.shake * 0.25; G.shake = Math.max(0, G.shake - dt * 3); }
-  const fov = (isTouch ? 72 : 66) + clamp((V - 20) / 50, 0, 1) * 8;
+  const fov = (inCar ? (isTouch ? 74 : 68) : (isTouch ? 72 : 66)) + clamp((V - 20) / 50, 0, 1) * (inCar ? 5 : 8);
   if (Math.abs(camera.fov - fov) > 0.05) { camera.fov = lerp(camera.fov, fov, Math.min(1, dt * 3)); camera.updateProjectionMatrix(); smokeFX.uScale.value = pointScale(); }
 }
 
@@ -1739,9 +1886,9 @@ function pause(on) {
   else if (!on && G.state === 'paused') { G.state = 'race'; showScreen(null); $('touch').hidden = !isTouch; if (Sfx.ok) Sfx.ctx.resume(); }
 }
 function fillSettings() {
-  $('setControl').value = settings.control; $('setPhone').value = settings.phone; $('setQuality').value = settings.quality; $('setMap').value = settings.map; $('setVolume').value = settings.volume; $('setAssist').checked = !!settings.assist; $('setAutoGas').checked = !!settings.autogas;
+  $('setControl').value = settings.control; $('setPhone').value = settings.phone; $('setQuality').value = settings.quality; $('setCam').value = String(settings.cam || 0); $('setMap').value = settings.map; $('setVolume').value = settings.volume; $('setAssist').checked = !!settings.assist; $('setAutoGas').checked = !!settings.autogas;
   const help = isTouch ? [['Steer', settings.control === 'slide' ? 'slide left thumb' : settings.control === 'tilt' ? 'tilt the phone' : '◀ ▶'], ['Gas / brake', 'GAS · BRAKE (hold BRAKE to reverse)'], ['Drift', 'DRIFT (handbrake)'], ['Reset car', 'RESET'], ['Camera / map', 'CAM · MAP'], ['Pause', 'II']]
-    : [['Steer', 'A / D · ← →'], ['Gas', 'W · ↑'], ['Brake / reverse', 'S · ↓'], ['Handbrake', 'Space'], ['Reset car', 'R'], ['Camera', 'C'], ['Map', 'M'], ['Pause', 'Esc · P'], ['Gamepad', 'stick · RT gas · LT brake · A drift']];
+    : [['Steer', 'A / D · ← →'], ['Gas', 'W · ↑'], ['Brake / reverse', 'S · ↓'], ['Handbrake', 'Space'], ['Reset car', 'R'], ['Camera', 'C · chase, far, in car, bonnet, bumper'], ['Map', 'M'], ['Pause', 'Esc · P'], ['Gamepad', 'stick · RT gas · LT brake · A drift']];
   $('helpGrid').innerHTML = help.map(([a, b]) => `<div><span>${a}</span><span>${b}</span></div>`).join('');
   $('pauseTitle').textContent = NET.on ? 'Race menu' : 'Paused'; $('pauseEyebrow').textContent = NET.on ? 'Online · the race keeps going while this is open' : RACE.player ? `${TRACKS[curTrack].name} · ${fmtT(RACE.t)}` : 'Settings';
   $('btnResume').textContent = RACE.player ? 'Resume' : 'Back'; $('btnRestart').hidden = NET.on || !RACE.player; $('btnQuit').textContent = NET.on ? 'Leave table' : 'Back to menu'; $('btnQuit').hidden = !RACE.player && !NET.on;
@@ -1776,6 +1923,7 @@ bindSel('setMap', 'map');
 $('setVolume').addEventListener('input', e => { settings.volume = +e.target.value; saveSettings(); Sfx.vol(settings.volume); });
 $('setAssist').addEventListener('change', e => { settings.assist = e.target.checked; saveSettings(); });
 $('setAutoGas').addEventListener('change', e => { settings.autogas = e.target.checked; saveSettings(); });
+$('setCam').addEventListener('change', e => setCam(Number(e.target.value), false));
 $('setQuality').addEventListener('change', e => { settings.quality = e.target.value; saveSettings(); const q = QUALITY[settings.quality]; renderer.setPixelRatio(Math.min(devicePixelRatio || 1, q.pr)); renderer.shadowMap.enabled = q.shadows; applyOutputStyle(settings.quality); scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); if (q.bloom) setupPost(); onResize(); $('qualityNote').hidden = false; });
 function setPhoneMode(v) { settings.phone = v; isTouch = v === 'on' || (v !== 'off' && touchDevice); if (isTouch && settings.control === 'keys') settings.control = 'slide'; if (!isTouch) settings.control = 'keys'; saveSettings(); $('optPhone').value = $('setPhone').value = v; $('setControl').value = settings.control; if (G.state === 'race') $('touch').hidden = !isTouch; applyControlMode(); updateHint(); }
 $('optPhone').addEventListener('change', e => setPhoneMode(e.target.value)); $('setPhone').addEventListener('change', e => setPhoneMode(e.target.value));
@@ -1883,7 +2031,7 @@ function frame(now) {
 }
 // QA hooks: run the race headless, or hold a frame still for a capture
 window.__sim = (seconds, dt = 1 / 60) => { const n = Math.round(seconds / dt); for (let i = 0; i < n && (G.state === 'race' || G.state === 'paused'); i++) simulate(dt); const p = RACE.player; return p && { state: G.state, phase: RACE.phase, lap: p.lap, pos: RACE.order.indexOf(p) + 1, of: RACE.order.length, mph: Math.round(p.speed * MPH), best: p.best, t: +RACE.t.toFixed(1), onRoad: p.onRoad, finished: p.finished }; };
-window.__game = { scene, ZENITH, HORIZON, RACE, G, T, settings, startRace, playerInput, keys, updateCamera, NET, TRACKS, CARS, camera, buildCircuit, set hud(v) { hud.hidden = !v; }, renderNow() { for (const c of RACE.cars) c.visuals(0.5); sky.position.copy(camera.position); if (postFX) postFX.pipeline.render(); else renderer.render(scene, camera); return canvas.toDataURL('image/png'); }, get post() { return !!postFX; }, frameAt };
+window.__game = { scene, ZENITH, HORIZON, RACE, G, T, settings, startRace, playerInput, keys, updateCamera, TREES, NET, TRACKS, CARS, camera, buildCircuit, set hud(v) { hud.hidden = !v; }, renderNow() { for (const c of RACE.cars) c.visuals(0.5); sky.position.copy(camera.position); if (postFX) postFX.pipeline.render(); else renderer.render(scene, camera); return canvas.toDataURL('image/png'); }, get post() { return !!postFX; }, frameAt };
 
 (async function boot() {
   resizeHUD();

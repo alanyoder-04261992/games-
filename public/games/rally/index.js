@@ -55,7 +55,7 @@ const tile = `<svg viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg" role
 
 export default {
   id: 'rally',
-  version: '1.9', // shown on the home tile; bump it whenever you improve the game
+  version: '2.0', // shown on the home tile; bump it whenever you improve the game
   name: 'Ridgeline Rally',
   tagline: 'Country-road racing over hills, farms and lakeshores. Race your friends or the computer.',
   description:
