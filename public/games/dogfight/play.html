@@ -250,7 +250,7 @@ import * as THREE from 'three/webgpu';
 import {
   Fn, If, Discard, uniform, texture, attribute, uv as tslUv, float, vec2, vec3, vec4, normalize, mix, pow, clamp as tslClamp, max, dot, abs, length, exp, cos, sin,
   smoothstep, reflect, select, vertexStage, positionLocal, positionWorld, cameraPosition, cameraProjectionMatrix, modelViewMatrix, normalGeometry,
-  materialColor, instancedDynamicBufferAttribute, screenDPR, pass, densityFogFactor, context, renderOutput,
+  materialColor, instancedDynamicBufferAttribute, screenDPR, pass, densityFogFactor, context, renderOutput, fwidth, mx_noise_float, mx_fractal_noise_float,
 } from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -319,7 +319,7 @@ const scene = new THREE.Scene();
 const HORIZON = new THREE.Color('#c3d3df'), ZENITH = new THREE.Color('#3d6aa3');
 // The distant sea fades to this darker haze instead of the sky's horizon colour, so the horizon stays a clear line
 // and sky and sea can't be mistaken for each other when you're banked or upside down.
-const SEA_HAZE = new THREE.Color('#7a92a3');
+const SEA_HAZE = new THREE.Color('#7a92a3'), SKY_MID = new THREE.Color('#93b4d6');
 const FOG_DENSITY = 0.000082;
 scene.fog = new THREE.FogExp2(HORIZON.clone(), FOG_DENSITY);
 const camera = new THREE.PerspectiveCamera(isTouch ? 70 : 64, innerWidth / innerHeight, 1, 70000);
@@ -336,19 +336,38 @@ const flash = new THREE.PointLight(0xffaa55, 0, 380, 0); scene.add(flash);
 const muzzleLight = new THREE.PointLight(0xffb060, 0, 26, 0); scene.add(muzzleLight);
 
 // Sky dome (TSL). The colour stays linear; the renderer's output pass applies ACES and sRGB to everything.
-const skyU = { uZen: uniform(ZENITH), uHor: uniform(HORIZON), uSun: uniform(SUN), uSea: uniform(SEA_HAZE) };
-function makeSkyMat() {
-  const { uZen, uHor, uSun, uSea } = skyU;
+// Haze at the horizon (it matches the fog), clearer blue higher up, light scattered round the sun, a sun disc that
+// the bloom catches, and high cirrus drawn with noise on a layer far overhead, drifting slowly with the wind.
+const skyU = { uZen: uniform(ZENITH), uMid: uniform(SKY_MID), uHor: uniform(HORIZON), uSun: uniform(SUN), uSea: uniform(SEA_HAZE), uTime: uniform(0) };
+// sky colour in direction d (no clouds, no sun disc): shared by the dome and the sea's reflection
+const skyGradient = (d, s) => {
+  const { uZen, uMid, uHor } = skyU, up = tslClamp(d.y, 0, 1);
+  const col = mix(uHor, uMid, pow(smoothstep(0, 0.3, up), 0.8)).toVar();
+  col.assign(mix(col, uZen, smoothstep(0.1, 0.95, up)));
+  col.addAssign(vec3(1, 0.86, 0.66).mul(pow(s, 3).mul(pow(up.oneMinus(), 4)).mul(0.22))); // the haze glows on the sun's side
+  col.addAssign(vec3(1, 0.9, 0.75).mul(pow(s, 12).mul(0.16).add(pow(s, 90).mul(0.4)))); // halo
+  return col;
+};
+function makeSkyMat(cirrusOctaves = BOOTQ.detail ? 4 : 3) {
+  const { uSun, uSea, uTime } = skyU;
   const m = new THREE.NodeMaterial();
   m.side = THREE.BackSide; m.depthWrite = false; m.fog = false;
   // gl_Position = p.xyww: the dome sits on the far plane and never clips
   m.vertexNode = Fn(() => { const p = cameraProjectionMatrix.mul(modelViewMatrix).mul(vec4(positionLocal, 1)); return vec4(p.x, p.y, p.w, p.w); })();
   m.fragmentNode = withOutput(Fn(() => {
-    const d = normalize(positionLocal), h = d.y;
-    const col = mix(uHor, uZen, pow(tslClamp(h, 0, 1), 0.55)).toVar();
-    If(h.lessThan(0), () => { col.assign(mix(uHor, uSea, tslClamp(h.negate().mul(60), 0, 1))); }); // below the horizon: sea haze, with a crisp edge
-    const s = max(dot(d, uSun), 0);
-    col.addAssign(vec3(1, 0.88, 0.7).mul(pow(s, 10).mul(0.22).add(pow(s, 900).mul(5))));
+    const d = normalize(positionLocal), h = d.y, s = max(dot(d, uSun), 0);
+    const col = skyGradient(d, s).toVar();
+    If(h.greaterThan(0.005), () => {
+      // project onto a layer high overhead, stretch along the wind so the noise reads as wisps
+      const q = d.xz.div(h.add(0.1));
+      const w = vec2(q.x.mul(0.83).add(q.y.mul(0.55)), q.y.mul(0.83).sub(q.x.mul(0.55)));
+      const n = mx_fractal_noise_float(vec3(w.x.mul(0.7).add(uTime.mul(0.006)), w.y.mul(3.2), uTime.mul(0.003)), cirrusOctaves, 2.1, 0.5);
+      const patch = mx_noise_float(vec3(q.mul(0.22), 4.1));
+      const c = smoothstep(0.08, 0.6, n.add(patch.mul(0.4)).sub(0.05)).mul(smoothstep(0.015, 0.2, h)).mul(0.5);
+      col.assign(mix(col, vec3(1, 0.98, 0.95).add(vec3(0.4, 0.32, 0.2).mul(pow(s, 6))), c));
+    });
+    col.addAssign(vec3(1, 0.95, 0.85).mul(smoothstep(0.99955, 0.99978, s).mul(12))); // the sun
+    If(h.lessThan(0), () => { col.assign(mix(skyU.uHor, uSea, tslClamp(h.negate().mul(60), 0, 1))); }); // below the horizon: sea haze, with a crisp edge
     return vec4(col, 1);
   })());
   return m;
@@ -458,36 +477,69 @@ function applyOutputStyle(q) {
   renderer.outputColorSpace = direct ? THREE.LinearSRGBColorSpace : THREE.SRGBColorSpace;
   scene.fog = direct ? null : SCENE_FOG; // on Medium/Low the fog is added in directOutput instead
 }
-// Sea, lake and river (TSL): waves, fresnel sky reflection, sun glint, shallow-water tint and surf from the baked depth map.
+// Sea, lake and river (TSL): fifteen wave trains spread round the wind, each faded out before it gets finer than
+// the pixel it lands in (so the distance never shimmers into rings), rougher and calmer wind patches, fresnel sky
+// reflection, a sun glint that widens as the waves it can't show add up, light through the wave crests, whitecaps,
+// shallow-water tint and surf from the baked depth map.
+const SEA_WAVES = (() => {
+  const r = mulberry32(77), w = []; let f = 0.035;
+  for (let i = 0; i < 15; i++) {
+    // long swells stay gentle; most of the slope is in the short chop
+    const ang = 0.6 + (r() - 0.5) * 2.4 * (0.45 + i / 28), slope = 0.045 + 0.085 * Math.exp(-(((i - 9) / 4.5) ** 2));
+    w.push({ dx: Math.cos(ang), dy: Math.sin(ang), f, a: slope / f, w: Math.sqrt(9.81 * f) * (0.9 + r() * 0.2), ph: r() * 6.283 });
+    f *= 1.42;
+  }
+  return w;
+})();
+const SEA_AMP = SEA_WAVES.reduce((t, v) => t + v.a, 0), CHOP_AMP = SEA_WAVES.slice(6).reduce((t, v) => t + v.a, 0);
 const waterU = {
   uTime: uniform(0), uSun: uniform(SUN), uDeep: uniform(new THREE.Color('#0b2d40')), uShallow: uniform(new THREE.Color('#22606c')), uReef: uniform(new THREE.Color('#4aa39a')),
-  uHor: uniform(HORIZON), uZen: uniform(ZENITH), uSea: uniform(SEA_HAZE), uGrid: uniform(new V3(HALF, 100, 1)), ...fogU,
+  uSSS: uniform(new THREE.Color('#2e8c80')), uSea: uniform(SEA_HAZE), uGrid: uniform(new V3(HALF, 100, 1)), ...fogU,
 };
 // a 1x1 placeholder; buildDepthTex() fills it in before the first frame
 const waterDepthTex = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat); waterDepthTex.magFilter = waterDepthTex.minFilter = THREE.LinearFilter;
 const waterMat = new THREE.NodeMaterial();
 waterMat.fog = false; // fogged by hand below, as before
 waterMat.fragmentNode = withOutput(Fn(() => {
-  const { uTime, uSun, uDeep, uShallow, uReef, uHor, uZen, uSea, uGrid, uFogDensity } = waterU;
-  const wv = (p, dx, dy, f, a, s) => { const d = vec2(dx, dy); return d.mul(cos(dot(p, d).mul(f).add(uTime.mul(s))).mul(f * a)); };
+  const { uTime, uSun, uDeep, uShallow, uReef, uSSS, uSea, uGrid, uFogDensity } = waterU;
   const vW = positionWorld, p = vW.xz, dist = length(cameraPosition.sub(vW));
+  const fp = max(length(fwidth(p)), 0.0005); // metres of water covered by one pixel here
   const tuv = p.add(uGrid.x).div(uGrid.y).add(0.5).div(uGrid.z);
   const outside = tuv.x.lessThan(0).or(tuv.y.lessThan(0)).or(tuv.x.greaterThan(1)).or(tuv.y.greaterThan(1));
   const depth = select(outside, float(60), texture(waterDepthTex, tuv).r.mul(60)).toVar();
-  const fade = smoothstep(300, 6000, dist).oneMinus();
   const calm = smoothstep(0, 6, depth).mul(0.65).add(0.35);
-  const g = wv(p, 0.8, 0.6, 0.045, 0.9, 1.3).add(wv(p, -0.5, 0.86, 0.07, 0.5, 1.7)).add(wv(p, 0.96, -0.28, 0.13, 0.22, 2.3)).mul(calm).toVar();
-  g.addAssign(wv(p, 0.3, 0.95, 0.31, 0.10, 3.1).add(wv(p, -0.9, 0.4, 0.53, 0.05, 4.0)).add(wv(p, 0.6, -0.8, 1.1, 0.02, 5.3)).mul(fade).mul(calm));
-  const n = normalize(vec3(g.x.mul(-0.6), 1, g.y.mul(-0.6)));
+  const patch = mx_noise_float(vec3(p.mul(0.0012), uTime.mul(0.008))).mul(0.4).add(0.85); // wind patches
+  const grad = vec2(0).toVar(), hgt = float(0).toVar(), chop = float(0).toVar(), lost = float(0).toVar();
+  for (const [i, v] of SEA_WAVES.entries()) {
+    const k = smoothstep(0.3, 1.1, fp.mul(v.f)).oneMinus(); // 0 once the wave is finer than about a pixel
+    const ph = dot(p, vec2(v.dx, v.dy)).mul(v.f).add(uTime.mul(v.w)).add(v.ph);
+    grad.addAssign(vec2(v.dx, v.dy).mul(cos(ph).mul(v.f * v.a).mul(k)));
+    hgt.addAssign(sin(ph).mul(v.a).mul(k));
+    if (i >= 6) chop.addAssign(sin(ph).mul(v.a));
+    lost.addAssign(k.oneMinus().mul((v.f * v.a) ** 2));
+  }
+  const amp = calm.mul(patch);
+  const n = normalize(vec3(grad.x.mul(amp).mul(-0.75), 1, grad.y.mul(amp).mul(-0.75)));
   const V = normalize(cameraPosition.sub(vW));
   const fres = pow(max(dot(n, V), 0).oneMinus(), 5).mul(0.98).add(0.02);
   const R = reflect(V.negate(), n).toVar();
-  const skyc = mix(uHor, uZen, pow(tslClamp(R.y, 0, 1), 0.6)).mul(0.82); // the sea mirrors a dimmer sky than the sky itself
-  const deepc = mix(uShallow, uDeep, smoothstep(0, 0.6, V.y));
-  const body = mix(deepc, uReef, smoothstep(0.5, 14, depth).oneMinus().mul(0.9));
-  const col = mix(body, skyc, fres.mul(0.62)).toVar();
   const sd = max(dot(R, uSun), 0);
-  col.addAssign(vec3(1, 0.93, 0.82).mul(pow(sd, 300).mul(3.2).add(pow(sd, 24).mul(0.07))));
+  const skyc = skyGradient(vec3(R.x, max(R.y, 0), R.z), sd).mul(0.82); // the sea mirrors a dimmer sky than the sky itself
+  const deepc = mix(uShallow, uDeep, smoothstep(0, 0.6, V.y));
+  const body = mix(deepc, uReef, smoothstep(0.5, 14, depth).oneMinus().mul(0.9)).toVar();
+  // sunlight through the crests, seen at a low angle
+  const hn = hgt.div(SEA_AMP).mul(amp);
+  body.addAssign(uSSS.mul(max(hn.mul(2.2).add(0.15), 0)).mul(pow(V.y.oneMinus(), 3)).mul(0.35).mul(smoothstep(0, 4, depth)));
+  const col = mix(body, skyc, fres.mul(0.62)).toVar();
+  // sun glint: sharp up close, broader and dimmer where the waves it can't draw make the sea rougher
+  const shin = mix(float(900), float(45), smoothstep(0.0, 0.02, lost.mul(amp)));
+  col.addAssign(vec3(1, 0.93, 0.82).mul(pow(sd, shin).mul(shin.mul(0.005)).add(pow(sd, 18).mul(0.05))));
+  // whitecaps on the tallest crests near the camera
+  const fn = mx_noise_float(vec3(p.mul(0.08), uTime.mul(0.12)));
+  const cn = chop.div(CHOP_AMP).mul(patch);
+  const gust = smoothstep(0.05, 0.55, mx_noise_float(vec3(p.mul(0.005), uTime.mul(0.02).add(7.0)))); // whitecaps come in gusty patches
+  const foam = smoothstep(0.56, 0.82, cn.add(fn.mul(0.3))).mul(gust).mul(smoothstep(700, 2200, dist).oneMinus()).mul(smoothstep(3, 12, depth)).mul(0.5);
+  col.assign(mix(col, vec3(0.88, 0.92, 0.93), foam));
   const wob = sin(p.x.mul(0.09).add(uTime.mul(0.8))).mul(sin(p.y.mul(0.11).sub(uTime.mul(0.6))));
   const band = smoothstep(0, 2.4, depth.add(wob.mul(0.5))).oneMinus();
   const surf = band.mul(sin(depth.mul(2.8).sub(uTime.mul(1.7)).add(wob)).mul(0.45).add(0.55));
@@ -519,23 +571,6 @@ function buildEnv() {
     envMap = pm.fromScene(es, 0.02, 0.1, 1000).texture; pm.dispose();
     for (const m of PBR_MATS) { m.envMap = envMap; m.needsUpdate = true; }
   } catch (e) { console.warn('environment map unavailable', e); }
-}
-// High, thin cirrus streaks far above the fight
-function buildCirrus() {
-  const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d'); const r = mulberry32(5);
-  for (let i = 0; i < 170; i++) {
-    const cx = r() * 512, cy = r() * 512, w = 60 + r() * 240, h = 3 + r() * 10;
-    for (const dx of [-512, 0, 512]) for (const dy of [-512, 0, 512]) {
-      x.save(); x.translate(cx + dx, cy + dy); x.rotate(-0.3 + r() * 0.2); x.scale(1, h / w);
-      const g = x.createRadialGradient(0, 0, 0, 0, 0, w / 2); g.addColorStop(0, `rgba(255,255,255,${0.07 + r() * 0.11})`); g.addColorStop(1, 'rgba(255,255,255,0)');
-      x.fillStyle = g; x.beginPath(); x.arc(0, 0, w / 2, 0, 6.283); x.fill(); x.restore();
-    }
-  }
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(5, 5); t.colorSpace = THREE.SRGBColorSpace;
-  const a = document.createElement('canvas'); a.width = a.height = 128; const ax = a.getContext('2d');
-  const ag = ax.createRadialGradient(64, 64, 10, 64, 64, 64); ag.addColorStop(0, '#fff'); ag.addColorStop(0.6, '#bbb'); ag.addColorStop(1, '#000'); ax.fillStyle = ag; ax.fillRect(0, 0, 128, 128);
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(90000, 90000).rotateX(Math.PI / 2), new THREE.MeshBasicNodeMaterial({ map: t, alphaMap: new THREE.CanvasTexture(a), transparent: true, opacity: 0.7, depthWrite: false, fog: false, side: THREE.DoubleSide }));
-  m.position.y = 7200; m.renderOrder = -5; scene.add(m);
 }
 
 // =====================================================================
@@ -687,7 +722,6 @@ async function buildWorld() {
   fireFX = new Particles(1800, true);
   buildTracers();
   buildEnv();
-  buildCirrus();
 }
 
 async function buildColorMap(S) {
@@ -3127,7 +3161,7 @@ function frame(now) {
   }
   if (G.state === 'paused' || G.state === 'play') $('portrait').hidden = $('portrait').hidden || G.state !== 'play';
   flash.intensity = Math.max(0, flash.intensity - rdt * 14); muzzleLight.intensity = Math.max(0, muzzleLight.intensity - rdt * 45);
-  waterU.uTime.value = now / 1000;
+  waterU.uTime.value = skyU.uTime.value = now / 1000;
   sky.position.copy(camera.position);
   const fp = G.player && G.state !== 'menu' ? G.player.pos : camera.position;
   sun.position.copy(fp).addScaledVector(SUN, 600); sun.target.position.copy(fp);
