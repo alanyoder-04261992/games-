@@ -83,6 +83,11 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
 .tbtn.on{background:rgba(234,165,60,.55);border-color:var(--amber)}
 #tFire{width:104px;height:104px;font-size:1.05rem;right:calc(max(16px,env(safe-area-inset-right)) + 10px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 10px);border-color:rgba(226,85,63,.9);background:rgba(226,85,63,.35)}
 #tFire.on{background:rgba(226,85,63,.75)}
+.tbtn[hidden]{display:none}
+/* rudder: hold to yaw; above the stick, out of the corner map's way */
+.tbtn.rud{width:60px;height:46px;border-radius:10px;font-size:.72rem;bottom:calc(max(16px,env(safe-area-inset-bottom)) + 196px)}
+#tRudL{left:calc(max(16px,env(safe-area-inset-left)) + 4px)}
+#tRudR{left:calc(max(16px,env(safe-area-inset-left)) + 74px)}
 .tbtn.sq{width:46px;height:46px;border-radius:10px;font-size:.72rem;top:calc(max(10px,env(safe-area-inset-top)) + 4px)}
 #tPause{right:calc(max(16px,env(safe-area-inset-right)) + 12px);font-size:1rem}
 #tCam{right:calc(max(16px,env(safe-area-inset-right)) + 64px)}
@@ -149,6 +154,9 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
       <label for="optPhone">Phone mode
         <select id="optPhone"><option value="auto">Auto (on for phones)</option><option value="on">On · touch controls</option><option value="off">Off · keyboard and mouse</option></select>
       </label>
+      <label for="optRudder">Rudder buttons (touch)
+        <select id="optRudder"><option value="off">Off</option><option value="on">On · hold ◀ RUD / RUD ▶ to yaw</option></select>
+      </label>
       <label for="optLock">Missile lock
         <select id="optLock"><option value="auto">Auto-lock (wide cone)</option><option value="manual">Manual (keep the target centred)</option></select>
       </label>
@@ -195,6 +203,9 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
       <label for="setDiff" id="setDiffL">Difficulty
         <select id="setDiff"><option value="easy">Easy · forgiving</option><option value="normal">Normal</option><option value="hard">Hard · enemies carry missiles</option><option value="ace">Ace · deadly</option></select>
       </label>
+      <label for="setRudder">Rudder buttons (touch)
+        <select id="setRudder"><option value="off">Off</option><option value="on">On · hold ◀ RUD / RUD ▶ to yaw</option></select>
+      </label>
       <label for="setLock">Missile lock
         <select id="setLock"><option value="auto">Auto-lock (wide cone)</option><option value="manual">Manual (keep the target centred)</option></select>
       </label>
@@ -239,6 +250,8 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
   <button class="tbtn sq" id="tFlaps">FLAP</button>
   <button class="tbtn sq" id="tCam">CAM</button>
   <button class="tbtn sq" id="tPause" aria-label="Pause">II</button>
+  <button class="tbtn rud" id="tRudL" aria-label="Rudder left" hidden>◀ RUD</button>
+  <button class="tbtn rud" id="tRudR" aria-label="Rudder right" hidden>RUD ▶</button>
 </div>
 <div id="portrait" hidden>Turn your phone sideways for a wider view. Tap to hide.</div>
 
@@ -288,7 +301,7 @@ const EMBED = /[?&]embed=1/.test(location.search) && window.parent !== window;
 const AUTOPILOT = /autopilot/.test(location.hash) || /autopilot/.test(location.search);
 function loadSettings() { try { return JSON.parse(localStorage.getItem('dogfight.settings') || '{}'); } catch (e) { return {}; } }
 function saveSettings() { try { localStorage.setItem('dogfight.settings', JSON.stringify(settings)); } catch (e) { } }
-const settings = Object.assign({ control: touchDevice ? 'stick-assist' : 'mouse', quality: touchDevice ? 'medium' : 'high', volume: 0.7, invert: false, killcam: true, plane: 'kestrel', phone: 'auto', enemies: 'normal', waves: 3, difficulty: 'normal', lock: 'auto', map: 'radar' }, loadSettings());
+const settings = Object.assign({ control: touchDevice ? 'stick-assist' : 'mouse', quality: touchDevice ? 'medium' : 'high', volume: 0.7, invert: false, killcam: true, plane: 'kestrel', phone: 'auto', enemies: 'normal', waves: 3, difficulty: 'normal', lock: 'auto', map: 'radar', rudder: 'off' }, loadSettings());
 // Phone mode: 'auto' follows the device, 'on' forces the touch controls (also handy on a tablet or a touch laptop), 'off' hides them.
 let isTouch = settings.phone === 'on' || (settings.phone !== 'off' && touchDevice);
 if (isTouch && settings.control === 'mouse') settings.control = 'stick-assist';
@@ -2481,7 +2494,7 @@ const fmtTime = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStar
 // =====================================================================
 const keys = new Set();
 let mouseFire = false, padPrev = [];
-const touch = { boost: false, sx: 0, sy: 0, fire: false, stickId: null, ox: 0, oy: 0, aimId: null, lx: 0, ly: 0, tilt: null, tiltRef: null };
+const touch = { boost: false, rud: 0, sx: 0, sy: 0, fire: false, stickId: null, ox: 0, oy: 0, aimId: null, lx: 0, ly: 0, tilt: null, tiltRef: null };
 function toggleGear() { const p = G.player; if (!p || !p.alive) return; if (p.onGround && p.gear) { msg('Gear locked while on the ground', 'warn'); return; } p.gear = p.gear ? 0 : 1; msg(p.gear ? 'Gear down' : 'Gear up'); $('tGear').classList.toggle('on', !!p.gear); }
 function toggleFlaps() { const p = G.player; if (!p || !p.alive) return; p.flaps = p.flaps ? 0 : 1; msg(p.flaps ? 'Flaps down' : 'Flaps up'); $('tFlaps').classList.toggle('on', !!p.flaps); }
 function cycleCam() { if (G.cam.mode === 'kill') return; G.cam.mode = G.cam.mode === 'chase' ? 'cockpit' : 'chase'; camera.near = G.cam.mode === 'cockpit' ? 0.1 : 1; camera.updateProjectionMatrix(); }
@@ -2496,7 +2509,7 @@ addEventListener('keydown', e => {
   } else if (G.state === 'paused' && (e.code === 'Escape' || e.code === 'KeyP')) pause(false);
 });
 addEventListener('keyup', e => keys.delete(e.code));
-addEventListener('blur', () => { keys.clear(); mouseFire = false; touch.fire = false; touch.boost = false; if (G.state === 'play') pause(true); });
+addEventListener('blur', () => { keys.clear(); mouseFire = false; touch.fire = false; touch.boost = false; touch.rud = 0; if (G.state === 'play') pause(true); });
 document.addEventListener('visibilitychange', () => { if (document.hidden && G.state === 'play') pause(true); });
 canvas.addEventListener('mousedown', e => {
   if (G.state !== 'play' || isTouch) return;
@@ -2542,6 +2555,13 @@ const setThr = e => { const r = tThr.getBoundingClientRect(); const v = 1.15 * (
 tThr.addEventListener('pointerdown', e => { e.preventDefault(); tThr.setPointerCapture(e.pointerId); setThr(e); });
 tThr.addEventListener('pointermove', e => { if (tThr.hasPointerCapture(e.pointerId)) setThr(e); });
 for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) tThr.addEventListener(ev, () => { touch.boost = false; });
+// rudder buttons: held down, they yaw the nose that way
+for (const [id, dir] of [['tRudL', -1], ['tRudR', 1]]) {
+  const b = $(id);
+  b.addEventListener('pointerdown', e => { e.preventDefault(); touch.rud = dir; b.classList.add('on'); try { b.setPointerCapture(e.pointerId); } catch (err) { } });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, () => { if (touch.rud === dir) touch.rud = 0; b.classList.remove('on'); });
+}
+function applyRudder() { $('tRudL').hidden = $('tRudR').hidden = settings.rudder !== 'on'; if (settings.rudder !== 'on') touch.rud = 0; }
 $('tMsl').addEventListener('pointerdown', e => { e.preventDefault(); firePlayerMissile(); });
 $('tFlr').addEventListener('pointerdown', e => { e.preventDefault(); playerFlares(); });
 $('tMap').addEventListener('click', () => cycleMap());
@@ -2579,7 +2599,7 @@ function playerControl(dt) {
   let wantBoost = (keys.has('ShiftLeft') || keys.has('ShiftRight')) && p.throttle >= 0.99 || touch.boost;
   let kx = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
   let ky = (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0) - (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0);
-  let kz = (keys.has('KeyE') ? 1 : 0) - (keys.has('KeyQ') ? 1 : 0);
+  let kz = (keys.has('KeyE') ? 1 : 0) - (keys.has('KeyQ') ? 1 : 0) + touch.rud;
   let fire = keys.has('Space') || mouseFire || touch.fire;
   p.brake = keys.has('KeyB') || (p.onGround && p.throttle < 0.05) ? 1 : 0;
   const gp = pollPad();
@@ -2608,7 +2628,7 @@ function playerControl(dt) {
   if (p.onGround) {
     // ground handling: stick works directly, rudder steers, the mouse/aim mode steers with yaw
     let sx = kx, sy = ky * inv, sz = kz;
-    if (isTouch && (mode === 'stick-assist' || mode === 'stick-manual')) { sx = touch.sx; sy = touch.sy * inv; sz = touch.sx * 0.8; }
+    if (isTouch && (mode === 'stick-assist' || mode === 'stick-manual')) { sx = touch.sx; sy = touch.sy * inv; sz = touch.sx * 0.8 + touch.rud; }
     if (mode === 'mouse' || mode === 'touch-aim') { const yawErr = Math.atan2(-Math.sin(G.aimYaw), -Math.cos(G.aimYaw)); _E.setFromQuaternion(p.q, 'YXZ'); let e2 = G.aimYaw - _E.y; e2 = Math.atan2(Math.sin(e2), Math.cos(e2)); sz = keyActive ? kz : clamp(-e2 * 3, -1, 1); if (!keyActive) sy = clamp(-G.aimPitch * 3 + (p.V > p.stallSpeed() * 0.9 ? -0.4 : 0), -1, 1); else sy = ky * inv; void yawErr; }
     inp.roll = sx * 0.4; inp.pitch = sy; inp.yaw = clamp(sz + sx * 0.5, -1, 1);
     if (mode === 'mouse' || mode === 'touch-aim') { inp.pitch = keyActive ? ky : clamp(G.aimPitch * 2.5, -1, 1); }
@@ -3029,7 +3049,7 @@ function pause(on) {
 function fillSettings() {
   $('setControl').value = settings.control; $('setQuality').value = settings.quality; $('setVolume').value = settings.volume; $('setInvert').checked = settings.invert; $('setKill').checked = settings.killcam;
   const help = isTouch ? [
-    ['Steer (stick)', 'left thumb'], ['Throttle', 'slider'], ['Boost', 'drag into the red top of the slider'], ['Fire all guns', 'FIRE'], ['Missile', 'MSL (wait for the lock)'], ['Flares', 'FLARE'], ['Corner map', 'MAP'], ['Gear / flaps', 'GEAR · FLAP'], ['Camera', 'CAM'], ['Pause', 'II'],
+    ['Steer (stick)', 'left thumb'], ['Throttle', 'slider'], ['Boost', 'drag into the red top of the slider'], ['Fire all guns', 'FIRE'], ['Missile', 'MSL (wait for the lock)'], ['Flares', 'FLARE'], ['Corner map', 'MAP'], ['Gear / flaps', 'GEAR · FLAP'], ['Camera', 'CAM'], ['Pause', 'II'], ['Rudder', 'hold ◀ RUD / RUD ▶ (turn on in settings)'],
     ['Stick, assisted', 'auto-levels, holds height'], ['Touch-drag aim', 'drag anywhere, plane follows'], ['Tilt', 'tilt phone to steer'],
   ] : [
     ['Aim (mouse mode)', 'move mouse'], ['Fire', 'click · Space'], ['Missile', 'right click · X'], ['Flares', 'F'], ['Pitch', 'W / S'], ['Roll', 'A / D'], ['Rudder', 'Q / E'], ['Throttle', 'Shift / Z · wheel · 1–0'],
@@ -3037,7 +3057,7 @@ function fillSettings() {
   ];
   $('helpGrid').innerHTML = help.map(([a, b]) => `<div><span>${a}</span><span>${b}</span></div>`).join('');
   $('pauseEyebrow').textContent = G.player ? `${SPECS[settings.plane].full} · ${fmtTime(G.time)} airborne · ${G.stats ? G.stats.kills : 0} kills` : 'Settings';
-  $('setPhone').value = settings.phone; $('setDiff').value = settings.difficulty; $('setLock').value = settings.lock; $('setMap').value = settings.map;
+  $('setPhone').value = settings.phone; $('setRudder').value = settings.rudder; $('setDiff').value = settings.difficulty; $('setLock').value = settings.lock; $('setMap').value = settings.map;
   $('setDiffL').hidden = NET.on;
   $('btnResume').textContent = G.player ? 'Resume' : 'Back';
   $('btnRestart').hidden = $('btnEnd').hidden = !G.player;
@@ -3069,6 +3089,7 @@ $('optPhone').addEventListener('change', e => setPhoneMode(e.target.value));
 $('setPhone').addEventListener('change', e => setPhoneMode(e.target.value));
 $('optEnemies').addEventListener('change', e => { settings.enemies = e.target.value; saveSettings(); });
 const syncSetting = (key, ids) => ids.forEach(id => $(id).addEventListener('change', e => { settings[key] = e.target.value; saveSettings(); ids.forEach(j => ($(j).value = settings[key])); }));
+syncSetting('rudder', ['optRudder', 'setRudder']); $('optRudder').addEventListener('change', applyRudder); $('setRudder').addEventListener('change', applyRudder);
 syncSetting('difficulty', ['optDiff', 'setDiff']); syncSetting('lock', ['optLock', 'setLock']); syncSetting('map', ['optMap', 'setMap']);
 $('optWaves').addEventListener('change', e => { settings.waves = Number(e.target.value); saveSettings(); });
 $('btnSortie').addEventListener('click', () => startMission('sortie'));
@@ -3219,7 +3240,7 @@ window.__game = { get post() { return !!renderPipeline; }, get fx() { return { s
   progress('Ready', 1);
   await setupPost();
   onResize(); pick(settings.plane); updateHint();
-  $('optPhone').value = settings.phone; $('optEnemies').value = String(settings.enemies); $('optWaves').value = String(settings.waves);
+  $('optPhone').value = settings.phone; $('optRudder').value = settings.rudder; applyRudder(); $('optEnemies').value = String(settings.enemies); $('optWaves').value = String(settings.waves);
   $('optDiff').value = settings.difficulty; $('optLock').value = settings.lock; $('optMap').value = settings.map;
   if (EMBED) { $('optEnemiesL').hidden = $('optWavesL').hidden = true; }
   // the online link only makes sense when this page is served from the Game Center

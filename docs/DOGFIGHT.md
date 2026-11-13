@@ -38,6 +38,7 @@ The game's menu has:
 - **Waves**: 1, 2, 3, 5 or 8. Skill rises through the sortie, and the last wave brings an ace.
 - **Difficulty**, **Missile lock** (auto or manual) and **Corner map** are in the same menu and in the pause menu.
 - **Phone mode**: Auto turns the touch controls on for phones. On forces them, which is useful on a tablet or a touch laptop. Off hides them in favour of the keyboard and mouse. The same switch is in the pause menu.
+- **Rudder buttons** (touch, off by default): two hold buttons above the stick, ◀ RUD and RUD ▶, that yaw the nose for fine aiming and for steering on the runway. Keyboard and gamepad already have rudder (Q / E, right stick).
 
 ## Multiplayer
 
@@ -94,6 +95,7 @@ Computer pilots always fly the empty seats in a free-for-all. Their skill follow
 | Fire | Hold **FIRE** |
 | Gear / flaps | **GEAR**, **FLAP** |
 | Camera / pause | **CAM**, **II** |
+| Rudder (optional) | hold **◀ RUD** or **RUD ▶**; turn on *Rudder buttons* in the menu or pause menu |
 
 The control style is set in the pause menu:
 
