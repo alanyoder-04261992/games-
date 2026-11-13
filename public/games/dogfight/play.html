@@ -158,6 +158,12 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
       <label for="optWaves" id="optWavesL">Waves
         <select id="optWaves"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option><option value="8">8</option></select>
       </label>
+      <label for="optTod" id="optTodL">Time of day
+        <select id="optTod"><option value="day">Day</option><option value="sunset">Sunset</option><option value="night">Night · searchlights</option></select>
+      </label>
+      <label for="optWing" id="optWingL">Wingmen
+        <select id="optWing"><option value="0">None</option><option value="1">One</option><option value="2">Two</option></select>
+      </label>
       <label for="optPhone">Phone mode
         <select id="optPhone"><option value="auto">Auto (on for phones)</option><option value="on">On · touch controls</option><option value="off">Off · keyboard and mouse</option></select>
       </label>
@@ -315,7 +321,7 @@ const EMBED = /[?&]embed=1/.test(location.search) && window.parent !== window;
 const AUTOPILOT = /autopilot/.test(location.hash) || /autopilot/.test(location.search);
 function loadSettings() { try { return JSON.parse(localStorage.getItem('dogfight.settings') || '{}'); } catch (e) { return {}; } }
 function saveSettings() { try { localStorage.setItem('dogfight.settings', JSON.stringify(settings)); } catch (e) { } }
-const settings = Object.assign({ control: touchDevice ? 'stick-assist' : 'mouse', quality: touchDevice ? 'medium' : 'high', volume: 0.7, invert: false, killcam: true, plane: 'kestrel', phone: 'auto', enemies: 'normal', waves: 3, difficulty: 'normal', lock: 'auto', map: 'radar', rudder: 'off', mission: 'dogfight' }, loadSettings());
+const settings = Object.assign({ control: touchDevice ? 'stick-assist' : 'mouse', quality: touchDevice ? 'medium' : 'high', volume: 0.7, invert: false, killcam: true, plane: 'kestrel', phone: 'auto', enemies: 'normal', waves: 3, difficulty: 'normal', lock: 'auto', map: 'radar', rudder: 'off', mission: 'dogfight', tod: 'day', wingmen: '0', mode: 'free' }, loadSettings());
 // Phone mode: 'auto' follows the device, 'on' forces the touch controls (also handy on a tablet or a touch laptop), 'off' hides them.
 let isTouch = settings.phone === 'on' || (settings.phone !== 'off' && touchDevice);
 if (isTouch && settings.control === 'mouse') settings.control = 'stick-assist';
@@ -365,18 +371,21 @@ const muzzleLight = new THREE.PointLight(0xffb060, 0, 26, 0); scene.add(muzzleLi
 // Sky dome (TSL). The colour stays linear; the renderer's output pass applies ACES and sRGB to everything.
 // Haze at the horizon (it matches the fog), clearer blue higher up, light scattered round the sun, a sun disc that
 // the bloom catches, and high cirrus drawn with noise on a layer far overhead, drifting slowly with the wind.
-const skyU = { uZen: uniform(ZENITH), uMid: uniform(SKY_MID), uHor: uniform(HORIZON), uSun: uniform(SUN), uSea: uniform(SEA_HAZE), uTime: uniform(0) };
+const skyU = { uZen: uniform(ZENITH), uMid: uniform(SKY_MID), uHor: uniform(HORIZON), uSun: uniform(SUN), uSea: uniform(SEA_HAZE), uTime: uniform(0),
+  // time of day (see applyTimeOfDay): the sun (or moon) disc's colour, how much the haze glows round it, the cirrus colour and the stars
+  uSunCol: uniform(new THREE.Color(1, 0.95, 0.85)), uHalo: uniform(1), uCirrus: uniform(new THREE.Color(1, 0.98, 0.95)), uStars: uniform(0) };
+const SMOKE_LIGHT = uniform(1); // smoke and dust are drawn unlit; at night they darken with this
 // sky colour in direction d (no clouds, no sun disc): shared by the dome and the sea's reflection
 const skyGradient = (d, s) => {
   const { uZen, uMid, uHor } = skyU, up = tslClamp(d.y, 0, 1);
   const col = mix(uHor, uMid, pow(smoothstep(0, 0.3, up), 0.8)).toVar();
   col.assign(mix(col, uZen, smoothstep(0.1, 0.95, up)));
-  col.addAssign(vec3(1, 0.86, 0.66).mul(pow(s, 3).mul(pow(up.oneMinus(), 4)).mul(0.22))); // the haze glows on the sun's side
-  col.addAssign(vec3(1, 0.9, 0.75).mul(pow(s, 12).mul(0.16).add(pow(s, 90).mul(0.4)))); // halo
+  col.addAssign(vec3(1, 0.86, 0.66).mul(pow(s, 3).mul(pow(up.oneMinus(), 4)).mul(0.22)).mul(skyU.uHalo)); // the haze glows on the sun's side
+  col.addAssign(vec3(1, 0.9, 0.75).mul(pow(s, 12).mul(0.16).add(pow(s, 90).mul(0.4))).mul(skyU.uHalo)); // halo
   return col;
 };
 function makeSkyMat(cirrusOctaves = BOOTQ.detail ? 4 : 3) {
-  const { uSun, uSea, uTime } = skyU;
+  const { uSun, uSea, uTime, uSunCol, uHalo, uCirrus, uStars } = skyU;
   const m = new THREE.NodeMaterial();
   m.side = THREE.BackSide; m.depthWrite = false; m.fog = false;
   // gl_Position = p.xyww: the dome sits on the far plane and never clips
@@ -391,9 +400,11 @@ function makeSkyMat(cirrusOctaves = BOOTQ.detail ? 4 : 3) {
       const n = mx_fractal_noise_float(vec3(w.x.mul(0.7).add(uTime.mul(0.006)), w.y.mul(3.2), uTime.mul(0.003)), cirrusOctaves, 2.1, 0.5);
       const patch = mx_noise_float(vec3(q.mul(0.22), 4.1));
       const c = smoothstep(0.08, 0.6, n.add(patch.mul(0.4)).sub(0.05)).mul(smoothstep(0.015, 0.2, h)).mul(0.5);
-      col.assign(mix(col, vec3(1, 0.98, 0.95).add(vec3(0.4, 0.32, 0.2).mul(pow(s, 6))), c));
+      col.assign(mix(col, uCirrus.add(vec3(0.4, 0.32, 0.2).mul(pow(s, 6)).mul(uHalo)), c));
+      // stars: the brightest specks of fine noise, fading out toward the horizon haze (only drawn at night)
+      col.addAssign(vec3(0.9, 0.93, 1).mul(pow(max(mx_noise_float(d.mul(420)), 0), 14).mul(uStars).mul(70).mul(smoothstep(0.03, 0.3, h)).mul(c.mul(1.6).oneMinus())));
     });
-    col.addAssign(vec3(1, 0.95, 0.85).mul(smoothstep(0.99955, 0.99978, s).mul(12))); // the sun
+    col.addAssign(uSunCol.mul(smoothstep(0.99955, 0.99978, s).mul(12))); // the sun (or the moon)
     If(h.lessThan(0), () => { col.assign(mix(skyU.uHor, uSea, tslClamp(h.negate().mul(60), 0, 1))); }); // below the horizon: sea haze, with a crisp edge
     return vec4(col, 1);
   })());
@@ -522,13 +533,14 @@ const SEA_AMP = SEA_WAVES.reduce((t, v) => t + v.a, 0), CHOP_AMP = SEA_WAVES.sli
 const waterU = {
   uTime: uniform(0), uSun: uniform(SUN), uDeep: uniform(new THREE.Color('#0b2d40')), uShallow: uniform(new THREE.Color('#22606c')), uReef: uniform(new THREE.Color('#4aa39a')),
   uSSS: uniform(new THREE.Color('#2e8c80')), uSea: uniform(SEA_HAZE), uGrid: uniform(new V3(HALF, 100, 1)), ...fogU,
+  uLight: uniform(1), uGlint: uniform(new THREE.Color(1, 0.93, 0.82)), // daylight on the water and the glint's colour (time of day)
 };
 // a 1x1 placeholder; buildDepthTex() fills it in before the first frame
 const waterDepthTex = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat); waterDepthTex.magFilter = waterDepthTex.minFilter = THREE.LinearFilter;
 const waterMat = new THREE.NodeMaterial();
 waterMat.fog = false; // fogged by hand below, as before
 waterMat.fragmentNode = withOutput(Fn(() => {
-  const { uTime, uSun, uDeep, uShallow, uReef, uSSS, uSea, uGrid, uFogDensity } = waterU;
+  const { uTime, uSun, uDeep, uShallow, uReef, uSSS, uSea, uGrid, uFogDensity, uLight, uGlint } = waterU;
   const vW = positionWorld, p = vW.xz, dist = length(cameraPosition.sub(vW));
   const fp = max(length(fwidth(p)), 0.0005); // metres of water covered by one pixel here
   const tuv = p.add(uGrid.x).div(uGrid.y).add(0.5).div(uGrid.z);
@@ -557,20 +569,20 @@ waterMat.fragmentNode = withOutput(Fn(() => {
   // sunlight through the crests, seen at a low angle
   const hn = hgt.div(SEA_AMP).mul(amp);
   body.addAssign(uSSS.mul(max(hn.mul(2.2).add(0.15), 0)).mul(pow(V.y.oneMinus(), 3)).mul(0.35).mul(smoothstep(0, 4, depth)));
-  const col = mix(body, skyc, fres.mul(0.62)).toVar();
+  const col = mix(body.mul(uLight), skyc, fres.mul(0.62)).toVar();
   // sun glint: sharp up close, broader and dimmer where the waves it can't draw make the sea rougher
   const shin = mix(float(900), float(45), smoothstep(0.0, 0.02, lost.mul(amp)));
-  col.addAssign(vec3(1, 0.93, 0.82).mul(pow(sd, shin).mul(shin.mul(0.005)).add(pow(sd, 18).mul(0.05))));
+  col.addAssign(uGlint.mul(pow(sd, shin).mul(shin.mul(0.005)).add(pow(sd, 18).mul(0.05))));
   // whitecaps on the tallest crests near the camera
   const fn = mx_noise_float(vec3(p.mul(0.08), uTime.mul(0.12)));
   const cn = chop.div(CHOP_AMP).mul(patch);
   const gust = smoothstep(0.05, 0.55, mx_noise_float(vec3(p.mul(0.005), uTime.mul(0.02).add(7.0)))); // whitecaps come in gusty patches
   const foam = smoothstep(0.56, 0.82, cn.add(fn.mul(0.3))).mul(gust).mul(smoothstep(700, 2200, dist).oneMinus()).mul(smoothstep(3, 12, depth)).mul(0.5);
-  col.assign(mix(col, vec3(0.88, 0.92, 0.93), foam));
+  col.assign(mix(col, vec3(0.88, 0.92, 0.93).mul(uLight), foam));
   const wob = sin(p.x.mul(0.09).add(uTime.mul(0.8))).mul(sin(p.y.mul(0.11).sub(uTime.mul(0.6))));
   const band = smoothstep(0, 2.4, depth.add(wob.mul(0.5))).oneMinus();
   const surf = band.mul(sin(depth.mul(2.8).sub(uTime.mul(1.7)).add(wob)).mul(0.45).add(0.55));
-  col.assign(mix(col, vec3(0.92, 0.95, 0.95), tslClamp(surf, 0, 1).mul(0.75).mul(smoothstep(2500, 9000, dist).oneMinus())));
+  col.assign(mix(col, vec3(0.92, 0.95, 0.95).mul(uLight), tslClamp(surf, 0, 1).mul(0.75).mul(smoothstep(2500, 9000, dist).oneMinus())));
   const f = exp(uFogDensity.mul(uFogDensity).mul(dist).mul(dist).negate()).oneMinus();
   return vec4(mix(col, uSea, f), 1);
 })());
@@ -590,12 +602,13 @@ function buildDepthTex() {
 let envMap = null;
 const PBR_MATS = [];
 function pbr(params) { const m = new THREE.MeshStandardNodeMaterial(params); m.envMap = envMap; PBR_MATS.push(m); return m; }
-function buildEnv() {
+function buildEnv(groundHex = 0x51603c) {
   try {
+    const old = envMap;
     const pm = new THREE.PMREMGenerator(renderer), es = new THREE.Scene(); // the WebGPU build's PMREM (needs renderer.init(), done in boot)
     es.add(new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), makeSkyMat()));
-    const ground = new THREE.Mesh(new THREE.CircleGeometry(390, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicNodeMaterial({ color: 0x51603c })); ground.position.y = -30; es.add(ground);
-    envMap = pm.fromScene(es, 0.02, 0.1, 1000).texture; pm.dispose();
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(390, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicNodeMaterial({ color: groundHex })); ground.position.y = -30; es.add(ground);
+    envMap = pm.fromScene(es, 0.02, 0.1, 1000).texture; pm.dispose(); if (old) old.dispose();
     for (const m of PBR_MATS) { m.envMap = envMap; m.needsUpdate = true; }
   } catch (e) { console.warn('environment map unavailable', e); }
 }
@@ -628,7 +641,7 @@ class Particles {
       const d = length(tslUv().sub(0.5)).mul(2);
       const a = iCA.w.mul(smoothstep(0.25, 1, d).oneMinus()).toVar();
       If(a.lessThan(0.004), () => { Discard(); });
-      const c = mix(iCA.xyz, uFogColor, vFog);
+      const c = mix(additive ? iCA.xyz : iCA.xyz.mul(SMOKE_LIGHT), uFogColor, vFog);
       return vec4(c, additive ? a.mul(vFog.oneMinus()) : a);
     })());
     this.mat = m;
@@ -859,6 +872,7 @@ function buildAirfield() {
   }
 }
 
+const WINDOWS = []; let LIGHTHOUSE = null; // house positions: lit windows at night
 function buildTown() {
   const walls = [], roofs = [];
   const r = mulberry32(77);
@@ -866,7 +880,7 @@ function buildTown() {
   const add = (x, z, w, d, hgt, rot, wc, rc) => {
     const h = groundH(x, z); if (h < waterLevelAt(x, z) + 1.5) return false;
     const s = Math.abs(groundH(x + 8, z) - groundH(x - 8, z)) + Math.abs(groundH(x, z + 8) - groundH(x, z - 8)); if (s > 6) return false;
-    walls.push({ x, y: h - 1, z, w, d, h: hgt + 1, rot, c: wc }); roofs.push({ x, y: h + hgt, z, w: w * 1.08, d: d * 1.06, h: Math.min(w, d) * 0.45, rot, c: rc }); return true;
+    walls.push({ x, y: h - 1, z, w, d, h: hgt + 1, rot, c: wc }); WINDOWS.push([x, h + hgt * 0.45, z, Math.max(w, d) * 0.5]); roofs.push({ x, y: h + hgt, z, w: w * 1.08, d: d * 1.06, h: Math.min(w, d) * 0.45, rot, c: rc }); return true;
   };
   const WC = [0xe6dfcc, 0xd8c8a4, 0xa45f48, 0xb8b2a2, 0xe9e4d6], RC = [0xa44a32, 0x535860, 0x86412f, 0x9a5a3a];
   for (let i = -24; i <= 24; i++) for (let j = -24; j <= 24; j++) {
@@ -920,7 +934,7 @@ function buildTown() {
   if (best) {
     const lh = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 3, 18, 16), lam(0xf0ece2)); lh.position.set(best.x, best.h + 9, best.z); lh.castShadow = true; scene.add(lh);
     const band = new THREE.Mesh(new THREE.CylinderGeometry(2.45, 2.6, 3, 16), lam(0xb03a2e)); band.position.set(best.x, best.h + 11, best.z); scene.add(band);
-    const lamp = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 2.4, 10), lam(0xfff2b0, { emissive: 0x665522 })); lamp.position.set(best.x, best.h + 19.2, best.z); scene.add(lamp);
+    const lamp = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 2.4, 10), lam(0xfff2b0, { emissive: 0x665522 })); lamp.position.set(best.x, best.h + 19.2, best.z); scene.add(lamp); LIGHTHOUSE = new V3(best.x, best.h + 19.2, best.z);
   }
 }
 
@@ -976,6 +990,7 @@ function buildTrees(count) {
 }
 
 const cloudCenters = [];
+const CLOUD_MATS = [];
 function buildClouds(n) {
   const mkTex = (seed) => {
     const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); const r = mulberry32(seed);
@@ -990,7 +1005,7 @@ function buildClouds(n) {
   };
   const texs = [mkTex(3), mkTex(5), mkTex(8)];
   const mats = [];
-  for (const t of texs) for (const col of [0xffffff, 0xd7dde3, 0xb9c2cc]) mats.push(new THREE.SpriteNodeMaterial({ map: t, color: col, transparent: true, depthWrite: false, fog: true, opacity: 0.92 }));
+  for (const t of texs) for (const col of [0xffffff, 0xd7dde3, 0xb9c2cc]) { const m = new THREE.SpriteNodeMaterial({ map: t, color: col, transparent: true, depthWrite: false, fog: true, opacity: 0.92 }); m.userData.base = new THREE.Color(col); mats.push(m); CLOUD_MATS.push(m); }
   const r = mulberry32(21);
   for (let i = 0; i < n; i++) {
     const cx = (r() * 2 - 1) * 14000, cz = (r() * 2 - 1) * 14000, cy = 1350 + r() * 650;
@@ -1300,14 +1315,14 @@ function propDiscTexture(tip) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 const MAT_CACHE = {};
-function sharedMats(key, ace) {
-  const id = key + (ace ? 'ace' : '');
+function sharedMats(key, ace, boss) {
+  const BS = boss && BOSSES[boss], id = key + (BS ? 'boss:' + boss : ace ? 'ace' : '');
   if (MAT_CACHE[id]) return MAT_CACHE[id];
   const s = SPECS[key];
-  const lk = s.look, camo = camoTexture(s.camoA, s.camoB, lk.camoSeed, !!lk.mottled);
+  const lk = s.look, camo = BS ? camoTexture(BS.camo[0], BS.camo[1], lk.camoSeed + 7, false) : camoTexture(s.camoA, s.camoB, lk.camoSeed, !!lk.mottled);
   const body = planeMaterial(camo.map, camo.normal, s.bottom, lk.metal, lk.rough);
   const M = {
-    body, spinner: pbr({ color: ace ? 0xb02a22 : s.spinner, roughness: 0.34, metalness: 0.25 }),
+    body, spinner: BS ? pbr({ map: checkerTexture('#' + BS.trim.toString(16).padStart(6, '0'), '#141414'), roughness: 0.34, metalness: 0.25 }) : pbr({ color: ace ? 0xb02a22 : s.spinner, roughness: 0.34, metalness: 0.25 }),
     dark: pbr({ color: 0x1d1f1d, roughness: 0.62, metalness: 0.25 }), metal: pbr({ color: 0x8a8d90, roughness: 0.32, metalness: 0.85 }),
     chrome: pbr({ color: 0xc9ccd0, roughness: 0.16, metalness: 1 }), tyre: pbr({ color: 0x161616, roughness: 0.9, metalness: 0 }),
     exhaust: pbr({ color: 0x3b2c24, roughness: 0.8, metalness: 0.5 }), frame: pbr({ color: 0x2a2d29, roughness: 0.55, metalness: 0.3 }),
@@ -1315,7 +1330,7 @@ function sharedMats(key, ace) {
     tip: pbr({ color: 0xd9a92a, roughness: 0.5 }), glassNoseCover: pbr({ color: 0xb4cde0, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.38, envMapIntensity: 2.2, depthWrite: false }),
     disc: new THREE.MeshBasicNodeMaterial({ map: propDiscTexture(0xd9a92a), transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide }),
     insignia: pbr({ map: insigniaTexture(lk.insignia), transparent: true, roughness: 0.62, metalness: 0.1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }),
-    band: pbr({ color: ace && lk.aceBand ? 0xb02a22 : (lk.bandCol ?? 0x777777), roughness: 0.5, metalness: 0.15 }), pilot: lam(0x5a4330), suit: lam(0x4a4a36), helmet: lam(0xd9dad2),
+    band: pbr({ color: BS ? BS.trim : ace && lk.aceBand ? 0xb02a22 : (lk.bandCol ?? 0x777777), roughness: 0.5, metalness: 0.15 }), pilot: lam(0x5a4330), suit: lam(0x4a4a36), helmet: lam(0xd9dad2),
     nozzle: pbr({ color: 0x45403b, roughness: 0.42, metalness: 0.85 }), radome: pbr({ color: 0x6d7276, roughness: 0.55, metalness: 0.1 }),
     canopyJet: pbr({ color: 0xd8c27a, roughness: 0.03, metalness: 0.3, transparent: true, opacity: 0.32, envMapIntensity: 2.6, depthWrite: false }),
     glow: new THREE.MeshBasicNodeMaterial({ color: 0xff7a2a, transparent: true, opacity: 0.4, depthWrite: false }),
@@ -1351,7 +1366,7 @@ const PLANE_TEMPLATES = {};
 const MODEL_PARTS = ['wingL', 'wingR', 'ailL', 'ailR', 'elev', 'rud', 'rud2', 'canopy', 'head', 'prop', 'blades', 'disc', 'gearL', 'gearR', 'gearN', 'ab', 'glow'];
 let gaugeCanvas = null;
 function makePlaneModel(key, opts) {
-  const id = key + (opts.ace ? '.ace' : '') + (opts.cockpit ? '.ck' : '');
+  const id = key + (opts.boss ? '.boss.' + opts.boss : opts.ace ? '.ace' : '') + (opts.cockpit ? '.ck' : '');
   const T = PLANE_TEMPLATES[id] || (PLANE_TEMPLATES[id] = SPECS[key].jet ? buildJetTemplate(key, opts) : buildPlaneTemplate(key, opts));
   const g = T.clone(true), parts = {};
   for (const n of MODEL_PARTS) parts[n] = g.getObjectByName(n) || null;
@@ -1430,7 +1445,7 @@ const JET_LOOK = {
 for (const k in SPECS) if (SPECS[k].look.jet) { const J = JET_LOOK[SPECS[k].look.jet]; Object.assign(SPECS[k].look, { prof: J.prof, fx: J.fx, lift: 0, pylons: J.pylons, bombPos: J.bombPos }); }
 
 function buildJetTemplate(key, opts) {
-  const s = SPECS[key], M = sharedMats(key, opts.ace), g = new THREE.Group(), J = JET_LOOK[s.look.jet];
+  const s = SPECS[key], M = sharedMats(key, opts.ace, opts.boss), g = new THREE.Group(), J = JET_LOOK[s.look.jet];
   const L = s.length, R = s.R, F = fuselageShape(key);
   const lists = new Map();
   const put = (parent, mat, geo) => { const k = parent.uuid + mat.uuid; if (!lists.has(k)) lists.set(k, { parent, mat, geos: [] }); lists.get(k).geos.push(geo); };
@@ -1599,7 +1614,7 @@ function makeBombMesh(kg) {
 }
 function addBombs(g, s, named) { (s.look.bombPos || []).forEach((q, i) => { const b = named(makeBombMesh(s.bombKg), 'bomb' + i); b.position.set(q[0], q[1], q[2]); b.visible = false; g.add(b); }); }
 function buildPlaneTemplate(key, opts) {
-  const s = SPECS[key], M = sharedMats(key, opts.ace), g = new THREE.Group(), lk = s.look;
+  const s = SPECS[key], M = sharedMats(key, opts.ace, opts.boss), g = new THREE.Group(), lk = s.look;
   const L = s.length, R = s.R, half = s.span / 2, F = fuselageShape(key);
   // static pieces are merged into one mesh per material (and per moving group) to keep draw calls down
   const lists = new Map();
@@ -1769,6 +1784,12 @@ function buildPlaneTemplate(key, opts) {
   }
   addPylons(g, s, named); addBombs(g, s, named);
 
+  // a named ace's nose art, painted on both sides behind the cowling
+  if (opts.boss && BOSSES[opts.boss]) {
+    const art = pbr({ map: noseArtTexture(BOSSES[opts.boss].art), transparent: true, roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+    const z = s.noseZ + L * 0.25, p0 = F.at(z, 0, 1.03);
+    for (const sx of [-1, 1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(L * 0.17, L * 0.106), art); m.position.set(sx * p0.x, p0.y, z); m.rotation.y = sx * Math.PI / 2; g.add(m); }
+  }
   const shadowless = new Set([M.frame, M.dark, M.exhaust, M.tyre, M.metal, M.insignia]);
   for (const { parent, mat, geos } of lists.values()) {
     const m = new THREE.Mesh(geos.length > 1 ? mergeGeometries(geos) : geos[0], mat);
@@ -1807,12 +1828,12 @@ function updateTracers() {
     if (!B.tracer[i]) continue;
     const len = B.cannon[i] ? 0.03 : 0.024;
     _a.set(B.px[i], B.py[i], B.pz[i]); _b.set(B.px[i] - B.vx[i] * len, B.py[i] - B.vy[i] * len, B.pz[i] - B.vz[i] * len);
-    const dist = _a.distanceTo(cp); const w = Math.max(B.cannon[i] ? 0.55 : 0.35, dist * 0.0022);
+    const dist = _a.distanceTo(cp); const w = Math.max(B.cannon[i] ? 0.55 : 0.35, dist * 0.0022) * TOD.tracer;
     _c.subVectors(_a, _b); _d.subVectors(cp, _a); _e.crossVectors(_c, _d).normalize().multiplyScalar(w * 0.5);
     const o = t * 12; const P = tracerPos;
     P[o] = _b.x - _e.x; P[o + 1] = _b.y - _e.y; P[o + 2] = _b.z - _e.z; P[o + 3] = _a.x - _e.x; P[o + 4] = _a.y - _e.y; P[o + 5] = _a.z - _e.z;
     P[o + 6] = _b.x + _e.x; P[o + 7] = _b.y + _e.y; P[o + 8] = _b.z + _e.z; P[o + 9] = _a.x + _e.x; P[o + 10] = _a.y + _e.y; P[o + 11] = _a.z + _e.z;
-    const fog = Math.exp(-FOG_DENSITY * FOG_DENSITY * dist * dist);
+    const fog = Math.exp(-FOG_DENSITY * FOG_DENSITY * dist * dist * TOD.tracerFog);
     const enemy = B.owner[i] && !B.owner[i].player;
     const r = 1.0, gg = enemy ? 0.55 : 0.72, bb = enemy ? 0.3 : 0.32;
     for (let k = 0; k < 4; k++) tracerCol.set([r, gg, bb, 0.95 * fog], t * 16 + k * 4);
@@ -1843,7 +1864,8 @@ let PLANE_SEQ = 0;
 class Plane {
   constructor(key, o = {}) {
     this.key = key; this.spec = SPECS[key]; this.player = !!o.player; this.skill = o.skill || null; this.ace = !!o.ace;
-    this.model = makePlaneModel(key, { cockpit: this.player, ace: this.ace }); scene.add(this.model.group);
+    this.boss = o.boss || null;
+    this.model = makePlaneModel(key, { cockpit: this.player, ace: this.ace, boss: this.boss }); scene.add(this.model.group);
     this.zones = HIT_ZONES(this.spec);
     this.pos = new V3(); this.vel = new V3(); this.q = new Q4(); this.w = new V3(); this.invQ = new Q4();
     this.fwd = new V3(0, 0, -1); this.up = new V3(0, 1, 0); this.right = new V3(1, 0, 0);
@@ -2172,6 +2194,18 @@ function destroy(p, cause, attacker, explode) {
   p.inp.pitch = rand(-0.4, 0.2); p.inp.roll = rand(-1, 1); p.inp.yaw = rand(-0.5, 0.5); p.ctrl = { ...p.inp };
   if (explode) { explosion(p.pos, p.vel, 1.2, 'air'); debris(p.pos, p.vel, 18); p.gone = true; p.model.group.visible = false; }
   const killer = killerOf(p, attacker);
+  // computer pilots often get out; a named ace is worth a bonus
+  if (!p.player && !p.remote) {
+    const out = !explode && p.hp.pilot > 0 && p.agl() > 60 && Math.random() < (p.boss || p.role === 'wingman' ? 0.9 : 0.45);
+    if (out) spawnChute(_a.copy(p.pos).addScaledVector(p.up, 2.5), _b.copy(p.vel).multiplyScalar(0.5).addScaledVector(p.up, 12), p);
+    if (p.role === 'wingman') msg(`${p.label} is hit!${out ? ` ${p.label} bailed out.` : ''}`, 'danger', 4);
+    if (p.boss) {
+      const B = BOSSES[p.boss];
+      if (killer && killer.player) { G.stats.score += 1000; G.stats.boss = (G.stats.boss || 0) + 1; msg(`You shot down ${B.name}, ${B.call}!  +1000`, 'good', 6); }
+      else msg(`${B.name}, ${B.call}, is down!`, 'good', 5);
+      if (out) msg(`${B.name} bailed out`, 'info', 4);
+    }
+  }
   if (p.player) playerDown(cause, killer);
   announceDown(p, killer, cause);
 }
@@ -2517,13 +2551,17 @@ const _aim = new V3(), _dir = new V3();
 function aiThink(p, dt, target) {
   const b = p.brain, sk = SKILL[p.skill] || SKILL.veteran;
   const df = p.role === 'raider' ? diff() : DIFF.normal;
+  // a named ace: when badly hit, a last stand (no more dodging, full power, every missile)
+  const boss = !!p.boss;
+  if (boss && !p.lastStand && (bossHealth(p) < 0.35 || p.onFire)) { p.lastStand = true; b.mode = 'attack'; p.flares += 2; msg(`${BOSSES[p.boss].name}: "${BOSSES[p.boss].last}"`, 'danger', 4); }
+  const ls = boss && p.lastStand;
   b.t -= dt; b.cool -= dt; b.mslCool = (b.mslCool || 0) - dt; b.flareCool = (b.flareCool || 0) - dt;
   // incoming missile: flares (better pilots more often) and a hard break
   if (b.flareCool <= 0) for (const m of MSL) if (m.target === p && m.pos.distanceTo(p.pos) < 1400) {
     b.flareCool = 1.5; if (p.flares > 0 && Math.random() < (p.skill === 'ace' ? 0.9 : p.skill === 'veteran' ? 0.6 : 0.3)) dropFlares(p, false);
-    b.mode = 'evade'; b.t = 3; b.side = Math.random() < 0.5 ? -1 : 1; break;
+    if (!ls) { b.mode = 'evade'; b.t = 3; b.side = Math.random() < 0.5 ? -1 : 1; } break;
   }
-  p.throttle = 1; p.firing = false;
+  p.throttle = 1; p.firing = false; if (boss) p.boosting = ls && p.wep > 0.05 && p.engineOn;
   const agl = p.agl();
   _a.copy(p.pos).addScaledVector(p.vel, 4);
   const ahead = Math.max(groundH(_a.x, _a.z), waterLevelAt(_a.x, _a.z));
@@ -2535,8 +2573,9 @@ function aiThink(p, dt, target) {
   _c.subVectors(target.pos, p.pos); const dist = _c.length(); _d.copy(_c).multiplyScalar(1 / dist);
   const tgtPointing = target.fwd.dot(_e.copy(_d).negate());
   const behindMe = p.fwd.dot(_d) < -0.2;
-  if (b.mode !== 'evade' && dist < 900 && tgtPointing > 0.93 && behindMe && Math.random() < dt * sk.react * df.react * 0.6) { b.mode = 'evade'; b.t = rand(2.5, 5); b.side = Math.random() < 0.5 ? -1 : 1; }
-  if (b.mode === 'attack' && dist < 180 && p.fwd.dot(_d) < 0.5) { b.mode = 'extend'; b.t = rand(3, 5); }
+  if (boss) { if (!ls && b.mode !== 'evade' && dist < 1150 && tgtPointing > 0.86 && behindMe && Math.random() < dt * 5) { b.mode = 'evade'; b.t = rand(3, 5.5); b.side = Math.random() < 0.5 ? -1 : 1; } }
+  else if (b.mode !== 'evade' && dist < 900 && tgtPointing > 0.93 && behindMe && Math.random() < dt * sk.react * df.react * 0.6) { b.mode = 'evade'; b.t = rand(2.5, 5); b.side = Math.random() < 0.5 ? -1 : 1; }
+  if (b.mode === 'attack' && dist < 180 && p.fwd.dot(_d) < 0.5 && !ls) { b.mode = 'extend'; b.t = rand(3, 5); }
   if (b.mode !== 'attack' && b.t <= 0) b.mode = 'attack';
   // collision avoidance: break above or below when the closure time gets short
   _e.subVectors(target.vel, p.vel); const closing = -_c.dot(_e) / dist;
@@ -2546,6 +2585,14 @@ function aiThink(p, dt, target) {
     _dir.copy(p.fwd).addScaledVector(p.up, b.avoidDir * 1.2); if (b.avoidDir < 0) _dir.addScaledVector(p.right, 0.4);
     steerTo(p, _dir.normalize(), p.inp, sk.pull);
     p.firing = closing < 0 ? false : (dist > 150 && p.fwd.dot(_d) > 0.995);
+    return;
+  }
+  if (b.mode === 'evade' && boss) {
+    // scissors: reverse the turn every second or so, rolling over the top
+    b.flip = (b.flip || 0) - dt; if (b.flip <= 0) { b.side = -b.side; b.flip = rand(0.8, 1.3); }
+    _dir.copy(p.right).multiplyScalar(b.side).addScaledVector(p.up, 0.7 + 0.5 * Math.sin(G.time * 2.3)).addScaledVector(p.fwd, 0.1);
+    if (p.pos.y < 500) _dir.y = Math.abs(_dir.y) + 0.4;
+    steerTo(p, _dir.normalize(), p.inp, 1);
     return;
   }
   if (b.mode === 'evade') {
@@ -2569,7 +2616,7 @@ function aiThink(p, dt, target) {
   _b.subVectors(target.pos, p.pos).normalize();
   if (p.missiles > 0 && b.mslCool <= 0 && dist > 450 && dist < 2000 && p.fwd.dot(_b) > 0.955) {
     b.lockT = (b.lockT || 0) + dt;
-    if (b.lockT > (p.player ? 0.8 : 2.2)) { launchMissile(p, target); b.mslCool = 9; b.lockT = 0; }
+    if (b.lockT > (p.player ? 0.8 : boss ? 1.1 : 2.2)) { launchMissile(p, target); b.mslCool = ls ? 3.5 : boss ? 6 : 9; b.lockT = 0; }
   } else b.lockT = 0;
 }
 
@@ -2586,11 +2633,12 @@ const MISSIONS = {
   dogfight: { name: 'Dogfight', blurb: 'Waves of enemy fighters come in off the sea. Shoot them all down, then land.' },
   naval: { name: 'Naval strike', blurb: 'A battleship is steaming along the coast with its flak manned. Bomb it until it sinks, then come home.' },
   ground: { name: 'Ground attack', blurb: 'An armoured convoy is moving up to a fuel depot guarded by flak guns. Destroy the tanks, trucks, fuel tanks and sheds.' },
+  train: { name: 'Train busting', blurb: 'An ammunition train with flak wagons is running up the river valley to the harbour. Rockets and bombs set its wagons off one after another; stop it before it gets there.' },
   intercept: { name: 'Bomber intercept', blurb: 'Enemy bombers are heading for the harbour town with fighter cover. Shoot them down before three of them get through.' },
 };
-function missionKind() { return MISSIONS[settings.mission] ? settings.mission : 'dogfight'; }
+function missionKind() { return CAMP.on ? CAMPAIGN[CAMP.i].kind : MISSIONS[settings.mission] ? settings.mission : 'dogfight'; }
 const TOWN_LIMIT = 3; // bombers through to the town before the intercept fails
-const GW = { units: [], ship: null, flak: [], bombs: [], center: new V3(), gc: new V3(), active: false, own: {}, gready: false };
+const GW = { units: [], ship: null, flak: [], bombs: [], center: new V3(), gc: new V3(), active: false, own: {}, gready: false, train: [], trainS: 0, trainV: 0, sec: [], tready: false };
 // what shoots back from the ground: kills and hits are credited to it like to a pilot
 const AA_OWNER = { id: 'aa', team: 'red', role: 'ground', label: 'Anti-aircraft fire', player: false, seat: null, spec: { name: 'Flak' }, alive: true, gone: false, vel: new V3() };
 const GM = {};
@@ -2765,7 +2813,7 @@ function updateShip(S, dt) {
     S.pos.x -= Math.sin(S.hdg) * S.speed * dt; S.pos.z -= Math.cos(S.hdg) * S.speed * dt;
     if (S.sinkT < 18 && Math.random() < dt * 1.4) { _a.set(rand(-8, 8), shipD(0) + 2, rand(-80, 70)).applyQuaternion(S.q).add(S.pos); explosion(_a, _b.set(0, 0, 0), rand(1, 1.8), 'ground'); }
     if (Math.random() < dt * 12) { _a.set(rand(-6, 6), shipD(0) + 3, rand(-70, 60)).applyQuaternion(S.q).add(S.pos); if (_a.y > 0) { fireFX.spawn(_a.x, _a.y, _a.z, rand(-2, 2), rand(4, 9), rand(-2, 2), rand(0.6, 1.2), rand(3, 6), 4, 1, 0.65, 0.3, 0.9, 1, -2, 1); smokeFX.spawn(_a.x, _a.y + 3, _a.z, rand(-2, 2), rand(6, 12), rand(-2, 2), rand(8, 14), rand(6, 10), 6, 0.09, 0.085, 0.08, 0.8, 0.5, -1.5, 0); } }
-    if (S.sinkT > 46) { scene.remove(S.g); GW.ship = null; return; }
+    if (S.sinkT > 46) { scene.remove(S.g); GW.ship = null; clearSearchlights('naval'); return; }
   }
   shipPose(S);
   // bow wave and wake
@@ -2802,7 +2850,7 @@ function aaFire(src, from, dt, heavyRange, lightRange) {
   src.t -= dt;
   if (src.t <= 0 && src.heavy !== false) {
     src.t = rand(2.6, 4.2) / Math.sqrt(df.react);
-    const tof = d / 720, err = 45 + d * 0.03 * df.aim; // timed fuzes are rough: most bursts are near misses
+    const tof = d / 720, err = (45 + d * 0.03 * df.aim) * (GW.lit ? 0.55 : TOD.night ? 1.6 : 1); // timed fuzes are rough: most bursts are near misses; at night only a searchlight shows the gunners where you are
     const at = pl.pos.clone().addScaledVector(pl.vel, tof).add(rndDir(rand(0, err)));
     GW.flak.push({ pos: at, t: tof });
   }
@@ -2855,6 +2903,7 @@ function unitDies(u, owner) {
   u.g.traverse(o => { if (o.isMesh) o.material = gmats().wreck; });
   if (u.kind === 'fuel') u.g.scale.set(1.15, 0.35, 1.15); if (u.kind === 'shed') u.g.scale.set(1, 0.4, 1);
   G.crashSites.push({ x: u.pos.x, y: u.pos.y, z: u.pos.z, t: u.big ? 60 : 35, water: false });
+  if (u.ammo) trainCarDies(u, owner);
   if (owner && owner.player) {
     G.stats.score += u.pts; G.stats.ground = (G.stats.ground || 0) + 1;
     msg(`${u.name} destroyed  +${u.pts}`, 'good'); G.popups.push({ pos: at, text: `+${u.pts}`, t: 1.6 });
@@ -2870,13 +2919,17 @@ function hitShip(S, dmg, owner) {
 }
 // a blast at pos hurts everything around it (armour stops bullets far better than blast)
 function blastDamage(pos, radius, dmg, owner) {
-  for (const u of GW.units) if (u.alive) { const d = u.pos.distanceTo(pos) - u.r * 0.5; if (d < radius) damageUnit(u, dmg * (1 - Math.max(0, d) / radius) ** 0.7 * (0.85 + 0.15 * u.armor), owner); }
+  for (const u of allUnits()) if (u.alive) { const d = u.pos.distanceTo(pos) - u.r * 0.5; if (d < radius) damageUnit(u, dmg * (1 - Math.max(0, d) / radius) ** 0.7 * (0.85 + 0.15 * u.armor), owner); }
   const S = GW.ship; if (S && S.alive) { if (insideShip(S, pos, 2)) damageShip(S, dmg * 2.6, owner); else if (insideShip(S, pos, radius)) damageShip(S, dmg * 0.6, owner); }
 }
 // a bullet segment against the targets; true if it hit something
 function bulletVsGround(ox, oy, oz, nx, ny, nz, dmg, cannon, owner) {
   if (!GW.active) return false;
   if (GW.ship && GW.ship.alive) { _a.set(nx, ny, nz); if (insideShip(GW.ship, _a) || insideShip(GW.ship, _b.set((ox + nx) / 2, (oy + ny) / 2, (oz + nz) / 2))) { damageShip(GW.ship, dmg * 0.05, owner); for (let s = 0; s < 3; s++) fireFX.spawn(nx, ny, nz, rand(-20, 20), rand(0, 25), rand(-20, 20), rand(0.1, 0.25), cannon ? 1.2 : 0.6, 2, 1, 0.85, 0.55, 1, 2, 9, 1); return true; } }
+  for (const u of GW.train) {
+    if (!u.alive || Math.abs(u.pos.x - nx) > 40 || Math.abs(u.pos.z - nz) > 40) continue; _b.set(u.pos.x, u.pos.y + 2, u.pos.z);
+    if (segPointDist(_c.set(ox, oy, oz), _d.set(nx, ny, nz), _b) < u.r) { damageUnit(u, dmg * u.armor * (cannon ? 1.6 : 1), owner); for (let s = 0; s < (cannon ? 6 : 3); s++) fireFX.spawn(nx, ny, nz, rand(-15, 15), rand(2, 18), rand(-15, 15), rand(0.1, 0.25), cannon ? 1.2 : 0.6, 2, 1, 0.85, 0.55, 1, 2, 9, 1); return true; }
+  }
   if (!GW.units.length || _a.set(nx, ny, nz).distanceToSquared(GW.gc) > 2200 * 2200) return false;
   for (const u of GW.units) {
     if (!u.alive) continue; _b.set(u.pos.x, u.pos.y + u.r * 0.45, u.pos.z);
@@ -2998,18 +3051,23 @@ function spawnEscorts(n, near, text) {
 function clearGroundWar() {
   for (const u of GW.units) scene.remove(u.g); GW.units = [];
   if (GW.ship) scene.remove(GW.ship.g); GW.ship = null;
+  clearSearchlights();
+  for (const u of GW.train) scene.remove(u.g); GW.train = []; GW.sec = []; GW.tready = false;
   for (const b of GW.bombs) scene.remove(b.mesh); GW.bombs = []; GW.flak = []; GW.shells = []; GW.townRuns = 0; GW.townHit = 0; GW.active = false; GW.own = {}; GW.gready = false;
 }
 function setupMission(m) {
   clearGroundWar(); m.kind = missionKind();
   if (m.kind === 'naval') setupNaval(m);
   else if (m.kind === 'ground') setupGround(m);
-  else if (m.kind === 'intercept') { m.bwave = 0; m.bwaves = clamp(Number(settings.waves) || 2, 1, 3); m.maxScore = (m.bwaves * 3 + 1) * 200 + m.bwaves * 300 + 700; }
+  else if (m.kind === 'train') setupTrain(m);
+  else if (m.kind === 'intercept') { m.bwave = 0; m.bwaves = clamp(Number(CAMP.on ? CAMPAIGN[CAMP.i].bwaves : settings.waves) || 2, 1, 3); m.maxScore = (m.bwaves * 3 + 1) * 200 + m.bwaves * 300 + 700; }
   GW.active = m.kind !== 'dogfight';
+  missionLights(m.kind);
   m.escortsLeft = m.kind === 'intercept' ? 0 : 3;
 }
 function updateGroundWar(dt) {
   if (!GW.active) return;
+  updateSearchlights(dt);
   for (const u of GW.units) {
     if (!u.alive) continue;
     if (u.path !== undefined || u.s !== undefined) moveOnPath(u, dt);
@@ -3017,6 +3075,7 @@ function updateGroundWar(dt) {
     if (u.tur && G.player) { _a.subVectors(G.player.pos, u.pos); const yaw = Math.atan2(-_a.x, -_a.z) - u.hdg; u.tur.rotation.y = yaw; if (u.el) u.el.rotation.x = clamp(Math.atan2(_a.y, Math.hypot(_a.x, _a.z)), 0, 1.4); }
   }
   if (GW.ship) updateShip(GW.ship, dt);
+  updateTrain(dt);
   updateFlak(dt); updateBombs(dt);
   // flying into the battleship ends badly
   if (GW.ship) for (const p of G.planes) if (!p.gone && !p.remote && p.alive && insideShip(GW.ship, p.pos, 1)) crash(p, 'hit the battleship');
@@ -3034,9 +3093,14 @@ function missionObjective(m, dt) {
     }
     return;
   }
-  // naval / ground: fighters come to defend the target now and then
-  if (m.next != null) { m.next -= dt; if (m.next <= 0) { m.next = null; m.escortsLeft--; spawnEscorts(2, (m.kind === 'naval' ? (GW.ship ? GW.ship.pos : GW.center) : GW.gc).clone().setY(1400), 'Enemy fighters scrambled to defend the target'); } }
+  // naval / ground / train: fighters come to defend the target now and then
+  if (m.next != null) { m.next -= dt; if (m.next <= 0) { m.next = null; m.escortsLeft--; spawnEscorts(2, (m.kind === 'naval' ? (GW.ship ? GW.ship.pos : GW.center) : m.kind === 'train' && GW.train[0] ? GW.train[0].pos : GW.gc).clone().setY(1400), 'Enemy fighters scrambled to defend the target'); } }
   else if (m.escortsLeft > 0 && mRaiders(m).length === 0) m.next = 45;
+  if (m.kind === 'train') {
+    if (!GW.train.some(u => u.ammo && u.alive)) { m.phase = 'rtb'; if (!NET.on || m.local) msg('Every ammunition wagon is gone. Return to base and land', 'good', 6); }
+    else if (RAIL && GW.trainS >= RAIL.len - 45) { m.phase = 'over'; m.endT = 4; m.cause = 'let the ammunition train reach the depot'; m.trainLost = true; if (!NET.on || m.local) msg('The train reached the depot. Mission failed', 'danger', 6); }
+    return;
+  }
   const done = m.kind === 'naval' ? !GW.ship || !GW.ship.alive : GW.units.every(u => u.optional || !u.alive);
   if (done) { m.phase = 'rtb'; if (!NET.on) msg(m.kind === 'naval' ? 'Target sunk. Return to base and land' : 'Convoy and depot destroyed. Return to base and land', 'good', 6); }
   void pl;
@@ -3044,6 +3108,7 @@ function missionObjective(m, dt) {
 function missionLine(m) {
   if (m.kind === 'naval') return GW.ship && GW.ship.alive ? `Sink the battleship · ${Math.max(0, Math.round(GW.ship.hp / GW.ship.max * 100))}% afloat` : 'Battleship sinking';
   if (m.kind === 'ground') { const left = GW.units.filter(u => !u.optional && u.alive).length; return `Destroy the convoy and depot · ${left} of ${m.targetsTotal} targets left`; }
+  if (m.kind === 'train') { const left = GW.train.filter(u => u.ammo && u.alive).length; return `Stop the ammunition train · ${left} of ${m.targetsTotal || 6} wagons left · ${RAIL ? Math.max(0, (RAIL.len - GW.trainS) / 1000).toFixed(1) : '?'} km to the depot`; }
   if (m.kind === 'dogfight') { const n = mRaiders(m).length; return m.next != null ? `Wave ${m.wave + 1} of ${WAVES.length} inbound in ${Math.ceil(m.next)} s` : `Wave ${m.wave} of ${WAVES.length} · ${n} bandit${n === 1 ? '' : 's'} left`; }
   if (m.kind === 'intercept') { const n = G.planes.filter(p => p.bomber && p.alive && !p.gone && !p.remote).length; return m.next != null ? `Bombers inbound in ${Math.ceil(m.next)} s · town hit ${GW.townRuns || 0} of ${TOWN_LIMIT}` : `Stop the bombers · ${n} inbound · town hit ${GW.townRuns || 0} of ${TOWN_LIMIT}`; }
   return '';
@@ -3054,6 +3119,7 @@ function objectivePos(kind) {
   if (m.kind === 'dogfight' && NET.on) { const r = raidersOf('dogfight')[0]; return r ? _e.copy(r.pos) : null; }
   if (m.kind === 'naval' && GW.ship && GW.ship.alive) return _e.copy(GW.ship.pos).setY(12);
   if (m.kind === 'ground') { const u = GW.units.find(u => u.alive && !u.optional); return u ? _e.copy(u.pos).setY(u.pos.y + 6) : null; }
+  if (m.kind === 'train') { const u = GW.train.find(u => u.alive && u.ammo); return u ? _e.copy(u.pos).setY(u.pos.y + 7) : null; }
   if (m.kind === 'intercept') { const b = G.planes.find(p => p.bomber && p.alive && !p.gone && !p.remote); return b ? _e.copy(b.pos) : _e.set(TOWN.x, 200, TOWN.z); }
   return null;
 }
@@ -3078,8 +3144,10 @@ function setupKind(kind, m) {
   m.kind = kind; GW.own[kind] = true; GW.active = true;
   if (kind === 'naval') { if (GW.ship) scene.remove(GW.ship.g); GW.ship = null; setupNaval(m); }
   else if (kind === 'ground') { for (const u of GW.units) scene.remove(u.g); GW.units = []; setupGround(m); GW.gready = true; }
+  else if (kind === 'train') setupTrain(m);
   else if (kind === 'intercept') { GW.townRuns = 0; m.bwave = 0; m.bwaves = clamp(Number(NET.opts.waves) || 2, 1, 3); }
   else { m.wave = 0; WAVES = buildWaves(NET.opts.enemies, NET.opts.waves); }
+  missionLights(kind);
   m.escortsLeft = kind === 'intercept' ? 0 : 3;
 }
 // what a mission leaves behind when it ends: the convoy's wrecks stay, anything still alive goes
@@ -3088,6 +3156,8 @@ function dropKind(kind, won) {
   if (kind === 'ground') { GW.gready = false; GW.units = GW.units.filter(u => { if (u.alive) scene.remove(u.g); return !u.alive; }); }
   if (kind === 'naval' && GW.ship && GW.ship.alive) { scene.remove(GW.ship.g); GW.ship = null; }
   if (kind === 'intercept') GW.townRuns = 0;
+  if (kind === 'train') { GW.tready = false; GW.train = GW.train.filter(u => { if (u.alive) scene.remove(u.g); return !u.alive; }); }
+  if (kind !== 'naval' || !GW.ship) clearSearchlights(kind);
   dropLocalRaiders(kind);
   GW.own[kind] = false; delete NM.mk[kind]; delete NM.kinds[kind];
 }
@@ -3140,6 +3210,7 @@ function netMissionsTick(dt) {
       const d = { k: 'mstate', kind, owner: NET.seat, name: NET.name, members: r.members, line: r.line, obj: r.obj };
       if (kind === 'naval' && GW.ship) { const S = GW.ship; d.ship = [r1(S.pos.x), r1(S.pos.z), r3(S.hdg), Math.round(S.hp), S.max, S.alive ? 1 : 0, r1(S.sinkT), S.wp]; }
       if (kind === 'ground') d.units = GW.units.map(u => [u.alive ? 1 : 0, Math.round(u.hp), u.s !== undefined ? r1(u.s) : 0, u.dir || 0]);
+      if (kind === 'train') d.train = [r1(GW.trainS), r1(GW.trainV), GW.train.map(u => [u.alive ? 1 : 0, Math.round(u.hp)])];
       netSend(d);
     }
   }
@@ -3148,7 +3219,7 @@ function netMissionsTick(dt) {
   if (NM.flushT <= 0) {
     NM.flushT = 0.25;
     if (NM.pend.naval > 0) { netSend({ k: 'mhit', kind: 'naval', dmg: Math.round(NM.pend.naval), by: NM.pend.nby }); NM.pend.naval = 0; }
-    for (const i in NM.pend.ground) netSend({ k: 'mhit', kind: 'ground', i: +i, dmg: Math.round(NM.pend.ground[i].dmg), by: NM.pend.ground[i].by });
+    for (const key in NM.pend.ground) { const [kind, i] = key.split(':'); netSend({ k: 'mhit', kind, i: +i, dmg: Math.round(NM.pend.ground[key].dmg), by: NM.pend.ground[key].by }); }
     NM.pend.ground = {};
   }
   // a mission whose owner went quiet (left the table) has ended
@@ -3178,7 +3249,7 @@ function handleMission(d) {
       if (was) netSend({ k: 'mjoin', kind: k, seat: NET.seat, name: NET.name });
     }
     let r = NM.kinds[k];
-    if (!r) { r = NM.kinds[k] = { owner: d.owner, name: d.name, members: [d.owner], line: '', obj: null, lastT: nowMs() }; if (NM.mine !== k) showBanner(k, d.name); }
+    if (!r) { r = NM.kinds[k] = { owner: d.owner, name: d.name, members: [d.owner], line: '', obj: null, lastT: nowMs() }; if (NM.mine !== k) showBanner(k, d.name); if (k === 'intercept') missionLights(k); }
     Object.assign(r, { owner: d.owner, name: d.name || r.name, lastT: nowMs() });
     if (d.k === 'mstart') return;
     if (d.members) r.members = d.members; r.line = d.line || ''; r.obj = d.obj;
@@ -3186,12 +3257,17 @@ function handleMission(d) {
       const [x, z, hdg, hp, max, alive, sinkT, wp] = d.ship;
       let S = GW.ship;
       if (!S && !alive) return;
-      if (!S) { S = GW.ship = makeShip(); S.pos.set(x, 0, z); S.hdg = hdg; S.wps = [new V3(coastX(-6000) + 5400, 0, -6000), new V3(coastX(5000) + 5400, 0, 5000)]; shipPose(S); }
+      if (!S) { S = GW.ship = makeShip(); S.pos.set(x, 0, z); S.hdg = hdg; S.wps = [new V3(coastX(-6000) + 5400, 0, -6000), new V3(coastX(5000) + 5400, 0, 5000)]; shipPose(S); missionLights('naval'); }
       S.replica = true; S.net = { x, z, hdg, at: nowMs() }; S.hp = hp; S.max = max; S.wp = wp || 0;
       if (S.alive && !alive) { S.alive = false; S.sinkT = sinkT; }
     }
+    if (k === 'train' && d.train) {
+      if (!GW.tready) { setupTrain({}); missionLights('train'); }
+      const [ts, tv, cars] = d.train; if (Math.abs(GW.trainS - ts) > 40) GW.trainS = ts; else GW.trainS += (ts - GW.trainS) * 0.3; GW.trainV = tv;
+      cars.forEach(([a, hp], i) => { const u = GW.train[i]; if (!u) return; u.hp = hp; if (u.alive && !a) unitDies(u, null); });
+    }
     if (k === 'ground' && d.units) {
-      if (!GW.gready) { for (const u of GW.units) scene.remove(u.g); GW.units = []; setupGround({}); GW.gready = true; }
+      if (!GW.gready) { for (const u of GW.units) scene.remove(u.g); GW.units = []; setupGround({}); GW.gready = true; missionLights('ground'); }
       d.units.forEach(([a, hp, s, dir], i) => {
         const u = GW.units[i]; if (!u) return; u.hp = hp;
         if (u.s !== undefined) { if (Math.abs(u.s - s) > 12) u.s = s; else u.s += (s - u.s) * 0.3; u.dir = dir; }
@@ -3220,16 +3296,18 @@ function handleMission(d) {
     const dmg = clamp(Number(d.dmg) || 0, 0, 5000), by = G.planes.find(p => p.id === d.by) || null;
     if (k === 'naval' && GW.ship) hitShip(GW.ship, dmg, by);
     if (k === 'ground' && GW.units[d.i]) hitUnit(GW.units[d.i], dmg, by);
+    if (k === 'train' && GW.train[d.i]) hitUnit(GW.train[d.i], dmg, by);
   }
 }
 // damage to targets: applied here when this device runs that mission (or offline), otherwise sent to its owner
 function damageUnit(u, dmg, by) {
-  if (!NET.on || GW.own.ground) { hitUnit(u, dmg, by); return; }
-  const i = GW.units.indexOf(u); if (i < 0 || !u.alive) return;
-  const e = NM.pend.ground[i] || (NM.pend.ground[i] = { dmg: 0, by: null }); e.dmg += dmg; if (by) e.by = by.id;
+  const kind = u.train ? 'train' : 'ground';
+  if (!NET.on || GW.own[kind] || (G.mission && G.mission.local)) { hitUnit(u, dmg, by); return; }
+  const i = (u.train ? GW.train : GW.units).indexOf(u); if (i < 0 || !u.alive) return;
+  const key = kind + ':' + i, e = NM.pend.ground[key] || (NM.pend.ground[key] = { dmg: 0, by: null }); e.dmg += dmg; if (by) e.by = by.id;
 }
 function damageShip(S, dmg, by) {
-  if (!NET.on || GW.own.naval) { hitShip(S, dmg, by); return; }
+  if (!NET.on || GW.own.naval || (G.mission && G.mission.local)) { hitShip(S, dmg, by); return; }
   if (!S.alive) return;
   NM.pend.naval += dmg; if (by) NM.pend.nby = by.id;
   if (by && by.player && dmg >= 40) msg(`Battleship hit · about ${Math.max(0, Math.round((S.hp - NM.pend.naval) / S.max * 100))}% left`, 'good', 2.2);
@@ -3257,6 +3335,433 @@ function netObjectivePos() {
   if (NM.mk[k]) return objectivePos(k);
   const r = NM.kinds[k]; return r && r.obj ? _e.fromArray(r.obj) : null;
 }
+
+// =====================================================================
+//  Rockets: unguided, fired in pairs from under the wings. They burn for a second, then fall like a shell,
+//  and burst on whatever they hit: aircraft, vehicles, wagons, the battleship or the ground.
+// =====================================================================
+const ROCKETS = [];
+const RKT_GEO = new THREE.CylinderGeometry(0.085, 0.085, 1.5, 8).rotateX(Math.PI / 2), RKT_HEAD = new THREE.ConeGeometry(0.085, 0.32, 8).rotateX(-Math.PI / 2).translate(0, 0, -0.91);
+function rocketCount(key) { const s = SPECS[key]; return !s || s.role === 'bomber' ? 0 : key === 'striker' ? 19 : s.jet ? 12 : s.bombs >= 4 ? 10 : 6; }
+function spawnRocket(pos, vel, owner, vis) {
+  const mesh = new THREE.Group(); mesh.add(new THREE.Mesh(RKT_GEO, mslMat), new THREE.Mesh(RKT_HEAD, mslDark)); mesh.position.copy(pos); scene.add(mesh);
+  ROCKETS.push({ pos, vel, owner, vis, mesh, age: 0, dir: vel.clone().normalize() });
+}
+function fireRocket(p) {
+  if (!p || !p.alive || (p.rockets || 0) <= 0) return false;
+  p.rockets--; p.rktSide = -(p.rktSide || 1);
+  const pos = new V3(p.rktSide * Math.min(3.2, p.spec.span * 0.22), -0.8, -1).applyQuaternion(p.q).add(p.pos);
+  const vel = p.vel.clone().addScaledVector(p.fwd, 30);
+  spawnRocket(pos, vel, p, false);
+  if (NET.on && !p.remote) netSend({ k: 'rkt', pos: pos.toArray().map(r1), vel: vel.toArray().map(r1) });
+  Sfx.launch(pos, !!p.player);
+  return true;
+}
+function firePlayerRockets() {
+  const p = G.player; if (!p || !p.alive || G.state !== 'play' || p.onGround) return;
+  if ((p.rockets || 0) <= 0) { msg('No rockets left · land at the airfield to rearm', 'warn'); return; }
+  fireRocket(p); p.rktPair = 0.09; // the second of the pair follows a moment later (simulate fires it)
+}
+const _ro = new V3(), _rk = new V3(), _ZERO = new V3();
+function updateRockets(dt) {
+  for (let i = ROCKETS.length - 1; i >= 0; i--) {
+    const r = ROCKETS[i]; r.age += dt;
+    _ro.copy(r.pos);
+    if (r.age < 1.1) r.vel.addScaledVector(r.dir, 320 * dt); // the motor burns for about a second
+    r.vel.y -= 9.81 * dt; r.vel.multiplyScalar(1 - 0.02 * dt);
+    r.pos.addScaledVector(r.vel, dt);
+    r.mesh.position.copy(r.pos); r.mesh.lookAt(_rk.copy(r.pos).sub(r.vel));
+    if (r.age < 1.1) { fireFX.spawn(r.pos.x, r.pos.y, r.pos.z, r.vel.x * 0.7, r.vel.y * 0.7, r.vel.z * 0.7, 0.08, 1.1, 2, 1, 0.8, 0.4, 1, 3, 0, 1); }
+    if (r.age < 1.6 && Math.random() < 0.8) smokeFX.spawn(r.pos.x, r.pos.y, r.pos.z, rand(-1, 1), rand(-1, 1), rand(-1, 1), rand(1.4, 2.4), 0.9, 2.4, 0.72, 0.7, 0.67, 0.55, 0.6, -0.2, 0);
+    let hit = null, boom = null;
+    if (!r.vis) for (const p of G.planes) { if (p === r.owner || p.gone || !p.alive || (r.owner && r.owner.team === p.team)) continue; if (segPointDist(_ro, r.pos, p.pos) < 5) { hit = p; boom = 'missile'; break; } }
+    if (!boom && GW.ship && GW.ship.alive && insideShip(GW.ship, r.pos)) boom = 'ground';
+    if (!boom) for (const u of allUnits()) { if (!u.alive || Math.abs(u.pos.x - r.pos.x) > 40 || Math.abs(u.pos.z - r.pos.z) > 40) continue; if (segPointDist(_ro, r.pos, _rk.set(u.pos.x, u.pos.y + u.r * 0.4, u.pos.z)) < u.r + 0.8) { boom = 'ground'; break; } }
+    const gh = groundH(r.pos.x, r.pos.z), wl = waterLevelAt(r.pos.x, r.pos.z);
+    if (!boom && r.pos.y < Math.max(gh, wl)) { boom = gh < wl ? 'water' : 'ground'; r.pos.y = Math.max(gh, wl); }
+    if (!boom && r.age > 7) boom = 'missile';
+    if (!boom) continue;
+    explosion(r.pos, _ZERO, 0.7, boom);
+    if (!r.vis) {
+      if (hit) hitPart(hit, 'fuse', 85, r.owner);
+      blastDamage(r.pos, 14, 140, r.owner);
+      for (const p of G.planes) { if (p === hit || p === r.owner || p.gone || !p.alive) continue; const d = p.pos.distanceTo(r.pos); if (d < 16) hitPart(p, 'fuse', 45 * (1 - d / 16), r.owner); }
+    }
+    scene.remove(r.mesh); ROCKETS.splice(i, 1);
+  }
+}
+function clearRockets() { for (const r of ROCKETS) scene.remove(r.mesh); ROCKETS.length = 0; }
+
+// =====================================================================
+//  The railway and the ammunition train. The line runs up the river valley on the north bank to a depot by
+//  the harbour; its bed is smoothed and banked up over the dips. The train has a locomotive, a tender, flak
+//  cars and wagons of ammunition: a burning ammo wagon can set off the ones next to it, so the train goes up
+//  car by car. Destroy every ammo wagon before the train reaches the depot.
+// =====================================================================
+let RAIL = null;
+const CAR_GAP = 14;
+function railway() {
+  if (RAIL) return RAIL;
+  const raw = [], P = [], x1 = TOWN.x - 650;
+  for (let x = -10000; x <= x1; x += 10) { const z = riverZ(x) + 135; raw.push([x, z, Math.max(groundH(x, z), waterLevelAt(x, z) + 1.5)]); }
+  const n = raw.length, R = 16;
+  for (let i = 0; i < n; i++) { let s = 0, c = 0; for (let j = Math.max(0, i - R); j <= Math.min(n - 1, i + R); j++) { s += raw[j][2]; c++; } P.push(new V3(raw[i][0], Math.max(s / c, raw[i][2] - 0.4) + 0.35, raw[i][1])); }
+  for (let pass = 0; pass < 2; pass++) for (let i = 1; i < n - 1; i++) P[i].y = Math.max((P[i - 1].y + P[i].y * 2 + P[i + 1].y) / 4, raw[i][2] - 0.4 + 0.35);
+  const cum = [0]; for (let i = 1; i < n; i++) cum.push(cum[i - 1] + P[i].distanceTo(P[i - 1]));
+  RAIL = { P, cum, len: cum[n - 1] };
+  // the bed: ballast on top, grassy banks down to the ground either side, and two rails
+  const pos = [], col = [], idx = [], rails = [];
+  const cBal = new THREE.Color(0x766a5c), cBank = new THREE.Color(0x5f6446);
+  const N = new V3(), T = new V3();
+  for (let i = 0; i < n; i++) {
+    const a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)]; T.subVectors(b, a).setY(0).normalize(); N.set(-T.z, 0, T.x);
+    const c = P[i], y = c.y;
+    for (const sd of [-1, 1]) {
+      const ex = c.x + N.x * 2.3 * sd, ez = c.z + N.z * 2.3 * sd, ge = groundH(ex, ez), drop = Math.max(0, y - ge);
+      const ox = c.x + N.x * (2.3 + drop * 1.4 + 0.5) * sd, oz = c.z + N.z * (2.3 + drop * 1.4 + 0.5) * sd;
+      // per station: outer bank foot, bank top (left), then the same on the right
+      if (sd < 0) { pos.push(ox, groundH(ox, oz) - 0.6, oz, ex, y, ez); col.push(cBank.r, cBank.g, cBank.b, cBal.r, cBal.g, cBal.b); }
+      else { pos.push(ex, y, ez, ox, groundH(ox, oz) - 0.6, oz); col.push(cBal.r, cBal.g, cBal.b, cBank.r, cBank.g, cBank.b); }
+    }
+    for (const sd of [-0.75, 0.75]) for (const w of [-0.08, 0.08]) rails.push(c.x + N.x * (sd + w), y + 0.2, c.z + N.z * (sd + w));
+    if (i < n - 1) { const k = i * 4, m = k + 4; for (let q = 0; q < 3; q++) idx.push(k + q, m + q, k + q + 1, k + q + 1, m + q, m + q + 1); }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx); g.computeVertexNormals();
+  const bed = new THREE.Mesh(g, new THREE.MeshLambertNodeMaterial({ vertexColors: true, side: THREE.DoubleSide })); bed.receiveShadow = true; scene.add(bed);
+  const ri = []; for (let i = 0; i < n - 1; i++) for (let r = 0; r < 2; r++) { const k = i * 4 + r * 2, m = k + 4; ri.push(k, m, k + 1, k + 1, m, m + 1); }
+  const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(rails, 3)); rg.setIndex(ri); rg.computeVertexNormals();
+  scene.add(new THREE.Mesh(rg, new THREE.MeshLambertNodeMaterial({ color: 0x3c3a37, side: THREE.DoubleSide })));
+  // the depot at the end of the line, and a buffer stop
+  const e = P[n - 1], d = P[n - 12], hd = Math.atan2(-(e.x - d.x), -(e.z - d.z));
+  addBox(16, 8, 46, lam(0x7a5a44), e.x + Math.cos(hd) * 14, e.y + 3.5, e.z - Math.sin(hd) * 14, hd); addBox(17, 1, 47, lam(0x4d4f52), e.x + Math.cos(hd) * 14, e.y + 7.8, e.z - Math.sin(hd) * 14, hd);
+  addBox(4, 1.4, 1, lam(0x9a2a22), e.x, e.y + 0.9, e.z, hd);
+  return RAIL;
+}
+// a point along the line (s in metres from the start) and the direction there
+function railAt(s, out) {
+  const R = RAIL, c = R.cum; s = clamp(s, 0, R.len);
+  let lo = 0, hi = c.length - 1; while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (c[mid] < s) lo = mid; else hi = mid; }
+  const t = (s - c[lo]) / Math.max(1e-6, c[hi] - c[lo]); return out.lerpVectors(R.P[lo], R.P[hi], t);
+}
+function makeTrainCar(kind) {
+  const M = gmats(), g = new THREE.Group(), u = { kind, g, pos: new V3(), hdg: 0, alive: true, train: true, t: rand(0, 2), lt: rand(0, 2), burst: 0 };
+  TM.ok || Object.assign(TM, { ok: true, black: pbr({ color: 0x1e1f21, roughness: 0.6, metalness: 0.5 }), red: pbr({ color: 0x7a221c, roughness: 0.7, metalness: 0.3 }), wagon: pbr({ color: 0x6b3d29, roughness: 0.9, metalness: 0.05 }), roofG: pbr({ color: 0x55575a, roughness: 0.8, metalness: 0.3 }), coal: lam(0x111111) });
+  const wheels = (n, len) => { for (let i = 0; i < n; i++) for (const sx of [-1, 1]) { const w = mcyl(0.55, 0.55, 0.25, TM.red, sx * 1.15, 0.55, -len / 2 + 1.2 + i * (len - 2.4) / Math.max(1, n - 1), g, 10); w.rotation.z = Math.PI / 2; } };
+  if (kind === 'loco') {
+    const boiler = mcyl(1.25, 1.25, 8.5, TM.black, 0, 2.35, -1.6, g, 16); boiler.rotation.x = Math.PI / 2;
+    mbox(2.9, 3.1, 3.4, TM.black, 0, 2.6, 4.4, g); mbox(3.2, 0.25, 3.8, TM.roofG, 0, 4.25, 4.4, g);
+    mcyl(0.35, 0.45, 1.5, TM.black, 0, 4.1, -4.6, g, 10); mcyl(0.5, 0.5, 0.6, TM.black, 0, 3.6, -1.5, g, 10);
+    mbox(2.6, 0.6, 12.5, M.dark, 0, 1.05, 0, g); mbox(2.8, 0.5, 0.4, TM.red, 0, 0.9, -6.3, g); wheels(4, 11);
+    Object.assign(u, { name: 'Locomotive', hp: 220, r: 6.5, pts: 250, armor: 0.35 });
+  } else if (kind === 'tender') {
+    mbox(2.8, 2.2, 6.5, TM.black, 0, 2.0, 0, g); mbox(2.4, 0.5, 5.6, TM.coal, 0, 3.3, 0, g); mbox(2.6, 0.5, 7.2, M.dark, 0, 0.9, 0, g); wheels(2, 6.5);
+    Object.assign(u, { name: 'Tender', hp: 90, r: 4.5, pts: 50, armor: 0.6, optional: true });
+  } else if (kind === 'ammo') {
+    mbox(2.9, 3.0, 11, TM.wagon, 0, 2.6, 0, g); const roof = mcyl(1.55, 1.55, 11.1, TM.roofG, 0, 3.75, 0, g, 12); roof.rotation.x = Math.PI / 2; roof.scale.set(1, 1, 0.35);
+    mbox(2.95, 0.25, 0.25, M.dark, 0, 2.2, 0, g); mbox(2.6, 0.5, 11.6, M.dark, 0, 0.9, 0, g); wheels(2, 11);
+    Object.assign(u, { name: 'Ammunition wagon', hp: 110, r: 6, pts: 150, armor: 0.75, ammo: true, big: true });
+  } else if (kind === 'flak') {
+    mbox(2.8, 0.7, 11, M.dark, 0, 1.1, 0, g); mbox(2.6, 0.9, 3, M.sand, 0, 1.9, 0, g); wheels(2, 11);
+    const tur = new THREE.Group(); tur.position.set(0, 2.6, 0); g.add(tur); mbox(1.2, 0.6, 1.2, M.olive, 0, 0.1, 0, tur);
+    const el = new THREE.Group(); el.position.set(0, 0.3, 0); tur.add(el); for (const sx of [-0.22, 0.22]) mrod(new V3(sx, 0, 0.4), new V3(sx, 0, -3.4), 0.08, M.dark, el);
+    u.tur = tur; u.el = el; u.flak = true;
+    Object.assign(u, { name: 'Flak wagon', hp: 100, r: 5.5, pts: 100, armor: 0.6, optional: true });
+  }
+  u.max = u.hp; scene.add(g); return u;
+}
+const TM = {};
+const TRAIN_MAKEUP = ['loco', 'tender', 'flak', 'ammo', 'ammo', 'ammo', 'flak', 'ammo', 'ammo', 'ammo'];
+function setupTrain(m) {
+  railway();
+  for (const u of GW.train) scene.remove(u.g);
+  GW.train = TRAIN_MAKEUP.map((k, i) => { const u = makeTrainCar(k); u.idx = i; return u; });
+  GW.trainS = 1300; GW.trainV = 15; GW.sec = []; GW.tready = true; GW.active = true;
+  placeTrain(0);
+  m.targetsTotal = GW.train.filter(u => u.ammo).length;
+  m.maxScore = GW.train.reduce((a, u) => a + u.pts, 0) + 700;
+}
+const _tf = new V3(), _tb = new V3();
+function placeTrain(dt) {
+  for (const u of GW.train) {
+    const s = GW.trainS - u.idx * CAR_GAP; railAt(s + 5, _tf); railAt(s - 5, _tb); // the train runs toward larger s: the front bogie is ahead
+    u.pos.addVectors(_tf, _tb).multiplyScalar(0.5);
+    const dx = _tf.x - _tb.x, dz = _tf.z - _tb.z, hz = Math.hypot(dx, dz);
+    u.hdg = Math.atan2(-dx, -dz); const pitch = Math.atan2(_tf.y - _tb.y, hz);
+    u.g.position.copy(u.pos); u.g.rotation.set(pitch, u.hdg, 0, 'YXZ');
+    if (!u.alive) u.g.rotation.z = 0.08;
+  }
+}
+function updateTrain(dt) {
+  if (!GW.train || !GW.train.length || !RAIL) return;
+  const loco = GW.train[0], mine = ownsKind('train');
+  GW.trainV = loco.alive ? Math.min(15, GW.trainV + dt * 0.6) : Math.max(0, GW.trainV - dt * 1.4);
+  if (GW.trainS < RAIL.len - 40) GW.trainS += GW.trainV * dt; else GW.trainV = 0;
+  placeTrain(dt);
+  const pl = G.player;
+  for (const u of GW.train) {
+    if (u.alive && u.flak) aaFire(u, _c.set(u.pos.x, u.pos.y + 3, u.pos.z), dt, 2600, 850);
+    if (u.alive && u.tur && pl) { _a.subVectors(pl.pos, u.pos); u.tur.rotation.y = Math.atan2(-_a.x, -_a.z) - u.hdg; if (u.el) u.el.rotation.x = clamp(Math.atan2(_a.y, Math.hypot(_a.x, _a.z)), 0, 1.4); }
+    // fire spreading from a burning ammunition wagon
+    if (u.alive && u.chain > 0) { u.chain -= dt; if (u.chain <= 0 && mine) hitUnit(u, u.max * 0.8 + 30, u.chainBy); }
+    if (!u.alive && Math.random() < dt * 5 && u.pos.distanceTo(camera.position) < 5000) smokeFX.spawn(u.pos.x + rand(-2, 2), u.pos.y + 3, u.pos.z + rand(-4, 4), rand(-1, 1) + 2, rand(5, 8), rand(-1, 1), rand(6, 10), 5, 4, 0.12, 0.11, 0.1, 0.6, 0.1, -0.2, 0);
+  }
+  // the engine's smoke and steam
+  if (loco.alive && GW.trainV > 1 && Math.random() < dt * 14 && loco.pos.distanceTo(camera.position) < 6000) { _a.set(0, 4.9, -4.6).applyAxisAngle(_UP, loco.hdg).add(loco.pos); smokeFX.spawn(_a.x, _a.y, _a.z, rand(-1, 1), rand(4, 7), rand(-1, 1), rand(4, 7), 2.2, 3.5, 0.2, 0.19, 0.18, 0.75, 0.4, -0.5, 0); }
+  // secondary explosions in a burning wagon
+  for (let i = GW.sec.length - 1; i >= 0; i--) { const e = GW.sec[i]; e.t -= dt; if (e.t > 0) continue; GW.sec.splice(i, 1); explosion(_a.copy(e.u.pos).add(_b.set(rand(-1.5, 1.5), rand(1, 3), rand(-5, 5))), _ZERO, rand(0.6, 1.3), 'ground'); }
+}
+// an ammunition wagon going up: more blasts inside it, and the fire may spread to the cars either side
+function trainCarDies(u, owner) {
+  for (let k = 0; k < 5; k++) GW.sec.push({ u, t: rand(0.3, 3.5) });
+  if (!ownsKind('train')) return;
+  for (const j of [u.idx - 1, u.idx + 1]) { const v = GW.train[j]; if (!v || !v.alive || v.chain > 0) continue; if (Math.random() < (v.ammo ? 0.7 : 0.35)) { v.chain = rand(0.8, 1.8); v.chainBy = owner; } }
+}
+function ownsKind(k) { return !NET.on || !!GW.own[k] || !!(G.mission && G.mission.local); }
+function allUnits() { return GW.train && GW.train.length ? GW.units.concat(GW.train) : GW.units; }
+
+// =====================================================================
+//  Wingmen you can command (single player): they cover you by default, and on your word they go after
+//  your target or roll in on the ground target with guns, rockets and bombs.
+//  Keys: T attack my target · Y cover me · U hit the ground target. On a phone the WING button cycles them.
+// =====================================================================
+const WING = { cmd: 'cover', target: null, list: [] };
+const WING_NAMES = ['Mack', 'Dutch', 'Sparky'];
+const WING_CMDS = { attack: 'Attack my target', cover: 'Cover me', ground: 'Hit the ground target' };
+function spawnWingmen(n) {
+  WING.list = []; WING.cmd = 'cover'; WING.target = null;
+  const pl = G.player; if (!pl || !(n > 0)) return;
+  const mine = SPECS[settings.plane], key = mine.role === 'fighter' ? settings.plane : (Object.keys(SPECS).find(k => SPECS[k].era === mine.era && SPECS[k].side === mine.side && SPECS[k].role === 'fighter') || 'kestrel');
+  for (let i = 0; i < n; i++) {
+    const w = new Plane(key, { skill: 'veteran', id: 'w' + i, team: pl.team, role: 'wingman', label: WING_NAMES[i % WING_NAMES.length] });
+    w.liftK = 1.05; w.missiles = 2; w.flares = 4; w.bombs = w.spec.bombs || 0; w.rockets = rocketCount(key);
+    const side = i % 2 ? 1 : -1;
+    if (pl.onGround) { w.place(AF.x + 400 + i * 70, AF.h + 650 + i * 30, AF.z - 900 - i * 60, 0, 0, (w.spec.cruise || 130)); }
+    else { const yaw = Math.atan2(-pl.fwd.x, -pl.fwd.z); w.place(pl.pos.x + pl.right.x * side * 45 - pl.fwd.x * (40 + i * 25), pl.pos.y + 5 + i * 5, pl.pos.z + pl.right.z * side * 45 - pl.fwd.z * (40 + i * 25), yaw, 0, pl.V || 130); }
+    w.gear = w.gearT = 0; w.throttle = 0.85; G.planes.push(w); WING.list.push(w);
+  }
+  msg(`${n === 1 ? WING_NAMES[0] + ' is' : 'Your wingmen are'} with you · ${isTouch ? 'WING button' : 'T / Y / U'} gives orders`, 'info', 5);
+}
+function wingAlive() { return WING.list.filter(w => w.alive && !w.gone); }
+function bestTargetAhead() {
+  const pl = G.player; let best = null, bs = -1;
+  for (const e of G.planes) { if (!e.alive || e.gone || !pl || e.team === pl.team) continue; _a.subVectors(e.pos, pl.pos); const d = _a.length(), dot = pl.fwd.dot(_a.multiplyScalar(1 / d)); const sc = dot * 2 - d / 3000; if (dot > 0.6 && sc > bs) { bs = sc; best = e; } }
+  return best;
+}
+function wingCommand(cmd) {
+  const live = wingAlive(); if (!live.length) { msg('No wingmen with you', 'warn'); return; }
+  if (cmd === 'attack') {
+    const t = LOCK.target && LOCK.target.alive && !LOCK.target.isFlare && !LOCK.target.gone ? LOCK.target : bestTargetAhead();
+    if (!t) { msg('No target ahead of you · wingmen keep covering you', 'warn', 2.5); cmd = 'cover'; } else WING.target = t;
+  }
+  if (cmd === 'ground' && !groundTargetFor(live[0])) { msg('No ground targets · wingmen keep covering you', 'warn', 2.5); cmd = 'cover'; }
+  WING.cmd = cmd; const n = live[0].label;
+  msg(cmd === 'attack' ? `${n}: going after that ${WING.target.boss ? BOSSES[WING.target.boss].call : WING.target.spec.name}!` : cmd === 'cover' ? `${n}: on your wing, covering you` : `${n}: rolling in on the target!`, 'info', 3);
+  Sfx.chime();
+}
+function cycleWing() { const order = ['cover', 'attack', 'ground']; wingCommand(order[(order.indexOf(WING.cmd) + 1) % 3]); }
+// what a wingman should strike on the ground: the mission's targets first, then the guns
+function groundTargetFor(p) {
+  let best = null, bd = Infinity;
+  const consider = (pos, r, opt) => { const d = pos.distanceTo(p.pos) * (opt ? 3 : 1); if (d < bd) { bd = d; best = { pos, r }; } };
+  for (const u of allUnits()) if (u.alive) consider(u.pos, u.r, u.optional);
+  if (GW.ship && GW.ship.alive) consider(GW.ship.pos, 30, false);
+  return best;
+}
+const _gt = new V3();
+function groundRun(p, dt, gt) {
+  const b = p.brain; b.gs = b.gs || 'approach'; b.gT = (b.gT || 0) - dt; b.rkCool = (b.rkCool || 0) - dt; b.bCool = (b.bCool || 0) - dt;
+  p.firing = false; p.throttle = 0.9;
+  _gt.copy(gt.pos); _gt.y += 2; _c.subVectors(_gt, p.pos); const dist = _c.length(), horiz = Math.hypot(_c.x, _c.z), agl = p.agl();
+  if (agl < 70 && b.gs !== 'pull') { b.gs = 'pull'; b.gT = 2.5; }
+  if (b.gs === 'pull') { _dir.set(p.fwd.x, 0, p.fwd.z).normalize(); _dir.y = 0.9; steerTo(p, _dir.normalize(), p.inp, 1); p.throttle = 1; if (b.gT <= 0) { b.gs = 'extend'; b.gT = 7; } return; }
+  if (b.gs === 'extend') { _dir.set(p.fwd.x, 0, p.fwd.z).normalize(); _dir.y = clamp((650 - agl) * 0.003, -0.2, 0.35); steerTo(p, _dir.normalize(), p.inp, 0.7); if (b.gT <= 0) b.gs = 'approach'; return; }
+  if (b.gs === 'approach') {
+    _dir.set(_c.x, 0, _c.z).normalize(); _dir.y = clamp((650 - agl) * 0.003, -0.25, 0.35); steerTo(p, _dir.normalize(), p.inp, 0.8);
+    if (horiz < 1300 && agl > 280 && p.fwd.dot(_d.copy(_c).normalize()) > 0.6) b.gs = 'dive';
+    return;
+  }
+  // the dive: guns, rockets and a bomb at the bottom, then pull out
+  _dir.copy(_c).normalize(); steerTo(p, _dir, p.inp, 0.95); p.throttle = 0.65;
+  const conv = p.fwd.dot(_dir);
+  p.firing = conv > 0.995 && dist < 850;
+  if (conv > 0.996 && dist < 1100 && b.rkCool <= 0 && p.rockets > 0) { fireRocket(p); b.rkCool = 0.4; }
+  if (p.bombs > 0 && b.bCool <= 0) { const im = bombImpact(p); if (im && im.pos.distanceTo(_gt) < Math.max(16, gt.r * 2.2)) { dropBomb(p); b.bCool = 1.2; } }
+  if (dist < 300 || agl < 170) { b.gs = 'pull'; b.gT = 2.6; }
+}
+function formationFly(p, dt, pl) {
+  const i = WING.list.indexOf(p), side = i % 2 ? 1 : -1;
+  _d.set(pl.fwd.x, 0, pl.fwd.z).normalize();
+  _gt.copy(pl.pos).addScaledVector(pl.right, side * (38 + i * 6)).addScaledVector(_d, -(32 + i * 22)).add(_a.set(0, 4 + i * 4, 0));
+  const ahead = _b.subVectors(p.pos, _gt).dot(_d);
+  _c.copy(_gt).addScaledVector(pl.vel, 1.6).sub(p.pos); const d = _c.length();
+  _dir.copy(_c).normalize(); if (d < 70) _dir.lerp(pl.fwd, 1 - d / 70).normalize();
+  if (p.agl() < 80) _dir.y = Math.max(_dir.y, 0.3);
+  steerTo(p, _dir.normalize(), p.inp, 0.85);
+  p.throttle = clamp(pl.throttle - ahead * 0.012 + (pl.V - p.V) * 0.03, 0.15, 1); p.firing = false;
+}
+function wingThink(p, dt) {
+  const pl = G.player, cmd = WING.cmd;
+  if (!pl || !pl.alive || pl.onGround) { aiThink(p, dt, pickTarget(p, dt)); return; }
+  if (cmd === 'attack') { if (!WING.target || !WING.target.alive || WING.target.gone) { WING.cmd = 'cover'; } else { aiThink(p, dt, WING.target); return; } }
+  if (cmd === 'ground') { const gt = groundTargetFor(p); if (gt) { groundRun(p, dt, gt); return; } WING.cmd = 'cover'; msg(`${p.label}: targets destroyed, forming up on you`, 'good', 3); }
+  // cover: go after anything near you, otherwise hold formation
+  let threat = null, td = 1500;
+  for (const e of G.planes) { if (!e.alive || e.gone || e.team === p.team) continue; const d = e.pos.distanceTo(pl.pos); if (d < td) { td = d; threat = e; } }
+  if (threat) { aiThink(p, dt, threat); return; }
+  p.brain.gs = 'approach';
+  formationFly(p, dt, pl);
+}
+
+// =====================================================================
+//  Enemy aces with names: painted aircraft with nose art and a health bar. They see you coming, break hard
+//  and scissor when you sit on their tail, and when they are badly hit they make a last stand: no more
+//  dodging, full power, every missile.
+// =====================================================================
+const BOSSES = {
+  heron: { name: 'Viktor Kessel', call: 'the Black Heron', camo: ['#1f2126', '#3a3e46'], trim: 0xd8b22a, art: 'heron', last: 'You will not take my sky!' },
+  wasp: { name: 'Ilse Brandt', call: 'the Red Wasp', camo: ['#8a1d16', '#5e130f'], trim: 0xf2c63a, art: 'wasp', last: 'Then we go down together!' },
+  ghost: { name: 'Arkady Volk', call: 'the Grey Ghost', camo: ['#a5adb2', '#7b848b'], trim: 0x22262b, art: 'ghost', last: 'You never saw me coming.' },
+};
+const BOSS_HP = 1.8;
+function noseArtTexture(art) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 160; const x = c.getContext('2d');
+  x.lineJoin = 'round'; x.lineCap = 'round';
+  if (art === 'heron') {
+    x.fillStyle = '#d8b22a'; x.beginPath(); x.ellipse(128, 80, 92, 58, 0, 0, 6.283); x.fill();
+    x.fillStyle = '#121316'; x.beginPath(); x.moveTo(70, 112); x.quadraticCurveTo(96, 60, 132, 66); x.quadraticCurveTo(150, 40, 172, 34); x.lineTo(214, 40); x.lineTo(176, 48); x.quadraticCurveTo(160, 66, 150, 84); x.quadraticCurveTo(128, 112, 70, 112); x.fill();
+    x.strokeStyle = '#121316'; x.lineWidth = 5; x.beginPath(); x.moveTo(118, 104); x.lineTo(112, 140); x.moveTo(132, 100); x.lineTo(140, 140); x.stroke();
+  } else if (art === 'wasp') {
+    x.fillStyle = 'rgba(240,235,220,0.85)'; for (const s of [-1, 1]) { x.beginPath(); x.ellipse(128 + s * 26, 46, 40, 18, s * -0.5, 0, 6.283); x.fill(); }
+    for (let i = 0; i < 5; i++) { x.fillStyle = i % 2 ? '#141414' : '#f2c63a'; x.beginPath(); x.ellipse(128, 70 + i * 13, 34 - i * 3, 9, 0, 0, 6.283); x.fill(); }
+    x.fillStyle = '#141414'; x.beginPath(); x.moveTo(118, 132); x.lineTo(128, 156); x.lineTo(138, 132); x.fill(); x.beginPath(); x.arc(128, 52, 16, 0, 6.283); x.fill();
+  } else {
+    x.fillStyle = '#eef0f2'; x.beginPath(); x.moveTo(84, 140); x.lineTo(84, 70); x.arc(128, 70, 44, Math.PI, 0); x.lineTo(172, 140); for (let i = 0; i < 4; i++) x.quadraticCurveTo(161 - i * 22, 122, 150 - i * 22, 140); x.fill();
+    x.fillStyle = '#1b1e22'; for (const s of [-1, 1]) { x.beginPath(); x.ellipse(128 + s * 16, 72, 7, 11, 0, 0, 6.283); x.fill(); } x.beginPath(); x.ellipse(128, 100, 9, 6, 0, 0, 6.283); x.fill();
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+function checkerTexture(a, b) { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) { x.fillStyle = (i + j) % 2 ? a : b; x.fillRect(i * 8, j * 8, 8, 8); } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; }
+function makeBossPlane(id, key, o = {}) {
+  const B = BOSSES[id] || BOSSES.heron;
+  const e = new Plane(key, { skill: 'ace', ace: true, boss: id, id: o.id || 'boss-' + id, team: 'red', role: 'raider', label: `${B.name}` });
+  e.liftK = 1.12; e.missiles = 2 + (e.spec.jet ? 2 : 0); e.flares = 10;
+  for (const k in e.hp) e.hp[k] *= BOSS_HP; e.bossMax = { ...e.hp };
+  return e;
+}
+function bossHealth(p) { let f = 1; for (const k of ['fuse', 'wingL', 'wingR', 'tail', 'pilot']) f = Math.min(f, Math.max(0, p.hp[k]) / p.bossMax[k]); return p.alive ? f : 0; }
+function bossFor(key) { return SPECS[key] && SPECS[key].jet ? 'ghost' : Math.random() < 0.5 ? 'heron' : 'wasp'; }
+
+// =====================================================================
+//  Parachutes: bail out (J, or BAIL on a phone) when your aircraft is going down, float down, and you are
+//  picked up and sent up again in a fresh aircraft. Computer pilots who are shot down often get out too.
+// =====================================================================
+const CHUTES = [];
+let CHUTE_M = null;
+function makeChuteMesh(player) {
+  CHUTE_M = CHUTE_M || { mine: lam(0xe8783a, { side: THREE.DoubleSide }), other: lam(0xe6e0cf, { side: THREE.DoubleSide }), line: lam(0x2a2a2a), suit: lam(0x55553f), skin: lam(0xc9a080) };
+  const g = new THREE.Group();
+  const canopy = new THREE.Mesh(new THREE.SphereGeometry(3.6, 16, 6, 0, Math.PI * 2, 0, Math.PI / 2.3), player ? CHUTE_M.mine : CHUTE_M.other);
+  canopy.position.y = 7.4; canopy.castShadow = true; g.add(canopy);
+  const lines = new THREE.Group(); lines.position.y = 0; g.add(lines);
+  for (let i = 0; i < 6; i++) { const a = i / 6 * 6.283; mrod(new V3(Math.cos(a) * 3.3, 7.6, Math.sin(a) * 3.3), new V3(0, 1.5, 0), 0.025, CHUTE_M.line, lines); }
+  mbox(0.5, 1.2, 0.35, CHUTE_M.suit, 0, 0.7, 0, g); const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 8, 6), CHUTE_M.skin); head.position.y = 1.5; g.add(head);
+  return { g, canopy, lines };
+}
+function spawnChute(pos, vel, who) {
+  const m = makeChuteMesh(who === G.player); m.g.position.copy(pos); scene.add(m.g); m.canopy.scale.setScalar(0.01); m.lines.visible = false;
+  const c = { pos: pos.clone(), vel: vel.clone(), t: 0, open: false, landed: false, landT: 0, who, ...m };
+  CHUTES.push(c); return c;
+}
+function updateChutes(dt) {
+  for (let i = CHUTES.length - 1; i >= 0; i--) {
+    const c = CHUTES[i]; c.t += dt;
+    if (!c.landed) {
+      if (!c.open && c.t > 1.4) { c.open = true; c.lines.visible = true; if (c.who === G.player) msg('Parachute open', 'info', 2); }
+      if (!c.open) { c.vel.y -= 9.81 * dt; c.vel.multiplyScalar(1 - 0.3 * dt); c.g.rotation.x += dt * 4; }
+      else {
+        const k = Math.min(1, dt * 1.5); c.vel.x += (3 - c.vel.x) * k; c.vel.z += (1.5 - c.vel.z) * k; c.vel.y += (-5.5 - c.vel.y) * Math.min(1, dt * 2.5);
+        const o = Math.min(1, (c.t - 1.4) / 0.6); c.canopy.scale.set(o, 0.5 * o, o);
+        c.g.rotation.set(Math.sin(c.t * 1.3) * 0.12, c.t * 0.2, Math.sin(c.t * 1.1) * 0.14);
+      }
+      c.pos.addScaledVector(c.vel, dt);
+      const gh = groundH(c.pos.x, c.pos.z), wl = waterLevelAt(c.pos.x, c.pos.z);
+      if (c.pos.y <= Math.max(gh, wl)) { c.pos.y = Math.max(gh, wl); c.landed = true; c.water = wl > gh; c.g.rotation.set(0, c.g.rotation.y, 0); if (c.who === G.player) chuteLanded(c); }
+      c.g.position.copy(c.pos);
+    } else {
+      c.landT += dt; c.canopy.scale.y = Math.max(0.04, c.canopy.scale.y - dt * 0.5); c.canopy.position.x = Math.min(5, c.landT * 3); c.canopy.position.y = Math.max(0.4, 7.4 - c.landT * 6); c.lines.visible = c.landT < 1;
+      if (c.landT > 30) { scene.remove(c.g); CHUTES.splice(i, 1); if (G.chute === c) G.chute = null; }
+    }
+  }
+}
+function clearChutes() { for (const c of CHUTES) scene.remove(c.g); CHUTES.length = 0; G.chute = null; G.bailWin = false; G.rescueT = null; }
+function playerInTrouble(p) { return p.onFire || !p.engineOn || p.fuel <= 0 || ['fuse', 'wingL', 'wingR', 'tail', 'engine'].some(k => p.hp[k] < p.spec.hp[k] * 0.35); }
+function canBail(p) { return !!p && !p.gone && !p.bailed && !p.onGround && p.hp.pilot > 0 && p.agl() > 35; }
+function bailOut() {
+  const p = G.player; if (G.state !== 'play' || !canBail(p)) return;
+  if (p.alive && !playerInTrouble(p) && !(G.bailArm > 0)) { G.bailArm = 2; msg('Bail out of a working aircraft? Press again to jump', 'warn', 2); return; }
+  p.bailed = true; G.bailWin = false; G.bailArm = 0;
+  G.chute = spawnChute(_a.copy(p.pos).addScaledVector(p.up, 2.5), _b.copy(p.vel).multiplyScalar(0.55).addScaledVector(p.up, 14), p);
+  G.stats.lost = (G.stats.lost || 0) + 1;
+  msg('You bailed out!', 'warn', 3);
+  if (G.cam.mode === 'cockpit') { G.cam.mode = 'chase'; camera.near = 1; camera.updateProjectionMatrix(); }
+  if (p.alive) destroy(p, 'abandoned the aircraft', null, false);
+  if (NET.on && !(G.mission && G.mission.local)) G.respawnT = null; // back in the air once you are on the ground
+}
+function chuteLanded(c) {
+  msg(c.water ? 'Splashdown! A boat is coming to pick you up' : 'Down safely! A car is coming to pick you up', 'good', 4);
+  if (NET.on && !(G.mission && G.mission.local)) { if (!NET.over) G.respawnT = 3; }
+  else G.rescueT = 4;
+}
+// single player: picked up, and up again in a fresh aircraft (the mission carries on)
+function rescuePilot() {
+  const m = G.mission; if (!m || m.phase === 'over' || G.ended) return;
+  const old = G.player; const np = spawnPlayer('quick'); resetAim(np); G.cam.mode = 'chase';
+  if (old && old !== np) { old.gone = true; old.model.group.visible = false; }
+  G.chute = null; G.bailWin = false;
+  G.stats.score = Math.max(0, G.stats.score - 100);
+  msg('Back in the air in a fresh aircraft  −100', 'good', 4);
+  if (WING.list.length && WING.cmd === 'cover') msg(`${WING.list[0].label}: good to have you back`, 'info', 3);
+}
+
+// =====================================================================
+//  Campaign (single player): ten missions in a row, from a first patrol to a duel with the Red Wasp, by day,
+//  at sunset and at night. Each earns up to three stars (complete it; don't lose an aircraft; fly it to an
+//  A grade); finishing missions unlocks aircraft for the campaign, and the star count earns medals.
+//  Free flight keeps every aircraft and mission open.
+// =====================================================================
+const CAMPAIGN = [
+  { id: 'patrol', title: 'First Patrol', kind: 'dogfight', tod: 'day', waves: [['rookie', 'rookie']], unlock: 'swift',
+    brief: 'Two raiders are probing the coast. Shoot them down and land back at the airfield.' },
+  { id: 'twos', title: "Two's Company", kind: 'dogfight', tod: 'day', wingmen: 2, waves: [['rookie', 'veteran', 'rookie'], ['veteran', 'veteran', 'rookie']], unlock: 'ranger',
+    brief: 'Mack and Dutch fly with you. Give them orders: T attack my target, Y cover me, U hit the ground target (the WING button on a phone).' },
+  { id: 'road', title: 'The Coast Road', kind: 'ground', tod: 'day', wingmen: 1, unlock: 'thunder',
+    brief: 'An armoured convoy is driving to a fuel depot. Bomb, rocket and strafe it. Send Mack in with U.' },
+  { id: 'rails', title: 'Iron Rails', kind: 'train', tod: 'day', wingmen: 1, unlock: 'brute',
+    brief: 'An ammunition train is running up the river valley to the harbour. Rockets (K, or RKT) and bombs set the wagons off one after another. Stop it before it reaches the depot.' },
+  { id: 'dusk', title: 'Dusk Raid', kind: 'intercept', tod: 'sunset', wingmen: 2, bwaves: 2,
+    brief: 'Bombers are coming for the town at sunset. Stop them before three get through.' },
+  { id: 'heron', title: 'The Black Heron', kind: 'dogfight', tod: 'sunset', waves: [['veteran', 'veteran'], ['boss:heron', 'veteran']], unlock: 'lancer',
+    brief: 'Viktor Kessel, the Black Heron, leads the second wave. He breaks hard when you get behind him. Stay with him.' },
+  { id: 'nightship', title: 'Ship in the Dark', kind: 'naval', tod: 'night', wingmen: 2,
+    brief: 'The battleship is moving at night under its searchlights. Get caught in a beam and the flak finds you; turn hard to break out.' },
+  { id: 'nighttrain', title: 'Night Train', kind: 'train', tod: 'night', wingmen: 1, unlock: 'talon',
+    brief: 'Another ammunition train, by night, with searchlights along the line.' },
+  { id: 'blitz', title: 'Searchlights', kind: 'intercept', tod: 'night', wingmen: 2, bwaves: 3, unlock: 'striker',
+    brief: 'Three formations of bombers by night. The town\'s searchlights sweep the sky; the bombers\' gunners are watching for you.' },
+  { id: 'duel', title: 'The Last Duel', kind: 'dogfight', tod: 'day', wingmen: 1, waves: [['veteran', 'veteran', 'ace'], ['boss:wasp', 'ace']],
+    brief: 'Ilse Brandt, the Red Wasp, the best they have. Clear her escort, then finish it.' },
+];
+const CAMP_START = ['kestrel', 'falke'];
+const MEDALS = [[8, 'Bronze wings'], [16, 'Silver wings'], [24, 'Gold wings'], [30, 'Ace of the coast']];
+const CAMP = { on: false, i: 0, sel: 0, save: loadCamp() };
+function loadCamp() { try { return Object.assign({ stars: {} }, JSON.parse(localStorage.getItem('dogfight.campaign') || '{}')); } catch (e) { return { stars: {} }; } }
+function saveCamp() { try { localStorage.setItem('dogfight.campaign', JSON.stringify(CAMP.save)); } catch (e) { } }
+const campDone = i => (CAMP.save.stars[CAMPAIGN[i].id] || 0) > 0;
+const campOpen = i => i === 0 || campDone(i - 1);
+function planeUnlocked(k) { return CAMP_START.includes(k) || CAMPAIGN.some((c, i) => c.unlock === k && campDone(i)); }
+function campStars() { return Object.values(CAMP.save.stars).reduce((a, b) => a + b, 0); }
+function medalFor(n) { let m = null; for (const [k, name] of MEDALS) if (n >= k) m = name; return m; }
+const starTxt = n => '★'.repeat(n) + '☆'.repeat(3 - n);
 
 function buildWaves(enemies, waves) {
   const W = clamp(Number(waves) || 3, 1, 10), out = [];
@@ -3287,6 +3792,7 @@ function startMission(mode) {
   G.time = 0; G.timeScale = 1; G.cam.mode = 'chase'; G.cam.kill = null; G.hitFlash = 0; G.respawnT = null; G.popups = []; G.streak = 0; G.lastKillT = -99; G.rearmT = 0;
   for (const m of MSL) { scene.remove(m.mesh); Sfx.motorStop(m); } MSL.length = 0; FLARES.length = 0; LOCK.target = null;
   camera.near = 1; camera.updateProjectionMatrix();
+  applyTimeOfDay(NET.on ? NET.opts.tod : CAMP.on ? CAMPAIGN[CAMP.i].tod || 'day' : settings.tod);
   const pl = spawnPlayer(mode);
   if (local) {
     if (mode === 'sortie') { G.mission = { mode, phase: 'takeoff', wave: 0, next: null, t: 0 }; msg('Full throttle to start your take-off roll', 'info', 6); }
@@ -3345,8 +3851,12 @@ function spawnWave(i) {
   const yaw = Math.atan2(-(c.x - cx), -(c.z - cz));
   list.forEach((sk, j) => {
     NET.raiderSeq = (NET.raiderSeq || 0) + 1;
-    const d = diff(), skill = shiftSkill(sk, d.shift);
     const ekey = types[(i + j) % types.length];
+    // single player: the last wave's ace is a named one (the campaign names its own)
+    let bossId = sk.startsWith('boss:') ? sk.slice(5) : null;
+    if (!bossId && sk === 'ace' && !CAMP.on && (!NET.on || (G.mission && G.mission.local)) && i === WAVES.length - 1 && WAVES.length > 1) bossId = bossFor(ekey);
+    if (bossId) { const e = makeBossPlane(bossId, ekey, { id: 'r' + NET.raiderSeq }); const off = (j - (list.length - 1) / 2) * 70; e.place(cx + Math.cos(yaw) * off, y + 40, cz - Math.sin(yaw) * off, yaw, 0, (e.spec.cruise || 130) * 1.04); e.gear = e.gearT = 0; G.planes.push(e); msg(`${BOSSES[bossId].name}, ${BOSSES[bossId].call}, is in the air!`, 'danger', 5); return; }
+    const d = diff(), skill = shiftSkill(sk, d.shift);
     const e = new Plane(ekey, { skill, ace: sk === 'ace', id: 'r' + NET.raiderSeq, team: 'red', role: 'raider' });
     e.missiles = d.enemyMsl[SKILLS.indexOf(skill)] + (e.spec.jet ? 1 : 0); e.flares = (skill === 'rookie' ? 0 : 3) + (e.spec.jet ? 2 : 0); e.liftK = d.aiTurn;
     const off = (j - (list.length - 1) / 2) * 70;
@@ -3354,7 +3864,7 @@ function spawnWave(i) {
     G.planes.push(e);
   });
   const names = [...new Set(list.map((_, j) => SPECS[types[(i + j) % types.length]].name))].join(' and ');
-  const text = `Wave ${i + 1} of ${WAVES.length}: ${list.length} × ${names}${list.includes('ace') ? ', one flown by an ace' : ''}`;
+  const text = `Wave ${i + 1} of ${WAVES.length}: ${list.length} × ${names}${list.some(k => k === 'ace' || k.startsWith('boss')) ? ', one flown by an ace' : ''}`;
   msg(text, 'warn', 4.5);
 }
 function missionUpdate(dt) {
@@ -3401,7 +3911,7 @@ addEventListener('message', e => {
   else if (d.type === 'rematch') { NET.rm = d; rematchButton(); }
 });
 function normOpts(o = {}) {
-  return { mode: o.mode === 'versus' ? 'versus' : 'coop', difficulty: DIFF[o.difficulty] ? o.difficulty : 'normal', enemies: o.enemies ?? 'normal', waves: Number(o.waves) || 3, kills: Number(o.kills) || 5, wingmen: o.wingmen === 'on' ? 'on' : 'off' };
+  return { mode: o.mode === 'versus' ? 'versus' : 'coop', difficulty: DIFF[o.difficulty] ? o.difficulty : 'normal', enemies: o.enemies ?? 'normal', waves: Number(o.waves) || 3, kills: Number(o.kills) || 5, wingmen: o.wingmen === 'on' ? 'on' : 'off', tod: TOD_PRESETS[o.tod] ? o.tod : 'day' };
 }
 function netInit(d) {
   NET.on = true; NET.host = !!d.isHost; NET.opts = normOpts(d.options);
@@ -3571,7 +4081,7 @@ function netObjective() {
 }
 function netMenu() {
   const o = NET.opts, seated = NET.seat != null;
-  $('soloSetup').hidden = false; $('optEnemiesL').hidden = $('optWavesL').hidden = $('optDiffL').hidden = true; $('btnOnline').hidden = true;
+  $('soloSetup').hidden = false; $('optEnemiesL').hidden = $('optWavesL').hidden = $('optDiffL').hidden = $('optTodL').hidden = $('optWingL').hidden = true; $('btnOnline').hidden = true;
   // co-op: free play to begin with, or a mission (a running one is joined); free-for-all is just the dogfight
   $('missionHead').hidden = $('missionList').hidden = o.mode !== 'coop'; $('pick-free').hidden = false; pickMission(NM.pick);
   $('missionHead').textContent = 'Start in free play, or with a mission';
@@ -4101,7 +4611,7 @@ function drawHUD(rdt) {
   }
   // ground targets and the battleship: red brackets with what they are
   if (GW.active) {
-    const tg = []; for (const u of GW.units) if (u.alive) tg.push([u.pos.x, u.pos.y + u.r * 0.6, u.pos.z, u.name, u.r, u.optional]);
+    const tg = []; for (const u of allUnits()) if (u.alive) tg.push([u.pos.x, u.pos.y + u.r * 0.6, u.pos.z, u.name, u.r, u.optional]);
     if (GW.ship && GW.ship.alive) tg.push([GW.ship.pos.x, 14, GW.ship.pos.z, `Battleship ${Math.round(GW.ship.hp / GW.ship.max * 100)}%`, 60, false]);
     for (const [x, y, z, name, r, opt] of tg) {
       const d = Math.hypot(x - p.pos.x, y - p.pos.y, z - p.pos.z); if (d > 4500) continue;
@@ -4243,7 +4753,7 @@ function drawSectorMap(p, x, y, S) {
     if (e === LOCK.target) { hx.strokeStyle = LOCK.locked ? '#ff4a3a' : '#eaa53c'; hx.lineWidth = 1.5; hx.strokeRect(ex - 5, ez - 5, 10, 10); }
   }
   hx.fillStyle = '#ffffff'; for (const m of MSL) { const [mx, mz] = toM(m.pos.x, m.pos.z); hx.fillRect(mx - 1, mz - 1, 2, 2); }
-  if (GW.active) { hx.fillStyle = '#e2553f'; for (const u of GW.units) if (u.alive) { const [ux, uz] = toM(u.pos.x, u.pos.z); hx.fillRect(ux - 1.5, uz - 1.5, 3, 3); } if (GW.ship && GW.ship.alive) { const [sx, sz] = toM(GW.ship.pos.x, GW.ship.pos.z); hx.fillRect(sx - 2.5, sz - 2.5, 5, 5); } }
+  if (GW.active) { hx.fillStyle = '#e2553f'; for (const u of allUnits()) if (u.alive) { const [ux, uz] = toM(u.pos.x, u.pos.z); hx.fillRect(ux - 1.5, uz - 1.5, 3, 3); } if (GW.ship && GW.ship.alive) { const [sx, sz] = toM(GW.ship.pos.x, GW.ship.pos.z); hx.fillRect(sx - 2.5, sz - 2.5, 5, 5); } }
   const [px, pz] = toM(p.pos.x, p.pos.z), hdg = Math.atan2(p.fwd.x, -p.fwd.z);
   hx.translate(px, pz); hx.rotate(hdg); hx.fillStyle = '#eaa53c'; hx.beginPath(); hx.moveTo(0, -7); hx.lineTo(5, 5); hx.lineTo(-5, 5); hx.fill();
   hx.restore();
@@ -4258,7 +4768,7 @@ function drawRadar(p, cx, cy, R) {
   hx.drawImage(terrainCanvas, (p.pos.x - range + HALF) * pxs, (p.pos.z - range + HALF) * pxs, range * 2 * pxs, range * 2 * pxs, -R, -R, R * 2, R * 2);
   hx.globalAlpha = 1;
   hx.fillStyle = '#f1e8d2'; hx.fillRect((AF.x - p.pos.x) * sc - 1.5, (AF.z - AF.len / 2 - p.pos.z) * sc, 3, AF.len * sc);
-  if (GW.active) { hx.fillStyle = '#e2553f'; for (const u of GW.units) if (u.alive) { let ex = (u.pos.x - p.pos.x) * sc, ez = (u.pos.z - p.pos.z) * sc; const l = Math.hypot(ex, ez); if (l > R - 4) { ex *= (R - 4) / l; ez *= (R - 4) / l; } hx.fillRect(ex - 2, ez - 2, 4, 4); } const S = GW.ship; if (S && S.alive) { let ex = (S.pos.x - p.pos.x) * sc, ez = (S.pos.z - p.pos.z) * sc; const l = Math.hypot(ex, ez); if (l > R - 6) { ex *= (R - 6) / l; ez *= (R - 6) / l; } hx.save(); hx.translate(ex, ez); hx.rotate(-S.hdg); hx.fillRect(-2.5, -8, 5, 16); hx.restore(); } }
+  if (GW.active) { hx.fillStyle = '#e2553f'; for (const u of allUnits()) if (u.alive) { let ex = (u.pos.x - p.pos.x) * sc, ez = (u.pos.z - p.pos.z) * sc; const l = Math.hypot(ex, ez); if (l > R - 4) { ex *= (R - 4) / l; ez *= (R - 4) / l; } hx.fillRect(ex - 2, ez - 2, 4, 4); } const S = GW.ship; if (S && S.alive) { let ex = (S.pos.x - p.pos.x) * sc, ez = (S.pos.z - p.pos.z) * sc; const l = Math.hypot(ex, ez); if (l > R - 6) { ex *= (R - 6) / l; ez *= (R - 6) / l; } hx.save(); hx.translate(ex, ez); hx.rotate(-S.hdg); hx.fillRect(-2.5, -8, 5, 16); hx.restore(); } }
   for (const e of G.planes) { if (e === p || !e.alive || e.gone) continue; let ex = (e.pos.x - p.pos.x) * sc, ez = (e.pos.z - p.pos.z) * sc; const l = Math.hypot(ex, ez); if (l > R - 4) { ex *= (R - 4) / l; ez *= (R - 4) / l; } hx.fillStyle = !hostile(e, p) ? '#97c46f' : e.ace ? '#ff6a4d' : '#e2553f'; hx.beginPath(); hx.arc(ex, ez, 3.5, 0, 6.283); hx.fill(); }
   hx.restore();
   hx.strokeStyle = 'rgba(241,232,210,0.6)'; hx.lineWidth = 1.5; hx.beginPath(); hx.arc(cx, cy, R, 0, 6.283); hx.stroke();
@@ -4384,7 +4894,7 @@ $('setPhone').addEventListener('change', e => setPhoneMode(e.target.value));
 $('optEnemies').addEventListener('change', e => { settings.enemies = e.target.value; saveSettings(); });
 const syncSetting = (key, ids) => ids.forEach(id => $(id).addEventListener('change', e => { settings[key] = e.target.value; saveSettings(); ids.forEach(j => ($(j).value = settings[key])); }));
 syncSetting('rudder', ['optRudder', 'setRudder']); $('optRudder').addEventListener('change', applyRudder); $('setRudder').addEventListener('change', applyRudder);
-syncSetting('difficulty', ['optDiff', 'setDiff']); syncSetting('lock', ['optLock', 'setLock']); syncSetting('map', ['optMap', 'setMap']);
+syncSetting('difficulty', ['optDiff', 'setDiff']); syncSetting('tod', ['optTod']); syncSetting('wingmen', ['optWing']); syncSetting('lock', ['optLock', 'setLock']); syncSetting('map', ['optMap', 'setMap']);
 $('optWaves').addEventListener('change', e => { settings.waves = Number(e.target.value); saveSettings(); });
 $('btnSortie').addEventListener('click', () => { if (settings.control === 'tilt') askTilt(); startMission('sortie'); });
 $('btnQuick').addEventListener('click', () => { if (settings.control === 'tilt') askTilt(); startMission('quick'); });
@@ -4463,6 +4973,115 @@ function updateHint() {
   else h.innerHTML = settings.control === 'mouse' ? 'Mouse aim: point where you want to fly and the aircraft follows. Click or <kbd>Space</kbd> to fire, right click or <kbd>X</kbd> for a missile once locked, <kbd>F</kbd> flares, <kbd>Shift</kbd>/<kbd>Z</kbd> throttle (hold <kbd>Shift</kbd> at full for boost), <kbd>M</kbd> map, <kbd>G</kbd> gear, <kbd>V</kbd> flaps, <kbd>C</kbd> cockpit, <kbd>Esc</kbd> pause. <kbd>W A S D</kbd> take direct control at any time.' : 'Stick mode: <kbd>W</kbd>/<kbd>S</kbd> pitch, <kbd>A</kbd>/<kbd>D</kbd> roll, <kbd>Q</kbd>/<kbd>E</kbd> rudder, <kbd>Space</kbd> fire, <kbd>Shift</kbd>/<kbd>Z</kbd> throttle, <kbd>G</kbd> gear, <kbd>C</kbd> cockpit. A gamepad works too.';
 }
 
+// =====================================================================
+//  Time of day: day, sunset or night. One set of numbers drives the sky, the sun (or moon), the lights, the sea,
+//  the clouds and the smoke. At night the town's windows, the runway and the lighthouse are lit, tracers glow
+//  brighter and searchlights sweep the sky round the targets.
+// =====================================================================
+const TOD_PRESETS = {
+  day: { name: 'Day', sun: [-0.45, 0.7, 0.55], zen: '#3d6aa3', mid: '#93b4d6', hor: '#c3d3df', sea: '#7a92a3', sunCol: [1, 0.95, 0.85], halo: 1, cirrus: [1, 0.98, 0.95], stars: 0,
+    light: [0xfff0d8, 2.9], hemi: [0xd6e4f5, 0x5d5c42, 1.35], water: 1, glint: [1, 0.93, 0.82], cloud: [1, 1, 1], smoke: 1, env: 0x51603c, tracer: 1, tracerFog: 1, lights: false },
+  sunset: { name: 'Sunset', sun: [0.86, 0.1, 0.5], zen: '#2c3d6e', mid: '#9a7a86', hor: '#f0a466', sea: '#6c5a5c', sunCol: [1, 0.62, 0.32], halo: 2.6, cirrus: [1, 0.66, 0.5], stars: 0,
+    light: [0xffa860, 2.3], hemi: [0xc8a0a0, 0x45362c, 0.95], water: 0.6, glint: [1, 0.6, 0.3], cloud: [1, 0.78, 0.66], smoke: 0.75, env: 0x4a3d30, tracer: 1.25, tracerFog: 0.8, lights: true },
+  night: { name: 'Night', sun: [-0.35, 0.55, -0.6], zen: '#03060f', mid: '#08101f', hor: '#141e33', sea: '#0a1220', sunCol: [0.75, 0.8, 0.9], halo: 0.12, cirrus: [0.16, 0.18, 0.24], stars: 1,
+    light: [0x9fb4ff, 0.5], hemi: [0x34446a, 0x0c0f14, 0.4], water: 0.18, glint: [0.6, 0.66, 0.8], cloud: [0.2, 0.22, 0.28], smoke: 0.22, env: 0x0d1210, tracer: 1.7, tracerFog: 0.45, lights: true },
+};
+const TOD = { key: 'day', tracer: 1, tracerFog: 1, night: false };
+let lightsFX = null;
+function applyTimeOfDay(key) {
+  if (!TOD_PRESETS[key]) key = 'day';
+  if (TOD.key === key && TOD.ready) return;
+  const P = TOD_PRESETS[key]; TOD.key = key; TOD.ready = true; TOD.tracer = P.tracer; TOD.tracerFog = P.tracerFog; TOD.night = key === 'night'; TOD.dark = key !== 'day';
+  SUN.set(...P.sun).normalize(); skyU.uSun.value.copy(SUN); waterU.uSun.value.copy(SUN);
+  skyU.uZen.value.set(P.zen); skyU.uMid.value.set(P.mid); skyU.uHor.value.set(P.hor); skyU.uSea.value.set(P.sea); waterU.uSea.value.set(P.sea);
+  skyU.uSunCol.value.setRGB(...P.sunCol); skyU.uHalo.value = P.halo; skyU.uCirrus.value.setRGB(...P.cirrus); skyU.uStars.value = P.stars;
+  // the fog fades into the horizon haze
+  SCENE_FOG.color.set(P.hor); fogU.uFogColor.value.copy(SCENE_FOG.color); FOG_SRGB.value.copy(SCENE_FOG.color).convertLinearToSRGB();
+  sun.color.set(P.light[0]); sun.intensity = P.light[1]; hemi.color.set(P.hemi[0]); hemi.groundColor.set(P.hemi[1]); hemi.intensity = P.hemi[2];
+  waterU.uLight.value = P.water; waterU.uGlint.value.setRGB(...P.glint); SMOKE_LIGHT.value = P.smoke;
+  for (const m of CLOUD_MATS) m.color.copy(m.userData.base).multiply(_tc.setRGB(...P.cloud));
+  buildEnv(P.env); // the aircraft reflect this sky
+  // lit windows, runway edge lights and the lighthouse
+  if (P.lights && !lightsFX) {
+    lightsFX = new Particles(WINDOWS.length * 2 + 200, true); const r = mulberry32(5);
+    for (const [x, y, z, w] of WINDOWS) { if (r() < 0.35) continue; for (let k = r() < 0.5 ? 1 : 2; k > 0; k--) lightsFX.spawn(x + (r() - 0.5) * w, y + (r() - 0.5) * 2, z + (r() - 0.5) * w, 0, 0, 0, 1e9, 2.6, 0, 1, 0.72 + r() * 0.12, 0.38, 0.85, 0, 0, 3); }
+    for (let zz = -AF.len / 2; zz <= AF.len / 2; zz += 60) for (const sx of [-1, 1]) lightsFX.spawn(AF.x + sx * (AF.wid / 2 + 2), AF.h + 0.8, AF.z + zz, 0, 0, 0, 1e9, 2.2, 0, 1, 0.9, 0.6, 0.95, 0, 0, 3);
+    for (const sx of [-1, 1]) for (let k = -3; k <= 3; k++) { lightsFX.spawn(AF.x + k * 5, AF.h + 0.8, AF.z + sx * (AF.len / 2 + 6), 0, 0, 0, 1e9, 2.4, 0, sx > 0 ? 0.4 : 1, 1, sx > 0 ? 0.5 : 0.4, 1, 0, 0, 3); }
+    if (LIGHTHOUSE) lightsFX.spawn(LIGHTHOUSE.x, LIGHTHOUSE.y, LIGHTHOUSE.z, 0, 0, 0, 1e9, 14, 0, 1, 0.9, 0.6, 1, 0, 0, 3);
+    lightsFX.update(0);
+  }
+  if (lightsFX) lightsFX.points.visible = P.lights;
+}
+const _tc = new THREE.Color();
+// searchlights: beams that sweep the sky round a target at night and lock on to whoever they catch
+let BEAM_MAT = null;
+function beamMat() {
+  if (BEAM_MAT) return BEAM_MAT;
+  const m = new THREE.NodeMaterial();
+  Object.assign(m, { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
+  m.fragmentNode = withOutput(Fn(() => {
+    const t = tslClamp(positionLocal.y.div(BEAM_L), 0, 1);
+    const e = abs(dot(normalView, positionViewDirection)); // brightest through the middle of the beam
+    const a = pow(e, 2.5).mul(pow(t.oneMinus(), 1.4)).mul(smoothstep(0, 0.01, t)).mul(0.32);
+    return vec4(vec3(0.82, 0.88, 1).mul(a), a);
+  })());
+  return (BEAM_MAT = m);
+}
+const BEAM_L = 3600, BEAM_HALF = 0.035;
+function makeSearchlight(x, z, y, parent, kind) {
+  const g = new THREE.Group(), base = gmats();
+  mcyl(1.4, 1.6, 1.2, base.olive, 0, 0.6, 0, g);
+  const head = new THREE.Group(); head.position.y = 1.6; g.add(head);
+  mcyl(1.0, 1.0, 1.4, base.dark, 0, 0, 0, head, 12);
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(BEAM_L * Math.tan(BEAM_HALF), 0.6, BEAM_L, 18, 1, true).translate(0, BEAM_L / 2, 0), beamMat());
+  beam.frustumCulled = false; beam.renderOrder = 4; head.add(beam);
+  g.position.set(x, y ?? groundH(x, z), z); (parent || scene).add(g);
+  return { g, head, beam, yaw: rand(0, 6.28), pitch: rand(0.7, 1.2), phase: rand(0, 100), lock: 0, parent: parent || null, kind };
+}
+const _bd = new V3(), _bw = new V3(), _bq = new Q4(), _UP = new V3(0, 1, 0);
+function updateSearchlights(dt) {
+  const L = GW.lights; if (!L || !L.length) return;
+  const pl = G.player; let lit = false;
+  for (const s of L) {
+    s.g.getWorldPosition(_bw); _bw.y += 1.6;
+    let want = null;
+    if (pl && pl.alive && !pl.onGround) {
+      _bd.subVectors(pl.pos, _bw); const d = _bd.length();
+      if (d < BEAM_L * 0.95) {
+        _bd.multiplyScalar(1 / d); const cur = _b.copy(_UP).applyQuaternion(s.head.getWorldQuaternion(_bq));
+        if (cur.dot(_bd) > Math.cos(BEAM_HALF * 1.6)) s.lock = Math.max(s.lock, 2.5); // caught
+        if (s.lock > 0) want = _bd;
+      }
+    }
+    s.lock -= dt;
+    let yaw, pitch;
+    if (want && s.lock > 0) { yaw = Math.atan2(-want.x, -want.z); pitch = Math.asin(clamp(want.y, -1, 1)); lit = true; }
+    else { const t = G.time * 0.12 + s.phase; yaw = s.phase + Math.sin(t) * 1.4 + t * 0.3; pitch = 0.85 + Math.sin(t * 1.7) * 0.35; }
+    const k = Math.min(1, dt * (s.lock > 0 ? 3.5 : 1));
+    s.yaw += Math.atan2(Math.sin(yaw - s.yaw), Math.cos(yaw - s.yaw)) * k; s.pitch += (pitch - s.pitch) * k;
+    // the beam's +Y axis points along (yaw, pitch) in the world; undo any parent (the battleship) rotation
+    _bd.set(-Math.sin(s.yaw) * Math.cos(s.pitch), Math.sin(s.pitch), -Math.cos(s.yaw) * Math.cos(s.pitch));
+    _bq.setFromUnitVectors(_UP, _bd);
+    if (s.parent) { s.head.parent.getWorldQuaternion(_dq); _bq.premultiply(_dq.invert()); }
+    s.head.quaternion.copy(_bq);
+  }
+  if (lit && !GW.lit) msg('Caught in a searchlight! Turn hard to break out', 'warn', 3);
+  GW.lit = lit;
+}
+function addSearchlights(cx, cz, n, rad, kind) {
+  if (!TOD.night) return;
+  GW.lights = GW.lights || [];
+  for (let i = 0; i < n; i++) { const a = i / n * 6.283 + 0.3, x = cx + Math.cos(a) * rad, z = cz + Math.sin(a) * rad; if (groundH(x, z) < waterLevelAt(x, z) + 1) continue; GW.lights.push(makeSearchlight(x, z, undefined, undefined, kind)); }
+}
+// the searchlights that go with a mission's targets (the ship carries its own)
+function missionLights(kind) {
+  if (!TOD.night || (GW.lights || []).some(s => s.kind === kind)) return;
+  if (kind === 'ground') addSearchlights(GW.gc.x, GW.gc.z, 4, 230, kind);
+  else if (kind === 'intercept') addSearchlights(TOWN.x, TOWN.z, 5, 520, kind);
+  else if (kind === 'train' && RAIL) { for (const f of [0.3, 0.55, 0.8]) { const p = RAIL.P[Math.round(f * (RAIL.P.length - 1))]; addSearchlights(p.x + 80, p.z + 60, 1, 0, kind); } }
+  else if (kind === 'naval' && GW.ship) { GW.lights = GW.lights || []; for (const [x, z] of [[-5, -8], [5, 20]]) GW.lights.push(makeSearchlight(x, z, 27, GW.ship.g, kind)); }
+}
+function clearSearchlights(kind) { GW.lights = (GW.lights || []).filter(s => { if (kind && s.kind !== kind) return true; (s.parent || scene).remove(s.g); return false; }); if (!GW.lights.length) GW.lit = false; }
 // =====================================================================
 //  Main loop
 // =====================================================================
@@ -4599,7 +5218,7 @@ window.__gw = GW; window.__gwDrop = p => { while (p.bombs > 0 && dropBomb(p)); }
   await setupPost();
   onResize(); pick(settings.plane); pickMission(settings.mission); updateHint();
   $('optPhone').value = settings.phone; $('optRudder').value = settings.rudder; applyRudder(); $('optEnemies').value = String(settings.enemies); $('optWaves').value = String(settings.waves);
-  $('optDiff').value = settings.difficulty; $('optLock').value = settings.lock; $('optMap').value = settings.map;
+  $('optDiff').value = settings.difficulty; $('optTod').value = settings.tod; $('optWing').value = String(settings.wingmen); $('optLock').value = settings.lock; $('optMap').value = settings.map;
   if (EMBED) { $('optEnemiesL').hidden = $('optWavesL').hidden = true; }
   // the online link only makes sense when this page is served from the Game Center
   $('btnOnline').hidden = EMBED || !/\/games\/dogfight\/play\.html$/.test(location.pathname);
