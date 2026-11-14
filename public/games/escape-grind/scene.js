@@ -37,6 +37,9 @@ export class Table3D {
     this.last = performance.now();
     this.mySeat = 0;
     this.followUntil = 0;
+    this.autoZoom = true; // follow-cam on the player's own moves (a setting)
+    this.chase = null;
+    this.zoomTo = null;
     this.focus = new THREE.Vector3(0, 0, 1);
     this.pawns = [];
     this.trays = [];
@@ -810,9 +813,30 @@ export class Table3D {
     const hfov = 2 * Math.atan(Math.tan((this.camera.fov * Math.PI) / 360) * asp);
     return Math.max(30, Math.min(42, 10.9 / Math.tan(hfov / 2)));
   }
+  // Follow-cam: zoom in on a pawn while it hops round the board, then ease back out to where the
+  // camera was. Hands the camera straight back if the person grabs it (drag, pinch, the camera
+  // buttons) and is off altogether when the "zoom in on your moves" setting is turned off.
+  followPawn(seat) {
+    if (!this.autoZoom || performance.now() < this.followUntil) return;
+    const back = this.camera.position.distanceTo(this.controls.target);
+    this.chase = { seat, back, dist: Math.max(this.controls.minDistance, this.#defaultDistance() * 0.55) };
+    this.zoomTo = null;
+  }
+  endFollow() {
+    if (!this.chase) return;
+    const { back } = this.chase;
+    this.chase = null;
+    if (performance.now() < this.followUntil) return; // they took over the camera: leave it where they put it
+    this.zoomTo = back;
+    this.focus.copy(this.#home());
+  }
+  #stopFollow() {
+    this.chase = null;
+    this.zoomTo = null;
+  }
   // gently look toward a point (the moving pawn) unless the person is steering the camera
   lookToward(vec, amount = 0.45) {
-    if (performance.now() < this.followUntil) return;
+    if (this.chase || performance.now() < this.followUntil) return;
     this.focus.copy(this.#home().lerp(new THREE.Vector3(vec.x, 0, vec.z), amount));
   }
   lookHome() {
@@ -838,10 +862,12 @@ export class Table3D {
   }
   // put the board back in the middle of the screen, seen from my own seat, at the starting zoom
   recenter() {
+    this.#stopFollow();
     this.followUntil = 0;
     this.setMySeat(this.mySeat);
   }
   view(kind) {
+    this.#stopFollow();
     this.followUntil = performance.now() + 1500;
     const a = seatAngle(this.mySeat);
     // every view is aimed at the board again, so a view change also undoes any drifting
@@ -953,8 +979,25 @@ export class Table3D {
         this.bursts.splice(b, 1);
       }
     }
+    // follow-cam: keep the moving pawn in the middle and ease the zoom in (or back out afterwards)
+    if (this.chase || this.zoomTo != null) {
+      if (performance.now() < this.followUntil) this.#stopFollow(); // the person is steering
+      else {
+        let want = this.zoomTo;
+        if (this.chase) {
+          const p = this.pawns[this.chase.seat].position;
+          this.focus.set(p.x, 0, p.z);
+          want = this.chase.dist;
+        }
+        const off = this.camera.position.clone().sub(this.controls.target);
+        const len = off.length();
+        const next = len + (want - len) * (1 - Math.exp(-dt * (this.chase ? 4 : 2.2))); // in quickly, out gently
+        this.camera.position.copy(this.controls.target).add(off.setLength(next));
+        if (!this.chase && Math.abs(next - want) < 0.05) this.zoomTo = null;
+      }
+    }
     // glide the camera with its target so following the action never swings the view around
-    const step = this.focus.clone().sub(this.controls.target).multiplyScalar(1 - Math.exp(-dt * 1.6));
+    const step = this.focus.clone().sub(this.controls.target).multiplyScalar(1 - Math.exp(-dt * (this.chase ? 6 : 1.6)));
     this.controls.target.add(step);
     this.camera.position.add(step);
     this.controls.update();
