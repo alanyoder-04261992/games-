@@ -23,7 +23,7 @@ public/games/my-game/
   ui.js        the screen (required)
   my-game.css  styles (optional)
   scene.js     a 3D board (optional, see "3D games" below)
-  rules.html   shown by the ? button at the table (optional)
+  rules.html   the illustrated rule book (required, see docs/RULEBOOK.md)
 ```
 
 ## 2. Write the manifest (`index.js`)

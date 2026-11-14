@@ -51,4 +51,7 @@ Games plug in as folders under `public/games/` — read `docs/ADDING_A_GAME.md` 
   (nothing hidden) or `'private'` (hidden hands: a "Pass to …" cover between people) in the
   manifest of any turn-based game. Leave it off for real-time games. A game's UI always draws
   `msg.seat`, which can change between turns on a shared device.
+- Every game has an illustrated rule book, `rules.html`, written to `docs/RULEBOOK.md` (inline-SVG
+  pictures, every rule matching the engine). Update it whenever a game's rules or controls change;
+  `tests/rulebook.test.mjs` checks the basics.
 - Run `npm test` before pushing. Rules engines need bot-vs-bot tests that play full games.
