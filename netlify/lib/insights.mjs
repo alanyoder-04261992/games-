@@ -8,6 +8,10 @@
 // Stored per event, nothing else: what happened, when (server time), a random device id, the
 // name the player typed, the game and how it was played. No IP address, no location.
 
+// Blobs are shared by every deploy of the site, so the live site and its previews keep separate
+// stores: trying out a deploy preview never mixes into the owner's real numbers.
+export const storeName = (context) => (context?.deploy?.context === 'production' ? 'insights' : 'insights-preview');
+
 export const EVENT_TYPES = ['open', 'start', 'end', 'leave', 'join'];
 const MODES = ['solo', 'local', 'host', 'guest'];
 const MAX_EVENTS_PER_REQUEST = 25;

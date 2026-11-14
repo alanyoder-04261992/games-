@@ -78,3 +78,11 @@ test('summary: players, games, modes, minutes, finish rate', async () => {
   assert.equal(sum.recent[0].t, 'leave');
   assert.equal(summarize([]).totals.finishRate, null);
 });
+
+test('the live site and deploy previews use separate stores', async () => {
+  const { storeName } = await import('../netlify/lib/insights.mjs');
+  assert.equal(storeName({ deploy: { context: 'production' } }), 'insights');
+  assert.equal(storeName({ deploy: { context: 'deploy-preview' } }), 'insights-preview');
+  assert.equal(storeName({ deploy: { context: 'branch-deploy' } }), 'insights-preview');
+  assert.equal(storeName(undefined), 'insights-preview');
+});

@@ -43,7 +43,9 @@ counted.
   to `/api/track` (`sendBeacon`, so nothing is lost when a tab closes).
 - `netlify/functions/track.mjs` → `handleTrack`: checks and cleans each event (known fields
   only, short strings, ids of letters and digits) and stores it in **Netlify Blobs**, store
-  `insights`, one blob per event under `e/<YYYY-MM-DD>/…`.
+  `insights` on the live site (`insights-preview` on deploy previews and branch deploys, so
+  trying out a preview never mixes into the real numbers), one blob per event under
+  `e/<YYYY-MM-DD>/…`.
 - `netlify/functions/insights.mjs` → `handleInsights`: compares the `Authorization: Bearer`
   key with `INSIGHTS_KEY` (in constant time, slowly on a miss), reads the chosen days and
   returns the summary from `summarize()`.
