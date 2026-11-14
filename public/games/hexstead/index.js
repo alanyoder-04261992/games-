@@ -7,7 +7,7 @@ import { SEAT_NAMES } from './art.js';
 
 export default {
   id: 'hexstead',
-  version: '2.4', // shown on the home tile; bump it whenever you improve the game
+  version: '2.5', // shown on the home tile; bump it whenever you improve the game
   sameDevice: 'private', // pass and play: several people on one device (hands are hidden: a cover screen between people)
   name: 'Hexstead',
   tagline: 'Settle a 3D hex island. Harvest, trade, build barns.',
@@ -54,6 +54,18 @@ export default {
       choices: [
         { value: false, label: 'Standard' },
         { value: true, label: 'Friendly (spares players with 2 points)' },
+      ],
+    },
+    {
+      key: 'fast',
+      label: 'Fast play',
+      type: 'select',
+      default: 'off',
+      choices: [
+        { value: 'off', label: 'Off' },
+        { value: 'raise', label: 'Build between turns' },
+        { value: 'harvest', label: 'Fast harvest' },
+        { value: 'both', label: 'Both' },
       ],
     },
     {
