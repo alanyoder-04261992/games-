@@ -730,7 +730,9 @@ class RookTable {
     const cw = this.cw * 1.08;
     const narrow = W < 700;
     const maxStep = cw * 0.72;
-    const step = n > 1 ? Math.min(maxStep, (W - cw * (narrow ? 1.6 : 1.4)) / (n - 1)) : 0;
+    // tablets (iPad portrait): keep the fan off the screen's rounded edges
+    const edge = narrow ? 0 : Math.max(12, W * 0.035);
+    const step = n > 1 ? Math.min(maxStep, (W - cw * (narrow ? 1.6 : 1.4) - 2 * edge) / (n - 1)) : 0;
     const spread = Math.min(narrow ? 1.2 : 3, (narrow ? 12 : 30) / Math.max(n, 1));
     const hintCard = this.prefs.hints && interactive ? this.hintCard() : null;
     const els = hand.map((card, i) => {

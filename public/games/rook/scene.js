@@ -931,7 +931,9 @@ class Table3D {
     const ch = cw * 1.4;
     const narrow = W < 700;
     const maxStep = cw * 0.72;
-    const step = n > 1 ? Math.min(maxStep, (W - cw * (narrow ? 1.7 : 1.9)) / (n - 1)) : 0;
+    // tablets (iPad portrait): keep the fan off the screen's rounded edges
+    const edge = narrow ? 0 : Math.max(12, W * 0.035);
+    const step = n > 1 ? Math.min(maxStep, (W - cw * (narrow ? 1.7 : 1.9) - 2 * edge) / (n - 1)) : 0;
     const spread = Math.min(narrow ? 1.2 : 3, (narrow ? 12 : 30) / Math.max(n, 1)) * DEG;
     const off = i - (n - 1) / 2;
     let lift = 0;
