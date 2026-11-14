@@ -441,9 +441,10 @@ class Card {
 }
 
 class Table3D {
-  constructor(container, { quality, onTap, onLost } = {}) {
+  constructor(container, { quality, onTap, onPile, onLost } = {}) {
     this.container = container;
     this.onTap = onTap;
+    this.onPile = onPile;
     this.onLost = onLost;
     const coarse = window.matchMedia?.('(pointer: coarse)').matches;
     this.quality = quality || (coarse && Math.min(screen.width, screen.height) < 820 ? 'low' : 'high');
@@ -1337,6 +1338,15 @@ class Table3D {
     const hit = this.raycaster.intersectObjects(meshes, false)[0];
     return hit ? hit.object.userData.card : null;
   }
+  // which trick pile (seat position) is under the pointer, if any
+  #pickPile(e) {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    this.raycaster.setFromCamera(ndc, this.camera);
+    const meshes = this.cards.filter((c) => c.zone.startsWith('pile-') && c.mesh.visible).map((c) => c.mesh);
+    const hit = this.raycaster.intersectObjects(meshes, false)[0];
+    return hit ? hit.object.userData.card.zone.slice(5) : null;
+  }
 
   #bindPointer(el) {
     el.style.touchAction = 'none';
@@ -1344,7 +1354,11 @@ class Table3D {
     el.addEventListener('pointerdown', (e) => {
       if (e.button) return;
       const c = this.#pick(e);
-      if (!playable(c)) return;
+      if (!playable(c)) {
+        const pile = this.onPile ? this.#pickPile(e) : null;
+        this.pileTap = pile ? { pos: pile, x: e.clientX, y: e.clientY, id: e.pointerId } : null;
+        return;
+      }
       this.drag = { card: c, x: e.clientX, y: e.clientY, dx: 0, dy: 0, moved: false, id: e.pointerId };
       el.setPointerCapture?.(e.pointerId);
     });
@@ -1360,7 +1374,7 @@ class Table3D {
       if (e.pointerType !== 'mouse') return;
       const c = this.#pick(e);
       const id = playable(c) ? c.id : null;
-      el.style.cursor = id ? 'pointer' : '';
+      el.style.cursor = id || (this.onPile && this.#pickPile(e)) ? 'pointer' : '';
       if (id !== this.hovered) {
         this.hovered = id;
         this.#relayoutHand(0.16);
@@ -1368,6 +1382,12 @@ class Table3D {
       }
     });
     const end = (e, cancel) => {
+      const pt = this.pileTap;
+      if (pt && pt.id === e.pointerId) {
+        this.pileTap = null;
+        if (!cancel && Math.hypot(e.clientX - pt.x, e.clientY - pt.y) < 12) this.onPile?.(pt.pos);
+        return;
+      }
       const g = this.drag;
       if (!g || g.id !== e.pointerId) return;
       this.drag = null;
