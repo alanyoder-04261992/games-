@@ -90,12 +90,14 @@ export function mount(ctx) {
   }
 
   let step = '';
+  let baseSpeed = 1; // the table's speed setting, without the catch-up speed-up
   async function present(msg, fast) {
     step = 'start';
     const prev = view;
     const v = msg.view;
     seats = msg.seats || seats;
-    speed = (SPEED[msg.speed] ?? 1) * (fast ? 0.25 : 1);
+    baseSpeed = SPEED[msg.speed] ?? 1;
+    speed = baseSpeed * (fast ? 0.25 : 1);
     if (!prev || v.seq < prev.seq || prev.seat !== v.seat) {
       view = v;
       table.setMySeat(v.seat ?? 0, !prev);
@@ -111,7 +113,10 @@ export function mount(ctx) {
     // 1) dice and pawn
     const r = v.lastRoll;
     if (r && r.seq !== prev.lastRoll?.seq) {
-      if (table.hasCard()) await table.dismissCard(null, speed);
+      if (table.hasCard()) {
+        await letThemRead();
+        await table.dismissCard(null, speed);
+      }
       presentedSeq = null;
       table.setActive(r.seat);
       table.lookToward(table.pawns[r.seat].position, 0.35);
@@ -152,7 +157,10 @@ export function mount(ctx) {
     for (const p of v.players) {
       const was = prev.players[p.seat];
       if (was.track === 'grind' && p.track === 'free') {
-        if (table.hasCard()) await table.dismissCard(p.seat, speed);
+        if (table.hasCard()) {
+          await letThemRead();
+          await table.dismissCard(p.seat, speed);
+        }
         presentedSeq = null;
         sound.win();
         flash(`${name(p.seat)} broke out of the Grind!`, 'win', 2600 * speed);
@@ -169,12 +177,15 @@ export function mount(ctx) {
         if (v.card.type === 'splurge' || v.card.type === 'setback') sound.bad();
         if (amt) flash(`-${money(amt)}`, 'bad', 1200 * speed);
         await sleep(1700 * speed);
+        await letThemRead();
         await table.dismissCard(null, speed);
         presentedSeq = null;
       }
     } else if (needsCard(v) && !table.hasCard()) await showCard(v);
     // the presented card was settled
     if (table.hasCard() && !needsCard(v)) {
+      // someone else's card: give everyone time to read it (my own choice closes it at once)
+      if (E.actors(prev)[0] !== me()) await letThemRead();
       const buyer = v.players.find((p) => p.assets.length > prev.players[p.seat].assets.length || (p.ventures?.length || 0) > (prev.players[p.seat].ventures?.length || 0));
       if (buyer) sound.good();
       await table.dismissCard(buyer ? buyer.seat : null, speed);
@@ -213,12 +224,35 @@ export function mount(ctx) {
   function needsCard(v) {
     return ['deal', 'venture', 'dream', 'market'].includes(v.phase) && v.card && !v.card.done;
   }
-  // the event log steps aside while a card is held up
-  const cardWatch = setInterval(() => root.classList.toggle('card-up', table.hasCard()), 200);
+  // the event log steps aside while a card is held up, and the card is told the free part of the
+  // screen (below the money strip, above the action bar, clear of the side buttons)
+  const cardWatch = setInterval(() => {
+    root.classList.toggle('card-up', table.hasCard());
+    const r = stage.getBoundingClientRect();
+    if (!r.height) return;
+    const top = (strip.getBoundingClientRect().bottom - r.top + 8) / r.height;
+    const bottom = (bar.getBoundingClientRect().top - r.top - 8) / r.height;
+    // on a phone the side buttons step aside while a card is up, so the card can use the width
+    const narrow = r.width < 700;
+    const side = narrow ? 14 : Math.max(16, r.right - tools.getBoundingClientRect().left + 8);
+    table.cardBox = { top: Math.max(0, top), bottom: Math.min(1, bottom), width: Math.max(0.4, (r.width - 2 * side) / r.width) };
+  }, 200);
+  // Cards stay up long enough to read: at least 3 seconds, more for longer text, slower on the
+  // Relaxed speed. The catch-up speed-up (when several moves are queued) never shortens this.
+  let cardUpAt = 0;
+  let cardReadMs = 0;
   async function showCard(v) {
     presentedSeq = v.cardSeq;
     sound.slide();
     await table.showCard(v.card, v.card.deck || 'small', speed);
+    const words = `${v.card.name || ''} ${v.card.text || ''} ${v.card.econNote || ''}`.length;
+    cardUpAt = performance.now();
+    cardReadMs = Math.min(7500, Math.max(3000, 1800 + words * 32)) * baseSpeed;
+  }
+  // wait out whatever reading time the card on screen still has
+  async function letThemRead() {
+    const left = cardUpAt + cardReadMs - performance.now();
+    if (left > 0) await sleep(left);
   }
   function syncDecks(v) {
     for (const [k, n] of Object.entries(v.deckSizes || {})) table.setDeckSize(k, n);

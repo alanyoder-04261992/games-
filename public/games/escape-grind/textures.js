@@ -456,9 +456,9 @@ export function cardFace(card, deck) {
     g.fillText(l, CW / 2, y);
     y += 70;
   }
-  g.font = `500 34px ${SANS}`;
+  g.font = `500 42px ${SANS}`; // big enough to read on a phone
   g.fillStyle = '#3a3326';
-  y = wrap(g, card.text || '', CW / 2, y + 20, CW - 110, 46);
+  y = wrap(g, card.text || '', CW / 2, y + 22, CW - 90, 54);
 
   const rows = [];
   if (card.type === 'asset') {
