@@ -86,3 +86,4 @@
   .bs-pick small { display: none; }
   .bs-dock { gap: 6px; padding: 6px 6px calc(8px + var(--safe-bottom)); }
 }
+.bs-confirm { background: linear-gradient(180deg, #5fe39a, #23a85f); color: #06321a; border-color: #8ff0bb; font-weight: 800; box-shadow: 0 0 18px rgba(95, 227, 154, 0.45); }

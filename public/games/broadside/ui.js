@@ -78,7 +78,16 @@ export function mount(ctx) {
   // placement
   // ---------------------------------------------------------------------
   function newPlan() {
-    plan = { ships: {}, selected: view.fleet[0], dir: 'h', size: view.size };
+    // preview: the square you first tapped. The picked ship waits there in green until you tap it
+    // again to drop it in (or tap somewhere else to move it).
+    plan = { ships: {}, selected: view.fleet[0], dir: 'h', size: view.size, preview: null };
+  }
+  // where the previewed ship would sit, and whether it fits there
+  function previewSpot() {
+    if (!plan?.selected || !plan.preview) return null;
+    const [x, y] = anchor(plan.selected, plan.preview.x, plan.preview.y, plan.dir);
+    const cells = shipCells(plan.size, x, y, plan.dir, SHIPS[plan.selected].len) || [];
+    return { x, y, cells, ok: fits(plan.selected, x, y, plan.dir) };
   }
   const planList = () => Object.entries(plan.ships).map(([id, p]) => ({ id, ...p }));
   function planCells(exceptId) {
@@ -103,6 +112,8 @@ export function mount(ctx) {
     return [ax, ay];
   }
   function showGhost() {
+    const spot = placing() && previewSpot();
+    if (scene && spot) return scene.setGhost({ id: plan.selected, x: spot.x, y: spot.y, dir: plan.dir, ok: spot.ok, preview: true });
     if (!scene || !placing() || !plan?.selected || !hoverCell) return scene?.setGhost(null);
     const [x, y] = anchor(plan.selected, hoverCell.x, hoverCell.y, plan.dir);
     scene.setGhost({ id: plan.selected, x, y, dir: plan.dir, ok: fits(plan.selected, x, y, plan.dir) });
@@ -116,19 +127,34 @@ export function mount(ctx) {
         delete plan.ships[s.id];
         plan.selected = s.id;
         plan.dir = s.dir;
+        // it waits in green where it was, until you tap a new spot and then tap it again
+        const back = Math.floor((SHIPS[s.id].len - 1) / 2);
+        plan.preview = { x: s.x + (s.dir === 'h' ? back : 0), y: s.y + (s.dir === 'v' ? back : 0) };
         sound.slide();
         drawPlacement();
       }
       return;
     }
-    const [x, y] = anchor(plan.selected, cx, cy, plan.dir);
-    if (!fits(plan.selected, x, y, plan.dir)) {
-      sound.error();
-      return ctx.toast('That spot is taken or off the grid');
+    // first tap: show the ship there in green; tap it again to place it
+    const spot = previewSpot();
+    if (!spot || !spot.cells.includes(cy * plan.size + cx)) {
+      plan.preview = { x: cx, y: cy };
+      sound.pop();
+      return drawPlacement();
     }
-    plan.ships[plan.selected] = { x, y, dir: plan.dir };
+    confirmPlace();
+  }
+  function confirmPlace() {
+    const spot = previewSpot();
+    if (!spot) return;
+    if (!spot.ok) {
+      sound.error();
+      return ctx.toast('That spot is taken — tap somewhere else');
+    }
+    plan.ships[plan.selected] = { x: spot.x, y: spot.y, dir: plan.dir };
     sound.card();
     plan.selected = view.fleet.find((id) => !plan.ships[id]) || null;
+    plan.preview = null;
     drawPlacement();
   }
   // after any change to the plan: the banner (which ship is next, or "ready?") and the dock
@@ -166,8 +192,8 @@ export function mount(ctx) {
   function rotate() {
     plan.dir = plan.dir === 'h' ? 'v' : 'h';
     sound.pop();
-    showGhost();
-    drawDock();
+    // a ship waiting in green turns round the square you tapped
+    drawPlacement();
   }
 
   // ---------------------------------------------------------------------
@@ -364,7 +390,15 @@ export function mount(ctx) {
       if (placing()) {
         const left = view.fleet.filter((id) => !plan?.ships[id]).length;
         title = left ? 'Position your fleet' : 'Fleet in position — ready?';
-        sub = left ? `Tap your grid to place the ${plan?.selected ? SHIPS[plan.selected].name : 'ship'}. Tap a placed ship to move it. R or ⟳ rotates.` : 'Press Ready when you are happy, or tap a ship to move it.';
+        const spot = previewSpot();
+        const ship = plan?.selected ? SHIPS[plan.selected].name : 'ship';
+        if (spot?.ok) {
+          title = `Tap the green ${ship} again to place it`;
+          sub = 'Or tap another square to move it. R or ⟳ turns it.';
+        } else if (spot) {
+          title = 'That spot is taken';
+          sub = `Tap another square for the ${ship}, or turn it with R or ⟳.`;
+        } else sub = left ? `Tap your grid to show the ${ship} there in green, then tap it again to place it. Tap a placed ship to move it.` : 'Press Ready when you are happy, or tap a ship to move it.';
       } else title = 'Waiting for the other admiral to position their fleet…';
     } else if (view.phase === 'battle') {
       if (myTurn()) {
@@ -412,6 +446,7 @@ export function mount(ctx) {
                 onclick: () => {
                   if (plan.ships[id]) delete plan.ships[id];
                   plan.selected = id;
+                  plan.preview = null;
                   sound.pop();
                   drawPlacement();
                 },
@@ -424,6 +459,7 @@ export function mount(ctx) {
         ),
         h(
           'div.bs-place-btns',
+          previewSpot()?.ok ? h('button.btn.bs-confirm', { onclick: confirmPlace }, `✓ Place ${SHIPS[plan.selected].name}`) : null,
           h('button.btn.ghost', { onclick: rotate, title: 'Rotate (R)' }, plan.dir === 'h' ? '⟳ Across' : '⟳ Down'),
           h(
             'button.btn.ghost',
@@ -431,13 +467,14 @@ export function mount(ctx) {
               onclick: () => {
                 plan.ships = Object.fromEntries(randomFleet(view.size, view.fleet).map(({ id, x, y, dir }) => [id, { x, y, dir }]));
                 plan.selected = null;
+                plan.preview = null;
                 sound.shuffle();
                 drawPlacement();
               },
             },
             'Shuffle',
           ),
-          h('button.btn.ghost', { onclick: () => ((plan.ships = {}), (plan.selected = view.fleet[0]), drawPlacement()) }, 'Clear'),
+          h('button.btn.ghost', { onclick: () => ((plan.ships = {}), (plan.selected = view.fleet[0]), (plan.preview = null), drawPlacement()) }, 'Clear'),
           h(
             'button.btn.gold',
             {

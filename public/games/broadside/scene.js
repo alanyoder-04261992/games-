@@ -1,12 +1,14 @@
-// Broadside 3D sea (three.js r187). Everything is modelled in code: a reflective ocean under a
-// physically based sky with drifting clouds, two floating grids marked out with lit buoys,
-// warships with painted plating, turrets, funnels, masts and navigation lights, shells that arc
-// in, water columns on a miss, explosions with shockwaves, debris, fire and smoke on a hit, and
-// ships that roll over and sink. Bloom makes fire and lights glow. The enemy grid sits to the
-// north, your own fleet to the south. "Low" quality drops reflections and bloom.
+// Broadside 3D sea (three.js r187). Everything is modelled in code: a deep-blue reflective ocean
+// with sunlit swell under a physically based sky with drifting clouds, two charts painted on the
+// water with glowing frames and lit buoys, warships in haze-grey plating with portholes, hull
+// numbers, guard rails, lifeboats, turning radars, and the fleet's colour on hull stripes, funnel
+// bands and turret roofs; shells that arc in, water columns on a miss, explosions with soft
+// shockwaves, debris, scorch marks, fire and smoke on a hit, ships that roll over and sink and
+// leave an oil slick, a lighthouse and gulls. Bloom makes fire and lights glow. The enemy grid sits
+// to the north, your own fleet to the south. "Low" quality drops reflections and bloom.
 // Renders with WebGPURenderer, which falls back to WebGL 2 by itself where WebGPU is missing.
 import * as THREE from '../../vendor/three/three.webgpu.min.js';
-import { pass, context, renderOutput, rangeFogFactor, vec4, uniform, vec2, vec3, float, positionWorld, cameraPosition, normalize, reflect, max, dot, pow, length, mix, reflector } from '../../vendor/three/three.tsl.min.js';
+import { pass, context, renderOutput, rangeFogFactor, vec4, uniform, vec2, vec3, float, positionWorld, cameraPosition, normalize, reflect, max, dot, pow, length, mix, smoothstep, reflector } from '../../vendor/three/three.tsl.min.js';
 import { RoundedBoxGeometry } from '../../vendor/three/addons/geometries/RoundedBoxGeometry.js';
 import { WaterMesh } from '../../vendor/three/addons/objects/WaterMesh.js';
 import { SkyMesh } from '../../vendor/three/addons/objects/SkyMesh.js';
@@ -24,6 +26,7 @@ class Sea extends WaterMesh {
   constructor(geometry, options, camera) {
     super(geometry, options);
     this.time = uniform(0);
+    this.shallowColor = uniform(new THREE.Color(options.shallowColor ?? 0x1f8aa6));
     const t = this.time;
     const uv = positionWorld.xz.mul(this.size);
     const n = this.waterNormals.sample(uv.div(103).add(vec2(t.div(17), t.div(29))))
@@ -45,9 +48,15 @@ class Sea extends WaterMesh {
     this.add(mirror.target);
     this.mirror = mirror;
     const theta = max(dot(eyeDirection, surfaceNormal), 0);
-    const reflectance = pow(float(1).sub(theta), 5).mul(0.98).add(0.02);
-    const scatter = max(0, dot(surfaceNormal, eyeDirection)).mul(this.waterColor);
-    this.material.colorNode = mix(this.sunColor.mul(diffuseLight).mul(0.3).add(scatter), mirror.rgb.add(specularLight), reflectance);
+    const reflectance = pow(float(1).sub(theta), 5).mul(0.95).add(0.05);
+    // the body of the water: deep blue in the troughs, a lighter sunlit teal on the faces of the
+    // swell that turn toward the sun, and a whisper of foam on the steepest crests
+    const lit = max(dot(this.sunDirection, surfaceNormal), 0);
+    const body = mix(this.waterColor, this.shallowColor, smoothstep(0.45, 0.95, lit).mul(0.85))
+      .add(this.sunColor.mul(diffuseLight).mul(0.05));
+    const crest = float(1).sub(smoothstep(0.72, 0.86, surfaceNormal.y)).mul(0.22);
+    const water = mix(body, vec3(0.85, 0.92, 0.95), crest);
+    this.material.colorNode = mix(water, mirror.rgb.add(specularLight), reflectance);
     this.material.transparent = false; // opaque like the old Water, so tinted patches and foam draw over it
   }
   dispose() {
@@ -131,6 +140,48 @@ const puffTexture = () =>
       g.fillRect(0, 0, w, w);
     }
   });
+// a soft bright ring that fades to nothing inside and out (shockwaves)
+const ringTexture = () =>
+  canvasTexture(256, 256, (g, w) => {
+    const gr = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2);
+    gr.addColorStop(0, 'rgba(255,255,255,0)');
+    gr.addColorStop(0.62, 'rgba(255,255,255,0)');
+    gr.addColorStop(0.82, 'rgba(255,255,255,0.9)');
+    gr.addColorStop(0.9, 'rgba(255,255,255,0.35)');
+    gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, w, w);
+  });
+// a burn mark: charred middle, scorched brown edge, ragged and soft
+const burnTexture = () =>
+  canvasTexture(256, 256, (g, w) => {
+    const r = seeded(31);
+    for (let k = 0; k < 26; k++) {
+      const a = r() * 6.28, d = r() * w * 0.2;
+      const x = w / 2 + Math.cos(a) * d, y = w / 2 + Math.sin(a) * d, rad = w * (0.12 + r() * 0.2);
+      const gr = g.createRadialGradient(x, y, 0, x, y, rad);
+      gr.addColorStop(0, 'rgba(12,8,6,0.55)');
+      gr.addColorStop(0.6, 'rgba(45,25,12,0.3)');
+      gr.addColorStop(1, 'rgba(60,35,15,0)');
+      g.fillStyle = gr;
+      g.fillRect(0, 0, w, w);
+    }
+  });
+// a spreading oil slick: dark, with a faint rainbow sheen round the edge
+const oilTexture = () =>
+  canvasTexture(256, 256, (g, w) => {
+    const r = seeded(77);
+    for (let k = 0; k < 18; k++) {
+      const x = w / 2 + (r() - 0.5) * w * 0.4, y = w / 2 + (r() - 0.5) * w * 0.4, rad = w * (0.18 + r() * 0.18);
+      const gr = g.createRadialGradient(x, y, 0, x, y, rad);
+      gr.addColorStop(0, 'rgba(8,10,12,0.5)');
+      gr.addColorStop(0.7, 'rgba(20,24,30,0.35)');
+      gr.addColorStop(0.85, `hsla(${Math.floor(r() * 360)},60%,45%,0.18)`);
+      gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr;
+      g.fillRect(0, 0, w, w);
+    }
+  });
 function labelTexture(text, color = '#ffffff') {
   return canvasTexture(128, 128, (g, w) => {
     g.font = '800 72px Inter, Arial, sans-serif';
@@ -144,54 +195,220 @@ function labelTexture(text, color = '#ffffff') {
   });
 }
 
+// A chart painted on the water: faintly checkered squares tinted by side, crisp anti-aliased grid
+// lines (drawn into the texture so they stay thicker than one pixel), little ticks where lines
+// cross, and a soft glow round the frame. `pad` squares of margin hold the glow.
+function gridTexture(N, pad, mine) {
+  const cell = N > 10 ? 72 : 88;
+  const size = Math.round((N + pad * 2) * cell);
+  const o = pad * cell; // where the grid starts in the texture
+  const tint = mine ? [20, 90, 140] : [120, 40, 52];
+  const glow = mine ? '120,210,255' : '255,140,110';
+  const t = canvasTexture(size, size, (g) => {
+    g.clearRect(0, 0, size, size);
+    // glow outside the frame
+    for (let k = 6; k >= 1; k--) {
+      g.strokeStyle = `rgba(${glow},${0.05 * (7 - k) * 0.5})`;
+      g.lineWidth = k * 7;
+      g.strokeRect(o, o, N * cell, N * cell);
+    }
+    g.clearRect(o, o, N * cell, N * cell);
+    // squares: a faint checker, darker toward the middle so the edge reads as a shallow rim
+    for (let y = 0; y < N; y++)
+      for (let x = 0; x < N; x++) {
+        const d = Math.max(Math.abs(x - (N - 1) / 2), Math.abs(y - (N - 1) / 2)) / (N / 2);
+        const a = 0.2 + ((x + y) % 2) * 0.07 + d * 0.06;
+        g.fillStyle = `rgba(${tint[0]},${tint[1]},${tint[2]},${a})`;
+        g.fillRect(o + x * cell, o + y * cell, cell, cell);
+      }
+    // grid lines
+    g.strokeStyle = 'rgba(225,242,255,0.5)';
+    g.lineWidth = 2.5;
+    g.beginPath();
+    for (let k = 1; k < N; k++) {
+      g.moveTo(o + k * cell, o);
+      g.lineTo(o + k * cell, o + N * cell);
+      g.moveTo(o, o + k * cell);
+      g.lineTo(o + N * cell, o + k * cell);
+    }
+    g.stroke();
+    // little crosses where the lines meet
+    g.strokeStyle = 'rgba(255,255,255,0.8)';
+    g.lineWidth = 3;
+    g.beginPath();
+    const s = cell * 0.09;
+    for (let y = 1; y < N; y++)
+      for (let x = 1; x < N; x++) {
+        g.moveTo(o + x * cell - s, o + y * cell);
+        g.lineTo(o + x * cell + s, o + y * cell);
+        g.moveTo(o + x * cell, o + y * cell - s);
+        g.lineTo(o + x * cell, o + y * cell + s);
+      }
+    g.stroke();
+    // inner edge
+    g.strokeStyle = `rgba(${glow},0.55)`;
+    g.lineWidth = 4;
+    g.strokeRect(o + 4, o + 4, N * cell - 8, N * cell - 8);
+  });
+  t.generateMipmaps = true;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.anisotropy = 16;
+  return t;
+}
+// a flat square outline of side `s` and line width `w`, lying on the water
+function frameGeometry(s, w) {
+  const outer = new THREE.Shape();
+  outer.moveTo(-s / 2, -s / 2);
+  outer.lineTo(s / 2, -s / 2);
+  outer.lineTo(s / 2, s / 2);
+  outer.lineTo(-s / 2, s / 2);
+  outer.closePath();
+  const r = s / 2 - w;
+  const hole = new THREE.Path();
+  hole.moveTo(-r, -r);
+  hole.lineTo(-r, r);
+  hole.lineTo(r, r);
+  hole.lineTo(r, -r);
+  hole.closePath();
+  outer.holes.push(hole);
+  return new THREE.ShapeGeometry(outer).rotateX(-Math.PI / 2);
+}
+
 // ---------------------------------------------------------------------
 // ships
 // ---------------------------------------------------------------------
-// painted steel plating: plate seams, weld lines, rust streaks and waterline grime
-function hullTexture(base, seed) {
+// Painted steel plating for the hull sides. ExtrudeGeometry maps a side wall's v to the extrude
+// depth, so with HULL_V the canvas runs from the keel (top row) to the deck edge (bottom row):
+// antifouling red below the waterline, grime just above it, plate seams, a row of portholes with
+// rust weeping from them, and a stripe in the fleet's colour under the deck edge.
+const HULL_H = 0.27; // extrude depth (0.24) plus the bevel above and below
+const HULL_V = { repeat: 1 / HULL_H, offset: -(1 - 0.24 - 0.015) / HULL_H };
+function hullTexture(base, stripe, seed, { portholes = true } = {}) {
   const t = canvasTexture(
     512,
     256,
     (g, w, h) => {
       const r = seeded(seed);
+      const at = (f) => f * h; // canvas row at a fraction of the hull's height from the keel
       g.fillStyle = base;
       g.fillRect(0, 0, w, h);
-      g.globalAlpha = 0.18;
-      for (let i = 0; i < 160; i++) {
+      // faint mottling, so a big flat hull isn't one dead colour
+      for (let i = 0; i < 90; i++) {
+        g.globalAlpha = 0.04 + r() * 0.05;
         g.fillStyle = r() < 0.5 ? '#000' : '#fff';
-        g.fillRect(r() * w, r() * h, 20 + r() * 60, 6 + r() * 16);
+        g.fillRect(r() * w, at(0.55) + r() * at(0.45), 30 + r() * 90, 4 + r() * 10);
       }
-      g.globalAlpha = 0.35;
-      g.strokeStyle = '#1d2329';
+      // grime along the waterline, fading upward
+      const gr = g.createLinearGradient(0, at(0.54), 0, at(0.72));
+      gr.addColorStop(0, 'rgba(30,38,40,0.55)');
+      gr.addColorStop(1, 'rgba(30,38,40,0)');
+      g.globalAlpha = 1;
+      g.fillStyle = gr;
+      g.fillRect(0, at(0.54), w, at(0.18));
+      // below the waterline: antifouling red
+      g.fillStyle = '#6e2620';
+      g.fillRect(0, 0, w, at(0.535));
+      // plate seams
+      g.globalAlpha = 0.28;
+      g.strokeStyle = '#151a1f';
       g.lineWidth = 1.5;
-      for (let x = 0; x < w; x += 46) {
-        g.beginPath();
-        g.moveTo(x + r() * 4, 0);
-        g.lineTo(x + r() * 4, h);
-        g.stroke();
+      g.beginPath();
+      for (let x = 0; x < w; x += 128) {
+        const j = r() * 3;
+        g.moveTo(x + j, at(0.54));
+        g.lineTo(x + j, h);
       }
-      for (let y = 30; y < h; y += 52) {
-        g.beginPath();
+      g.moveTo(0, at(0.68));
+      g.lineTo(w, at(0.68));
+      g.stroke();
+      g.globalAlpha = 0.18;
+      g.strokeStyle = '#ffffff';
+      g.beginPath();
+      g.moveTo(0, at(0.68) + 2);
+      g.lineTo(w, at(0.68) + 2);
+      g.stroke();
+      // portholes (texels are ~2.6x taller than wide on the hull, so draw them squashed)
+      if (portholes) {
+        for (let x = 10; x < w; x += 32) {
+          const y = at(0.79);
+          g.globalAlpha = 0.5;
+          const rs = g.createLinearGradient(x, y, x, y - at(0.2));
+          rs.addColorStop(0, 'rgba(110,55,25,0.5)');
+          rs.addColorStop(1, 'rgba(110,55,25,0)');
+          g.fillStyle = rs;
+          if (r() < 0.45) g.fillRect(x - 1.5, y - at(0.2), 3, at(0.2));
+          g.globalAlpha = 1;
+          g.fillStyle = '#cfd6db';
+          g.beginPath();
+          g.ellipse(x, y, 4.2, 4.2 / 2.6, 0, 0, Math.PI * 2);
+          g.fill();
+          g.fillStyle = '#141b22';
+          g.beginPath();
+          g.ellipse(x, y, 2.8, 2.8 / 2.6, 0, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
+      // the fleet's stripe under the deck edge, with a thin dark line above it
+      g.globalAlpha = 1;
+      g.fillStyle = stripe;
+      g.fillRect(0, at(0.85), w, at(0.065));
+      g.fillStyle = 'rgba(0,0,0,0.35)';
+      g.fillRect(0, at(0.915), w, 1.5);
+    },
+    { repeat: true },
+  );
+  t.wrapT = THREE.ClampToEdgeWrapping;
+  t.repeat.set(0.8, HULL_V.repeat);
+  t.offset.set(0, HULL_V.offset);
+  return t;
+}
+// the submarine's dark rubber-tiled skin: faint panel lines and a row of limber holes
+function subTexture() {
+  const t = canvasTexture(
+    256,
+    256,
+    (g, w, h) => {
+      const r = seeded(3);
+      g.fillStyle = '#2b3238';
+      g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 60; i++) {
+        g.globalAlpha = 0.05 + r() * 0.05;
+        g.fillStyle = r() < 0.5 ? '#000' : '#9aa4ad';
+        g.fillRect(r() * w, r() * h, 10 + r() * 40, 10 + r() * 40);
+      }
+      g.globalAlpha = 0.3;
+      g.strokeStyle = '#11161a';
+      g.lineWidth = 1;
+      g.beginPath();
+      for (let x = 0; x < w; x += 32) {
+        g.moveTo(x, 0);
+        g.lineTo(x, h);
+      }
+      for (let y = 0; y < h; y += 64) {
         g.moveTo(0, y);
         g.lineTo(w, y);
-        g.stroke();
       }
-      // rust streaks running down from fittings
-      for (let i = 0; i < 26; i++) {
-        const x = r() * w, y = r() * h * 0.6, len = 20 + r() * 70;
-        const gr = g.createLinearGradient(x, y, x, y + len);
-        gr.addColorStop(0, 'rgba(120,60,25,0.55)');
-        gr.addColorStop(1, 'rgba(120,60,25,0)');
-        g.globalAlpha = 0.6;
-        g.fillStyle = gr;
-        g.fillRect(x, y, 2 + r() * 3, len);
-      }
+      g.stroke();
       g.globalAlpha = 1;
     },
     { repeat: true },
   );
-  t.repeat.set(1.6, 2.5);
+  t.repeat.set(1, 3);
   return t;
+}
+// white hull numbers painted near the bow
+function numberTexture(text) {
+  return canvasTexture(128, 64, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    g.font = '900 50px Inter, Arial, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.lineWidth = 4;
+    g.strokeStyle = 'rgba(0,0,0,0.35)';
+    g.strokeText(text, w / 2, h / 2 + 3);
+    g.fillStyle = '#f4f6f8';
+    g.fillText(text, w / 2, h / 2 + 3);
+  });
 }
 function deckTexture(teak) {
   const t = canvasTexture(
@@ -241,23 +458,52 @@ function foamTexture() {
 }
 
 const MAT = {
-  hull: std('#ffffff', { map: hullTexture('#66737f', 1), roughness: 0.55, metalness: 0.35 }),
+  hullPlain: std('#6c7883', { roughness: 0.55, metalness: 0.35 }),
   hullDark: std('#3a434c', { roughness: 0.55, metalness: 0.35 }),
   boot: std('#8f2a22', { roughness: 0.7 }),
   deck: std('#ffffff', { map: deckTexture(false), roughness: 0.8 }),
   teak: std('#ffffff', { map: deckTexture(true), roughness: 0.85, metalness: 0 }),
-  super: std('#b9c1c8', { roughness: 0.5, metalness: 0.3 }),
+  super: std('#c3cad0', { roughness: 0.45, metalness: 0.25 }),
   dark: std('#2a3036', { roughness: 0.5, metalness: 0.5 }),
-  gun: std('#4b545c', { roughness: 0.4, metalness: 0.6 }),
-  glass: std('#1c2a36', { roughness: 0.1, metalness: 0.8 }),
-  white: std('#ffffff', { map: hullTexture('#e9edf0', 2), roughness: 0.5 }),
+  gun: std('#56606a', { roughness: 0.38, metalness: 0.6 }),
+  glass: std('#1c2a36', { roughness: 0.08, metalness: 0.85 }),
+  white: std('#eef1f3', { roughness: 0.45 }),
+  lifeboat: std('#ee7a2c', { roughness: 0.55, metalness: 0 }),
+  rail: new THREE.LineBasicMaterial({ color: '#dfe5ea', transparent: true, opacity: 0.85 }),
   navRed: new THREE.MeshBasicMaterial({ color: new THREE.Color(10, 0.6, 0.4), toneMapped: false }),
   navGreen: new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 10, 1.4), toneMapped: false }),
   navWhite: new THREE.MeshBasicMaterial({ color: new THREE.Color(9, 8.5, 7), toneMapped: false }),
   foam: new THREE.MeshBasicMaterial({ map: foamTexture(), transparent: true, opacity: 0.8, depthWrite: false }),
   red: std('#c0392b', { roughness: 0.6 }),
-  sub: std('#ffffff', { map: hullTexture('#2f363d', 3), roughness: 0.45, metalness: 0.4 }),
+  sub: std('#ffffff', { map: subTexture(), roughness: 0.5, metalness: 0.3 }),
 };
+// Each fleet's paint: a haze-grey hull (white for the cutter) with a stripe in the fleet's colour,
+// and the same colour on funnel bands and the submarine's sail. Built once per colour.
+const fleetCache = new Map();
+function fleetMats(color) {
+  let f = fleetCache.get(color);
+  if (!f) {
+    const seed = 1 + fleetCache.size * 7;
+    f = {
+      hull: std('#ffffff', { map: hullTexture('#5d6a75', color, seed), roughness: 0.6, metalness: 0.2 }),
+      cutter: std('#ffffff', { map: hullTexture('#e8ecef', color, seed + 1), roughness: 0.5, metalness: 0.1 }),
+      band: std(color, { roughness: 0.5, metalness: 0.1 }),
+    };
+    fleetCache.set(color, f);
+    share(...Object.values(f));
+  }
+  return f;
+}
+const HULL_NUMBERS = { flagship: '01', dreadnought: '24', frigate: '47', cutter: '63', submarine: '', patrol: '88' };
+const numberTextures = {};
+const numberMat = (id) => {
+  if (!numberTextures[id]) {
+    numberTextures[id] = new THREE.MeshStandardMaterial({ map: numberTexture(HULL_NUMBERS[id]), transparent: true, roughness: 0.6, metalness: 0, depthWrite: false });
+    share(numberTextures[id]);
+  }
+  return numberTextures[id];
+};
+const lifeboatGeo = new THREE.CapsuleGeometry(0.022, 0.09, 4, 10).rotateZ(Math.PI / 2);
 const navGeo = new THREE.SphereGeometry(0.016, 8, 6);
 
 // Geometries, materials and textures used by many objects at once. disposeTree() frees
@@ -265,7 +511,7 @@ const navGeo = new THREE.SphereGeometry(0.016, 8, 6);
 // and leaves these alone.
 const SHARED = new WeakSet();
 const share = (...xs) => xs.forEach((x) => SHARED.add(x));
-share(navGeo, ...Object.values(MAT));
+share(navGeo, lifeboatGeo, ...Object.values(MAT));
 function disposeTree(root) {
   root.traverse((o) => {
     // sprites all share one built-in quad, so only their materials are theirs
@@ -296,13 +542,19 @@ function hullGeometry(L, W, H, bow = 0.32) {
   return g;
 }
 
-function turret(scale = 1, barrels = 2) {
+function turret(scale = 1, barrels = 2, roof = null) {
   const g = new THREE.Group();
   const base = new THREE.Mesh(new THREE.CylinderGeometry(0.075 * scale, 0.085 * scale, 0.045 * scale, 18), MAT.gun);
   base.position.y = 0.022 * scale;
   const house = new THREE.Mesh(new RoundedBoxGeometry(0.15 * scale, 0.06 * scale, 0.12 * scale, 2, 0.015 * scale), MAT.gun);
   house.position.set(0.01 * scale, 0.07 * scale, 0);
   g.add(base, house);
+  // a roof painted in the fleet's colour, as navies did so their own aircraft could tell ships apart
+  if (roof) {
+    const r = new THREE.Mesh(new RoundedBoxGeometry(0.13 * scale, 0.008, 0.1 * scale, 1, 0.003), roof);
+    r.position.set(0.01 * scale, 0.1 * scale + 0.003, 0);
+    g.add(r);
+  }
   for (let k = 0; k < barrels; k++) {
     const b = new THREE.Mesh(new THREE.CylinderGeometry(0.011 * scale, 0.013 * scale, 0.2 * scale, 8), MAT.dark);
     b.rotation.z = -Math.PI / 2 + 0.08;
@@ -330,11 +582,24 @@ export function buildShip(id, flagColor = '#ffffff') {
   const g = new THREE.Group();
   const add = (...ms) => ms.forEach((m) => g.add(m));
   const deckY = 0.11;
+  const paint = fleetMats(flagColor);
   const funnels = [];
+  const radars = [];
+  // funnels: grey stack, a band in the fleet's colour, a black cap
   const funnel = (x, r, h) => {
     add(cyl(r * 0.85, r, h, MAT.super, x, deckY + 0.1, 0));
+    add(cyl(r * 0.865, r * 0.88, h * 0.16, paint.band, x, deckY + 0.1 + h * 0.62, 0));
     add(cyl(r * 0.87, r * 0.87, 0.04, MAT.dark, x, deckY + 0.1 + h - 0.02, 0));
     funnels.push(new THREE.Vector3(x, deckY + 0.14 + h, 0));
+  };
+  // orange lifeboats slung along both sides of the superstructure
+  const lifeboats = (xs, z, y) => {
+    for (const s of [-1, 1])
+      for (const x of xs) {
+        const b = new THREE.Mesh(lifeboatGeo, MAT.lifeboat);
+        b.position.set(x, deckY + y, s * z);
+        add(b);
+      }
   };
   // foam lapping round the hull at the waterline
   const foam = new THREE.Mesh(new THREE.PlaneGeometry(L + 0.24, (id === 'patrol' ? 0.5 : 0.66) + 0.16).rotateX(-Math.PI / 2), MAT.foam);
@@ -349,18 +614,21 @@ export function buildShip(id, flagColor = '#ffffff') {
     hull.position.y = -0.04;
     const deck = box(L * 0.7, 0.03, 0.14, MAT.sub, 0, 0.1, 0);
     const tower = box(0.36, 0.2, 0.12, MAT.sub, -0.05, 0.12, 0, 0.04);
+    const band = box(0.365, 0.035, 0.125, paint.band, -0.05, 0.26, 0, 0.01);
+    // hydroplanes at the stern
+    const planes = box(0.12, 0.012, 0.42, MAT.sub, -L / 2 + 0.16, -0.02, 0);
     const fin = box(0.24, 0.015, 0.36, MAT.sub, -0.02, 0.26, 0);
     const scope = cyl(0.008, 0.008, 0.18, MAT.dark, 0.03, 0.32, 0, 6);
     const scope2 = cyl(0.008, 0.008, 0.12, MAT.dark, -0.08, 0.32, 0, 6);
     const rudder = box(0.1, 0.18, 0.012, MAT.sub, -L / 2 + 0.05, -0.03, 0);
-    add(hull, deck, tower, fin, scope, scope2, rudder);
+    add(hull, deck, tower, band, fin, scope, scope2, rudder, planes);
     const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.07), new THREE.MeshStandardMaterial({ color: flagColor, side: THREE.DoubleSide }));
     flag.position.set(-0.03 - 0.06, 0.47, 0);
     const pole = cyl(0.004, 0.004, 0.2, MAT.dark, -0.03, 0.32, 0, 5);
     add(flag, pole);
   } else {
     const W = id === 'patrol' ? 0.5 : id === 'flagship' ? 0.7 : 0.62;
-    const hull = new THREE.Mesh(hullGeometry(L, W, 0.24), id === 'cutter' ? MAT.white : MAT.hull);
+    const hull = new THREE.Mesh(hullGeometry(L, W, 0.24), id === 'cutter' ? paint.cutter : paint.hull);
     hull.position.y = -0.13;
     const boot = new THREE.Mesh(hullGeometry(L * 1.006, W * 1.02, 0.05), MAT.boot);
     boot.position.y = -0.04;
@@ -370,6 +638,32 @@ export function buildShip(id, flagColor = '#ffffff') {
     const rim = hullShapeRing(L, W);
     rim.position.y = deckY - 0.005;
     add(hull, boot, deck, rim);
+    // guard rails round the deck: a top rail and stanchions
+    {
+      const pts = hullShape(L * 0.95, W * 0.88).getSpacedPoints(Math.round(L * 22));
+      const seg = [];
+      const top = deckY + 0.075;
+      for (let k = 0; k < pts.length - 1; k++) {
+        const a = pts[k], b = pts[k + 1];
+        seg.push(a.x, top, -a.y, b.x, top, -b.y);
+        if (k % 2 === 0) seg.push(a.x, deckY + 0.035, -a.y, a.x, top, -a.y);
+      }
+      const rg = new THREE.BufferGeometry();
+      rg.setAttribute('position', new THREE.Float32BufferAttribute(seg, 3));
+      add(new THREE.LineSegments(rg, MAT.rail));
+    }
+    // hull numbers on both bows
+    if (HULL_NUMBERS[id]) {
+      const nx = Math.min(L * 0.16, L / 2 - L * 0.32 - 0.08);
+      for (const s of [-1, 1]) {
+        const n = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.1), numberMat(id));
+        n.position.set(nx, 0.06, s * (W / 2 + 0.017));
+        if (s < 0) n.rotation.y = Math.PI;
+        n.castShadow = false;
+        n.userData.decal = true;
+        add(n);
+      }
+    }
     // navigation lights: red to port, green to starboard
     const port = new THREE.Mesh(navGeo, MAT.navRed);
     port.position.set(L * 0.05, deckY + 0.06, -W / 2 + 0.02);
@@ -384,7 +678,12 @@ export function buildShip(id, flagColor = '#ffffff') {
     const mast = (x, h = 0.5) => {
       add(cyl(0.012, 0.016, h, MAT.dark, x, deckY, 0, 8));
       add(box(0.02, 0.012, 0.18, MAT.dark, x, deckY + h * 0.72, 0));
-      const radar = box(0.05, 0.035, 0.14, MAT.super, x, deckY + h - 0.02, 0, 0.01);
+      // a radar aerial that turns on the masthead
+      const radar = new THREE.Group();
+      radar.position.set(x, deckY + h - 0.02, 0);
+      radar.add(box(0.035, 0.03, 0.16, MAT.super, 0, 0, 0, 0.008));
+      radar.rotation.y = Math.random() * 6;
+      radars.push(radar);
       add(radar);
       const light = new THREE.Mesh(navGeo, MAT.navWhite);
       light.position.set(x, deckY + h + 0.04, 0);
@@ -395,7 +694,7 @@ export function buildShip(id, flagColor = '#ffffff') {
       return radar;
     };
     const t = (x, s = 1, rot = 0, barrels = 2) => {
-      const tu = turret(s, barrels);
+      const tu = turret(s, barrels, paint.band);
       tu.position.set(x, deckY, 0);
       tu.rotation.y = rot;
       add(tu);
@@ -411,6 +710,7 @@ export function buildShip(id, flagColor = '#ffffff') {
       funnel(-0.28, 0.08, 0.3);
       funnel(-0.48, 0.07, 0.26);
       mast(0.1, 0.62);
+      lifeboats([-0.3, -0.12], 0.245, 0.08);
       for (const s of [-1, 1]) for (const x of [-0.7, -0.1, 0.5]) add(cyl(0.03, 0.03, 0.04, MAT.gun, x, deckY, s * 0.27, 10));
     } else if (id === 'dreadnought') {
       t(L * 0.34, 1.1);
@@ -421,12 +721,14 @@ export function buildShip(id, flagColor = '#ffffff') {
       add(box(0.265, 0.03, 0.305, MAT.glass, 0.04, deckY + 0.2, 0, 0.005));
       funnel(-0.24, 0.095, 0.3);
       mast(0.02, 0.55);
+      lifeboats([-0.22], 0.225, 0.08);
     } else if (id === 'frigate' || id === 'cutter') {
       t(L * 0.3, 0.9, 0, 1);
       add(box(0.6, 0.12, 0.36, id === 'cutter' ? MAT.white : MAT.super, -0.08, deckY, 0));
       add(box(0.28, 0.1, 0.3, id === 'cutter' ? MAT.white : MAT.super, 0.06, deckY + 0.12, 0));
       add(box(0.285, 0.03, 0.305, MAT.glass, 0.06, deckY + 0.18, 0, 0.005));
       funnel(-0.24, 0.075, 0.2);
+      lifeboats([-0.2], 0.215, 0.07);
       if (id === 'frigate') for (const s of [-1, 1]) add(box(0.18, 0.06, 0.08, MAT.gun, -L * 0.33, deckY, s * 0.12));
       else add(box(0.3, 0.02, 0.4, MAT.dark, -L * 0.33, deckY, 0)); // helipad
       mast(0.0, 0.5);
@@ -439,12 +741,12 @@ export function buildShip(id, flagColor = '#ffffff') {
     }
   }
   g.traverse((m) => {
-    if (m.isMesh) {
+    if (m.isMesh && !m.userData.decal) {
       m.castShadow = true;
       m.receiveShadow = true;
     }
   });
-  g.userData = { id, len, funnels };
+  g.userData = { id, len, funnels, radars, beam: id === 'submarine' ? 0.3 : id === 'patrol' ? 0.5 : id === 'flagship' ? 0.7 : 0.62 };
   return g;
 }
 
@@ -454,7 +756,7 @@ function hullShapeRing(L, W) {
   outer.holes.push(hullShape(L * 0.95, W * 0.86, 0.32, new THREE.Path()));
   const geo = new THREE.ExtrudeGeometry(outer, { depth: 0.04, bevelEnabled: false, curveSegments: 10 });
   geo.rotateX(-Math.PI / 2);
-  const m = new THREE.Mesh(geo, MAT.hull);
+  const m = new THREE.Mesh(geo, MAT.hullPlain);
   m.castShadow = true;
   return m;
 }
@@ -576,6 +878,9 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
     return sky;
   };
   const sky = makeSky();
+  // the sky seen behind the boards is a touch deeper than the one that lights them, so the bright
+  // horizon doesn't wash the bloom over everything at low camera angles
+  sky.material.colorNode = sky.material.colorNode.mul(vec4(0.8, 0.84, 0.9, 1));
   scene.add(sky);
   // light the scene with the sky itself (a second sky, baked once into a PMREM environment map)
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -627,14 +932,15 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
           waterNormals: normals,
           sunDirection: sunDir.clone(),
           sunColor: 0xfff2dc,
-          waterColor: 0x0d4f6e,
+          waterColor: 0x08405f,
+          shallowColor: 0x1b8aa3,
           distortionScale: 3.6,
           size: 2.2,
         },
         camera,
       );
     } else {
-      water = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({ color: '#1b5f86', roughness: 0.1, metalness: 0.05, normalMap: lowNormals, normalScale: new THREE.Vector2(0.4, 0.4), clearcoat: 1, clearcoatRoughness: 0.1 }));
+      water = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({ color: '#0f5d84', roughness: 0.1, metalness: 0.05, normalMap: lowNormals, normalScale: new THREE.Vector2(0.4, 0.4), clearcoat: 1, clearcoatRoughness: 0.1 }));
       water.receiveShadow = true;
     }
     water.rotation.x = -Math.PI / 2;
@@ -656,7 +962,7 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
     const scenePass = pass(scene, camera, { samples: 4 });
     const color = scenePass.getTextureNode('output');
     // only things brighter than sunlit white (fire, flashes, lamps) cross the glow threshold
-    const glow = bloom(color, 0.75, 0.5, 4.5);
+    const glow = bloom(color, 0.7, 0.45, 5.5);
     pipeline = new THREE.RenderPipeline(renderer, color.add(glow));
     pipeNodes = [glow, scenePass];
   }
@@ -673,6 +979,62 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
       const top = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1).scale(s * 0.75, s * 0.3, s * 0.5), green);
       top.position.set(x + 0.3, s * 0.18, z);
       scene.add(isl, top);
+    }
+  }
+  // a lighthouse on the north-west island, its lamp flashing every few seconds
+  const lighthouse = new THREE.Group();
+  {
+    const white = std('#f1efe8', { roughness: 0.7, metalness: 0 });
+    const red = std('#b8322a', { roughness: 0.65, metalness: 0 });
+    for (let k = 0; k < 5; k++) {
+      const r0 = 0.62 - k * 0.07, r1 = r0 - 0.07;
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, 0.7, 20), k % 2 ? red : white);
+      seg.position.y = 0.35 + k * 0.7;
+      lighthouse.add(seg);
+    }
+    const gallery = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.08, 20), std('#2a3036'));
+    gallery.position.y = 3.55;
+    const lampHouse = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.24, 0.4, 16), std('#2b3a44', { roughness: 0.1, metalness: 0.6 }));
+    lampHouse.position.y = 3.8;
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.3, 16), red);
+    roof.position.y = 4.15;
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(14, 11, 6), toneMapped: false }));
+    lamp.position.y = 3.82;
+    lighthouse.add(gallery, lampHouse, roof, lamp);
+    lighthouse.userData.lamp = lamp;
+    lighthouse.position.set(-38.6, 2.1, -46.2);
+    lighthouse.traverse((m) => m.isMesh && (m.castShadow = false));
+    scene.add(lighthouse);
+  }
+  // gulls wheeling high over the water
+  const gulls = [];
+  {
+    const wingGeo = new THREE.BufferGeometry();
+    wingGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0.06, 0, 0, -0.06, 0.34, 0, -0.04, 0, 0, 0.06, 0.34, 0, -0.04, 0.38, 0, -0.1], 3));
+    wingGeo.computeVertexNormals();
+    const wingMat = std('#f4f6f8', { side: THREE.DoubleSide, roughness: 0.9, metalness: 0 });
+    const tipMat = std('#30363c', { side: THREE.DoubleSide, roughness: 0.9, metalness: 0 });
+    const bodyGeo = new THREE.CapsuleGeometry(0.035, 0.16, 3, 6).rotateX(Math.PI / 2);
+    const r = seeded(12);
+    for (let k = 0; k < 5; k++) {
+      const gull = new THREE.Group();
+      const body = new THREE.Mesh(bodyGeo, wingMat);
+      const wings = [1, -1].map((s) => {
+        const pivot = new THREE.Group();
+        const w = new THREE.Mesh(wingGeo, wingMat);
+        const tip = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.06).rotateX(-Math.PI / 2), tipMat);
+        tip.position.set(0.36, 0.001, -0.07);
+        pivot.add(w, tip);
+        pivot.scale.x = s;
+        pivot.userData.s = s;
+        gull.add(pivot);
+        return pivot;
+      });
+      gull.add(body);
+      gull.scale.setScalar(0.85);
+      gull.userData = { wings, r: 7 + r() * 9, h: 3.2 + r() * 2, speed: (0.12 + r() * 0.08) * (r() < 0.5 ? 1 : -1), a: r() * 6.28, cx: (r() - 0.5) * 8, cz: (r() - 0.5) * 12, flap: r() * 6 };
+      gulls.push(gull);
+      scene.add(gull);
     }
   }
 
@@ -709,22 +1071,22 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
     boards = [0, 1].map((b) => {
       const g = new THREE.Group();
       const z = boardZ[b];
-      // tinted water patch
+      // the chart painted on the water: tinted squares, soft grid lines and a glowing frame
+      // (one texture, a little larger than the grid so the frame's glow has room)
+      const pad = 0.35;
       const patch = new THREE.Mesh(
-        new THREE.PlaneGeometry(N, N).rotateX(-Math.PI / 2),
-        new THREE.MeshBasicMaterial({ color: b === 0 ? '#0e3a5a' : '#2a1b2e', transparent: true, opacity: b === 0 ? 0.28 : 0.22, depthWrite: false }),
+        new THREE.PlaneGeometry(N + pad * 2, N + pad * 2).rotateX(-Math.PI / 2),
+        new THREE.MeshBasicMaterial({ map: gridTexture(N, pad, b === 0), transparent: true, depthWrite: false }),
       );
-      patch.position.set(0, 0.01, z);
-      // grid lines
-      const pts = [];
-      for (let k = 0; k <= N; k++) {
-        const o = k - N / 2;
-        pts.push(-N / 2, 0, o + z, N / 2, 0, o + z, o, 0, -N / 2 + z, o, 0, N / 2 + z);
-      }
-      const lg = new THREE.BufferGeometry();
-      lg.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-      const lines = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: '#e8f4ff', transparent: true, opacity: 0.38, depthWrite: false }));
-      lines.position.y = 0.03;
+      patch.position.set(0, 0.02, z);
+      patch.renderOrder = 1;
+      // a thin bright frame that glows a little under bloom
+      const frame = new THREE.Mesh(
+        frameGeometry(N + 0.08, 0.06),
+        new THREE.MeshBasicMaterial({ color: new THREE.Color(b === 0 ? '#7fd4ff' : '#ff9a7a').multiplyScalar(1.6), transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false }),
+      );
+      frame.position.set(0, 0.03, z);
+      frame.renderOrder = 1;
       // buoys around the edge
       const buoys = [];
       for (let k = 0; k <= N * 4; k++) {
@@ -757,8 +1119,8 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
       }
       const markers = new THREE.Group();
       const ships = new THREE.Group();
-      for (const o of [patch, lines, labels]) o.traverse((m) => m.layers.set(OVERLAY));
-      g.add(patch, lines, labels, markers, ships, ...buoys);
+      for (const o of [patch, frame, labels]) o.traverse((m) => m.layers.set(OVERLAY));
+      g.add(patch, frame, labels, markers, ships, ...buoys);
       world.add(g);
       return { group: g, markers, ships, buoys, shots: new Map(), shipObjs: new Map(), patch };
     });
@@ -808,13 +1170,15 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
     if (shot.hit) {
       if (!onShip) {
         const sc = new THREE.Mesh(scorchGeo, scorchMat);
-        sc.position.y = 0.015;
+        sc.position.y = 0.025;
+        sc.renderOrder = 2; // over the chart
         g.add(sc);
         const peg = new THREE.Mesh(pegGeo, hitMat);
         const cap = new THREE.Mesh(capGeo, hitMat);
         peg.castShadow = cap.castShadow = true;
         g.add(peg, cap);
       }
+      if (onShip) burnShip(b, shot.i, p);
       fires.push({ pos: p.clone().add(new THREE.Vector3(0, onShip ? 0.22 : 0.3, 0)), acc: Math.random(), board: b, i: shot.i });
     } else {
       const peg = new THREE.Mesh(pegGeo, missMat);
@@ -823,12 +1187,50 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
       cap.scale.setScalar(0.75);
       peg.castShadow = cap.castShadow = true;
       const ring = new THREE.Mesh(ringGeo, missRingMat);
-      ring.position.y = 0.02;
+      ring.position.y = 0.025;
+      ring.renderOrder = 2;
       g.add(peg, cap, ring);
       g.userData.bob = Math.random() * 6;
     }
     B.markers.add(g);
     B.shots.set(shot.i, g);
+  }
+
+  // a scorch mark on the deck of the ship at square i (it rolls and sinks with the ship)
+  const burnGeo = new THREE.PlaneGeometry(0.62, 1).rotateX(-Math.PI / 2);
+  const burnMat = new THREE.MeshStandardMaterial({ map: burnTexture(), transparent: true, depthWrite: false, roughness: 1, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const oilGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+  const oilTex = oilTexture();
+  share(burnGeo, burnMat, oilGeo, oilTex);
+  function burnShip(b, i, p) {
+    for (const obj of boards[b].shipObjs.values()) {
+      const u = obj.userData;
+      const cells = shipCells(N, u.x, u.y, u.dir, u.len);
+      if (!cells?.includes(i)) continue;
+      obj.updateWorldMatrix(true, false);
+      const local = obj.worldToLocal(p.clone());
+      const d = new THREE.Mesh(burnGeo, burnMat);
+      d.position.set(local.x, u.id === 'submarine' ? 0.135 : 0.14, 0);
+      d.scale.set(0.9 + Math.random() * 0.3, 1, u.beam * 0.92);
+      d.rotation.y = (Math.random() - 0.5) * 0.4;
+      d.renderOrder = 1;
+      obj.add(d);
+      return;
+    }
+  }
+  // a slick of oil and wreckage spreading where a ship went down
+  function addSlick(b, obj, animate) {
+    if (obj.userData.slick) return;
+    const m = new THREE.Mesh(oilGeo, new THREE.MeshBasicMaterial({ map: oilTex, transparent: true, opacity: 0.85, depthWrite: false }));
+    m.position.copy(obj.userData.base).setY(0.025);
+    m.rotation.y = obj.userData.dir === 'v' ? Math.PI / 2 : 0;
+    m.renderOrder = 1;
+    const full = new THREE.Vector3(obj.userData.len + 0.6, 1, 1.5);
+    obj.userData.slick = m;
+    boards[b].markers.add(m);
+    if (!animate) return m.scale.copy(full);
+    m.scale.set(0.01, 1, 0.01);
+    anims.push({ t0: performance.now() + 1800, dur: 5000, step: (k) => m.scale.copy(full).multiplyScalar(0.25 + 0.75 * ease.out(k)).setY(1) });
   }
 
   // ---------- ships ----------
@@ -861,12 +1263,18 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
         Object.assign(obj.userData, { x: sh.x, y: sh.y, dir: sh.dir });
         B.ships.add(obj);
         B.shipObjs.set(id, obj);
-        if (sh.sunk && !animateSink) setSunk(obj, 1);
+        if (sh.sunk && !animateSink) {
+          setSunk(obj, 1);
+          addSlick(b, obj, false);
+        }
       }
       if (sh.sunk && !obj.userData.sinking) {
         obj.userData.sinking = true;
-        if (animateSink) sinkShip(obj);
-        else setSunk(obj, 1);
+        if (animateSink) sinkShip(b, obj);
+        else {
+          setSunk(obj, 1);
+          addSlick(b, obj, false);
+        }
       }
     }
   }
@@ -876,7 +1284,8 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
     obj.rotation.x = 0.5 * k * (obj.userData.dir === 'v' ? 0 : 1);
     obj.rotation.z = 0.5 * k * (obj.userData.dir === 'v' ? 1 : 0) - 0.18 * k;
   }
-  function sinkShip(obj, delay = 600) {
+  function sinkShip(b, obj, delay = 600) {
+    addSlick(b, obj, true);
     anims.push({
       t0: performance.now() + delay,
       dur: 3200,
@@ -901,23 +1310,28 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
 
   // ---------- placement ghost ----------
   const ghost = new THREE.Group();
-  const ghostOk = new THREE.MeshBasicMaterial({ color: '#7dffb0', transparent: true, opacity: 0.42, depthWrite: false });
+  const ghostOk = new THREE.MeshBasicMaterial({ color: '#2fe37a', transparent: true, opacity: 0.42, depthWrite: false });
   const ghostBad = new THREE.MeshBasicMaterial({ color: '#ff6b6b', transparent: true, opacity: 0.42, depthWrite: false });
-  share(ghostOk, ghostBad);
+  // a ship waiting to be placed (tapped once, tap again to drop it in): solid green, squares pulsing
+  const ghostShip = new THREE.MeshStandardMaterial({ color: '#0b8a3a', emissive: '#06451d', emissiveIntensity: 0.5, roughness: 0.5, metalness: 0.1, transparent: true, opacity: 0.92 });
+  share(ghostOk, ghostBad, ghostShip);
+  let ghostPulse = false;
   let ghostKey = null;
   function setGhost(g) {
     // the ghost is rebuilt as the pointer crosses squares; skip it when nothing would change
-    const key = g ? `${N}:${g.id}:${g.x}:${g.y}:${g.dir}:${g.ok}` : null;
+    const key = g ? `${N}:${g.id}:${g.x}:${g.y}:${g.dir}:${g.ok}:${!!g.preview}` : null;
     if (key === ghostKey) return;
     ghostKey = key;
     disposeTree(ghost);
     ghost.clear();
+    ghostPulse = !!g?.preview;
+    ghostOk.opacity = 0.42;
     if (!g) return;
     const obj = buildShip(g.id, '#ffffff');
     obj.traverse((m) => {
       if (!m.isMesh) return;
       if (!SHARED.has(m.material)) m.material.dispose(); // its own flag material, never drawn
-      m.material = g.ok ? ghostOk : ghostBad;
+      m.material = g.ok ? (g.preview ? ghostShip : ghostOk) : ghostBad;
       m.castShadow = false;
     });
     const cells = [];
@@ -935,6 +1349,7 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
       if (x < 0 || y < 0 || x >= N || y >= N) continue;
       const sq = new THREE.Mesh(new THREE.PlaneGeometry(0.92, 0.92).rotateX(-Math.PI / 2), g.ok ? ghostOk : ghostBad);
       sq.position.set(x - (N - 1) / 2, 0.04, boardZ[0] + y - (N - 1) / 2);
+      sq.renderOrder = 2;
       ghost.add(sq);
     }
   }
@@ -1027,15 +1442,15 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
       particles.spawn('fire', p.clone().add(new THREE.Vector3(0, 0.25, 0)), { vel: [Math.cos(a) * sp, 2.5 + Math.random() * 3, Math.sin(a) * sp], gravity: 9, life: 0.9 + Math.random() * 0.8, size: [0.09, 0.04], color: 0xffc070 });
     }
     // a shockwave racing out across the water
-    const ring = new THREE.Mesh(shockGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(6, 3.6, 1.6), transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending }));
+    const ring = new THREE.Mesh(shockGeo, new THREE.MeshBasicMaterial({ map: shockTex, color: new THREE.Color(2.4, 1.6, 0.9), transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending }));
     ring.position.copy(p).setY(0.03);
     world.add(ring);
     anims.push({
       t0: performance.now(),
       dur: 650,
       step(k) {
-        ring.scale.setScalar(0.3 + ease.out(k) * (big ? 5 : 3.2));
-        ring.material.opacity = 0.9 * (1 - k);
+        ring.scale.setScalar(0.3 + ease.out(k) * (big ? 3.4 : 2.2));
+        ring.material.opacity = 0.9 * (1 - k) ** 2;
       },
       done() {
         world.remove(ring);
@@ -1074,10 +1489,11 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
     }
     shake = Math.max(shake, big ? 0.35 : 0.2);
   }
-  const shockGeo = new THREE.RingGeometry(0.35, 0.5, 48).rotateX(-Math.PI / 2);
+  const shockGeo = new THREE.PlaneGeometry(1.4, 1.4).rotateX(-Math.PI / 2);
+  const shockTex = ringTexture();
   const debrisGeo = new THREE.BoxGeometry(0.06, 0.02, 0.05);
   const splashGeo = new THREE.RingGeometry(0.2, 0.3, 40).rotateX(-Math.PI / 2);
-  share(shellGeo, shellMat, shockGeo, debrisGeo, splashGeo);
+  share(shellGeo, shellMat, shockGeo, shockTex, debrisGeo, splashGeo);
 
   // ---------- picking ----------
   const ray = new THREE.Raycaster();
@@ -1212,12 +1628,27 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
       for (const g of B.markers.children) if (g.userData.bob != null) g.position.y = Math.sin(t * 1.8 + g.userData.bob) * 0.02;
       for (const s of B.ships.children)
         if (!s.userData.sinking) {
+          for (const r of s.userData.radars || []) r.rotation.y += dt * 1.8;
           s.position.y = s.userData.base.y + Math.sin(t * 1.1 + s.userData.phase) * 0.02;
           const roll = Math.sin(t * 0.9 + s.userData.phase) * 0.025;
           if (s.userData.dir === 'v') s.rotation.z = roll;
           else s.rotation.x = roll;
         }
     }
+    // gulls: glide most of the time, flap now and then
+    for (const gl of gulls) {
+      const u = gl.userData;
+      u.a += u.speed * dt;
+      const x = u.cx + Math.cos(u.a) * u.r, z = u.cz + Math.sin(u.a) * u.r;
+      gl.position.set(x, u.h + Math.sin(t * 0.7 + u.flap) * 0.4, z);
+      // face along the circle, banked into the turn
+      gl.rotation.set(0, -u.a - (u.speed > 0 ? 0 : Math.PI), u.speed > 0 ? -0.35 : 0.35, 'YXZ');
+      const flapping = Math.sin(t * 0.5 + u.flap) > 0.2;
+      const wing = flapping ? Math.sin(t * 9 + u.flap) * 0.55 : 0.12;
+      for (const w of u.wings) w.rotation.z = wing * w.userData.s;
+    }
+    // the lighthouse lamp flashes
+    lighthouse.userData.lamp.visible = (t % 4) < 0.6;
     // burning hits
     for (const f of fires) {
       f.acc += dt * 14;
@@ -1229,6 +1660,7 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
       }
     }
     if (ghost.children.length) ghost.children[0].position.y = 0.1 + Math.sin(t * 4) * 0.03;
+    if (ghostPulse) ghostOk.opacity = 0.4 + Math.sin(t * 5) * 0.18;
     reticle.rotation.y = t * 0.8;
     const rs = 1 + Math.sin(t * 6) * 0.06;
     reticle.scale.set(rs, 1, rs);
@@ -1357,7 +1789,7 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
       const obj = boards[b].shipObjs.get(id);
       if (obj && !obj.userData.sinking) {
         obj.userData.sinking = true;
-        sinkShip(obj, delay);
+        sinkShip(b, obj, delay);
       }
     },
     hasMarker: (b, i) => boards[b]?.shots.has(i),

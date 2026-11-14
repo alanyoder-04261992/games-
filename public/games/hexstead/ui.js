@@ -4,7 +4,7 @@
 import { h, avatar } from '../../core/util.js';
 import { sound } from '../../core/sound.js';
 import {
-  RES, RES_LABEL, COST, CARDS, TERRAIN, canPay, total, ratio, homesteadSpots, roadSpots, townSpots, banditHexes, banditTargets, playable, actors,
+  RES, RES_LABEL, COST, CARDS, TERRAIN, canPay, total, ratio, homesteadSpots, roadSpots, townSpots, banditHexes, banditTargets, playable, actors, harvestNumbers,
 } from './engine.js';
 import { board } from './geometry.js';
 import { SEAT_COLORS, SEAT_NAMES, SEAT_INK, RES_ICON, RES_COLORS, CARD_ICON, PIECE_ICON, DICE_ICON } from './art.js';
@@ -101,7 +101,7 @@ export function mount(ctx) {
   // with the count beside it. `have` (my hand) marks the ones I'm short of.
   const resChip = (r, n, have) =>
     h(
-      'span.hx-cc' + (have && have[r] < n ? '.short' : ''),
+      'span.hx-cc' + (have && have[r] < n ? '.short' : '') + (n === 1 ? '.one' : ''),
       { style: { '--rc': RES_COLORS[r][0] }, title: `${n} ${RES_LABEL[r]}${have && have[r] < n ? ` (you have ${have[r]})` : ''}` },
       h('span.hx-cc-i', { html: RES_ICON[r] }),
       n > 1 || have ? h('b', n) : null,
@@ -210,10 +210,11 @@ export function mount(ctx) {
     const a = ev.action;
     if (a.type === 'roll' && view.dice) {
       scene.rollDice(view.dice);
-      const sum = view.dice[0] + view.dice[1];
+      // with fast harvest each die's own number lights up too
+      const nums = harvestNumbers(view, view.dice);
       setTimeout(() => {
         if (!scene) return;
-        scene.pulseNumber(sum, view.bandit);
+        for (const n of nums) scene.pulseNumber(n, view.bandit);
         if (view.gains) scene.floatGains(view.gains, view, 200);
       }, 1050);
       return;
@@ -305,7 +306,10 @@ export function mount(ctx) {
         break;
       case 'main':
         title = cur === p ? (mode ? `Pick a spot for your ${mode === 'road' ? 'trail' : mode === 'town' ? 'barn' : 'homestead'}` : 'Build, trade, or end your turn') : `${name(cur)} is building…`;
-        if (view.dice) sub = `Rolled ${view.dice[0] + view.dice[1]}`;
+        if (view.dice) {
+          const [d1, d2] = view.dice;
+          sub = view.fastHarvest ? `Rolled ${d1} + ${d2} = ${d1 + d2} · ${harvestNumbers(view, view.dice).join(', ') || 'nothing'} paid` : `Rolled ${d1 + d2}`;
+        }
         break;
       case 'raise': {
         const who = view.raiseQueue?.[0];
@@ -520,7 +524,7 @@ export function mount(ctx) {
         ? h('div.hx-turn-btns', h('button.btn.gold', { onclick: () => ((mode = null), act({ type: 'pass' })) }, 'Done'))
         : h(
             'div.hx-turn-btns',
-            h('button.btn.ghost', { onclick: () => openSheet({ type: 'trade', tab: 'bank', give: {}, get: {}, bankGive: null, bankGet: null }) }, 'Trade'),
+            h('button.btn.ghost', { onclick: () => openSheet({ type: 'trade', tab: view.offers < 3 ? 'table' : 'bank', give: {}, get: {}, bankGive: null, bankGet: null }) }, 'Trade'),
             h('button.btn.gold', { onclick: () => ((mode = null), act({ type: 'end' })) }, 'End turn'),
           ),
     );
@@ -701,8 +705,8 @@ export function mount(ctx) {
     const tab = sheet.tab;
     const tabs = h(
       'div.hx-tabs',
-      h('button' + (tab === 'bank' ? '.on' : ''), { onclick: () => ((sheet.tab = 'bank'), renderSheet()) }, 'Bank & harbors'),
       h('button' + (tab === 'table' ? '.on' : ''), { onclick: () => ((sheet.tab = 'table'), renderSheet()) }, 'Players'),
+      h('button' + (tab === 'bank' ? '.on' : ''), { onclick: () => ((sheet.tab = 'bank'), renderSheet()) }, 'Bank & harbors'),
     );
     if (tab === 'bank') {
       const give = sheet.bankGive;

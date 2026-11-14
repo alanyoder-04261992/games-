@@ -107,8 +107,11 @@ export function setup({ seed = 1, options = {} } = {}) {
   const s = {
     rng: seed >>> 0 || 1,
     size,
-    // with 5 or more players, everyone may build between turns ("barn raising")
-    raising: n >= 5 && options.raising !== false,
+    // with 5 or more players, everyone may build between turns ("barn raising"); Fast play can
+    // turn it on for smaller tables too
+    raising: (n >= 5 && options.raising !== false) || options.fast === 'raise' || options.fast === 'both',
+    // Fast play "fast harvest": each die's number produces as well as the total
+    fastHarvest: options.fast === 'harvest' || options.fast === 'both',
     raiseQueue: null,
     target: Number(options.target) || 10,
     friendly: !!options.friendly,
@@ -553,6 +556,8 @@ export function apply(prev, p, a) {
       s.rolled = true;
       const sum = d1 + d2;
       log(s, { k: 'roll', p, dice: [d1, d2] });
+      // fast harvest: the dice's own numbers produce even when the total is a 7
+      if (sum === 7 && s.fastHarvest) produce(s, harvestNumbers(s, [d1, d2]), sum);
       if (sum === 7) {
         const owe = seatsOf(s).map((q) => {
           const n = total(s.players[q].res);
@@ -564,7 +569,7 @@ export function apply(prev, p, a) {
           s.phase = 'discard';
         } else s.phase = 'bandit';
       } else {
-        produce(s, sum);
+        produce(s, harvestNumbers(s, [d1, d2]), sum);
         s.phase = 'main';
       }
       break;
@@ -789,10 +794,20 @@ function settleTrade(s) {
   }
 }
 
-function produce(s, sum) {
+// The numbers a roll harvests: the total, and with fast harvest each die's own number too
+// (once each, so a double 3 harvests 3 and 6). A total of 7 harvests nothing itself.
+export function harvestNumbers(s, [d1, d2]) {
+  const sum = d1 + d2;
+  const nums = s.fastHarvest ? [d1, d2, sum] : [sum];
+  return [...new Set(nums)].filter((n) => n >= 2 && n !== 7).sort((a, b) => a - b);
+}
+
+// Every tile showing one of `nums` pays its corners (the bandit's tile excepted). The bank
+// shortage rule looks at everything a roll pays out at once.
+function produce(s, nums, sum) {
   const want = seatsOf(s).map(() => emptyRes());
   G(s).HEXES.forEach((hx, i) => {
-    if (s.hexes[i].n !== sum || i === s.bandit) return;
+    if (!nums.includes(s.hexes[i].n) || i === s.bandit) return;
     const r = TERRAIN[s.hexes[i].t].res;
     for (const v of hx.verts) {
       const b = s.verts[v];
@@ -815,7 +830,7 @@ function produce(s, sum) {
     }
   }
   s.gains = Object.keys(gains).length ? gains : null;
-  log(s, { k: 'gain', gains: s.gains || {}, sum });
+  log(s, { k: 'gain', gains: s.gains || {}, sum, nums });
 }
 
 // ---------------------------------------------------------------------
