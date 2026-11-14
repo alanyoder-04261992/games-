@@ -26,7 +26,7 @@ for (const id of registered) {
     const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
     const dupes = ids.filter((x, i) => ids.indexOf(x) !== i);
     assert.deepEqual([...new Set(dupes)], [], 'ids are unique within the rule book');
-    assert.ok(!/<script|<style|<html|<head|<link\b/i.test(html), 'a fragment: no <script>, <style>, <html>, <head> or <link>');
+    assert.ok(!/<script|<style|<html|<head[\s>]|<link\b/i.test(html), 'a fragment: no <script>, <style>, <html>, <head> or <link>');
     assert.ok(!/(?:src|href)="https?:/i.test(html.replace(/xmlns(:\w+)?="[^"]*"/g, '')), 'no outside images or links');
     assert.ok(Buffer.byteLength(html) < 160_000, 'under 160 KB');
   });
