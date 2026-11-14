@@ -41,7 +41,7 @@
 .hx-tools { position: absolute; right: 10px; top: var(--top, 104px); display: flex; flex-direction: column; gap: 6px; z-index: 5; }
 .hx-tool { width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--edge); background: var(--glass); display: grid; place-items: center; cursor: pointer; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .hx-tool svg { width: 20px; height: 20px; }
-.hx-tool:hover { background: var(--glass-2); }
+@media (hover: hover) { .hx-tool:hover { background: var(--glass-2); } }
 
 /* log */
 .hx-log { position: absolute; right: 58px; top: var(--top, 104px); width: 270px; max-height: calc(100% - 320px); overflow: auto; background: var(--glass); border: 1px solid var(--edge); border-radius: 14px; padding: 8px 10px; font-size: 12.5px; z-index: 4; display: none; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
@@ -67,7 +67,7 @@
 .hx-hand { display: flex; gap: 10px; align-items: flex-end; }
 .hx-res { display: flex; gap: 6px; }
 .hx-card { position: relative; width: 62px; height: 86px; border-radius: 10px; background: linear-gradient(165deg, var(--a), var(--b)); box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4), inset 0 0 0 2px rgba(255, 255, 255, 0.25), inset 0 0 0 5px rgba(0, 0, 0, 0.12); display: flex; flex-direction: column; align-items: center; justify-content: center; transition: transform 0.2s, opacity 0.2s; }
-.hx-card:hover { transform: translateY(-4px); }
+@media (hover: hover) { .hx-card:hover { transform: translateY(-4px); } }
 .hx-card.none { opacity: 0.42; filter: saturate(0.5); }
 .hx-card-icon { width: 44px; height: 44px; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35)); }
 .hx-card-icon svg { width: 100%; height: 100%; }
@@ -76,7 +76,7 @@
 .hx-almanac { display: flex; gap: 6px; }
 .hx-acard { position: relative; width: 62px; height: 86px; border-radius: 10px; border: 0; cursor: pointer; padding: 6px 3px; background: linear-gradient(165deg, #5a4128, #2a1c10); box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45), inset 0 0 0 2px #e9b949, inset 0 0 0 5px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; transition: transform 0.2s; }
 .hx-acard.can { animation: hx-glow 1.8s infinite; }
-.hx-acard.can:hover { transform: translateY(-5px); }
+@media (hover: hover) { .hx-acard.can:hover { transform: translateY(-5px); } }
 @keyframes hx-glow { 50% { box-shadow: 0 6px 20px rgba(255, 210, 90, 0.55), inset 0 0 0 2px #ffe08a, inset 0 0 0 5px rgba(0, 0, 0, 0.25); } }
 .hx-acard-icon { width: 38px; height: 38px; }
 .hx-acard-icon svg { width: 100%; height: 100%; }
@@ -87,7 +87,7 @@
 .hx-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
 .hx-builds { display: flex; gap: 6px; }
 .hx-build { width: 76px; padding: 6px 4px 7px; border-radius: 12px; border: 1px solid var(--edge); background: var(--glass-2); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; color: inherit; transition: transform 0.15s, background 0.15s; }
-.hx-build:hover { transform: translateY(-2px); background: rgba(40, 54, 76, 0.95); }
+@media (hover: hover) { .hx-build:hover { transform: translateY(-2px); background: rgba(40, 54, 76, 0.95); } }
 .hx-build.on { background: linear-gradient(180deg, #ffe08a, #e2a73a); color: #3b2805; border-color: #ffe08a; }
 /* can't afford it: the button goes quiet, but the prices stay fully readable */
 .hx-build.off { background: rgba(16, 22, 32, 0.82); }
@@ -235,4 +235,42 @@
   .hx.many .hx-player-name strong { font-size: 11px; }
   .hx.many .hx-player-stats { display: none; }
   .hx.many .hx-vp { font-size: 13px; height: 22px; min-width: 22px; border-radius: 6px; }
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Touch screens (iPad and other tablets, phones): fingertip-sized targets, no stuck hover lifts,
+   no double-tap zoom or long-press text selection on the controls, and a pressed state instead.
+   --------------------------------------------------------------------------------------------- */
+.hx { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.hx button { touch-action: manipulation; }
+.hx-banner-in.armed { border-color: rgba(255, 226, 138, 0.8); box-shadow: 0 0 0 2px rgba(255, 210, 100, 0.35), 0 0 26px rgba(255, 210, 100, 0.35); }
+.hx-banner-in.armed small { color: #ffe08a; font-weight: 700; }
+@media (pointer: coarse) {
+  .hx-tool { width: 46px; height: 46px; border-radius: 14px; }
+  .hx-tool svg { width: 22px; height: 22px; }
+  .hx-tools { gap: 8px; }
+  .hx-log { right: 64px; }
+  .hx-x { width: 44px; height: 44px; top: 6px; right: 6px; }
+  .hx-step-ctl button { width: 36px; height: 36px; font-size: 19px; }
+  .hx-tabs button { padding: 11px 8px; }
+  .hx-pick { min-height: 64px; }
+  .hx-turn-btns .btn { min-height: 46px; }
+  .hx-build { min-height: 64px; }
+  .hx-chip { padding: 6px 12px; }
+  .hx-build:active, .hx-acard:active, .hx-pick:active, .hx-tool:active { transform: scale(0.96); filter: brightness(1.12); }
+  .hx-card:active { transform: translateY(-3px); }
+}
+/* tablet portrait (iPad 744–1024 wide): roomier than a phone, narrower than a laptop */
+@media (pointer: coarse) and (min-width: 700px) and (max-width: 1100px) and (orientation: portrait) {
+  .hx-dock { gap: 10px; padding: 12px 14px calc(14px + var(--safe-bottom)); }
+  .hx-hand { width: 100%; justify-content: center; }
+  .hx-card, .hx-acard { width: 70px; height: 96px; }
+  .hx-card-icon { width: 50px; height: 50px; }
+  .hx-actions { width: 100%; justify-content: center; }
+  .hx-build { min-width: 92px; padding: 8px 6px; }
+  .hx-build-icon { width: 34px; height: 34px; }
+  .hx-build-label { font-size: 13px; }
+  .hx-turn-btns { flex-direction: row; }
+  .hx-turn-btns .btn { min-width: 128px; }
+  .hx-sheet { width: min(600px, 100%); }
 }
