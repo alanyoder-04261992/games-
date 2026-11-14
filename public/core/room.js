@@ -66,7 +66,7 @@ export class HostRoom extends Emitter {
     this.claim = null;
     this.destroyed = false;
     this.options = { ...defaultOptions(game), ...options, ...(saved?.options || {}) };
-    this.settings = { speed: 'normal', autoClaim: true, botLevel: 'normal', ...settings, ...(saved?.settings || {}) };
+    this.settings = { speed: 'normal', autoClaim: false, botLevel: 'normal', ...settings, ...(saved?.settings || {}) };
 
     const me = { id: 'host', name: profile.name, hue: profile.hue, token: 'host', isHost: true, connected: true, autopilot: false };
     this.players.set('host', me);

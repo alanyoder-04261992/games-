@@ -7,7 +7,7 @@ import { ROOK_TILE as TILE } from './tile.js';
 
 export default {
   id: 'rook',
-  version: '2.5', // shown on the home tile; bump it whenever you improve the game
+  version: '2.6', // shown on the home tile; bump it whenever you improve the game (2.6: sure tricks off by default)
   sameDevice: 'private', // pass and play: several people on one device (hands are hidden: a cover screen between people)
   name: 'Rook',
   tagline: 'The classic trick-taking bidding game for four.',
