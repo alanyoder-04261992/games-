@@ -1,6 +1,10 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1b2430">
 <title>Coastal Dogfight</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Display:wght@700;800&family=Barlow+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <style>
@@ -47,6 +51,15 @@ p{margin:0;line-height:1.4;max-width:62ch}
 .pcard b{font-family:var(--f-display);font-size:1.6rem;font-weight:800;letter-spacing:.02em}
 .pcard small{color:var(--ink-dim);font-size:.9rem}
 .missions .pcard b{font-size:1.15rem}
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.tabs[hidden]{display:none}
+.tabs button{flex:1 1 200px}
+.tabs button[aria-selected="true"]{border-color:var(--amber);background:rgba(234,165,60,.16)}
+.camp .pcard .stars{color:var(--amber);letter-spacing:.14em;font-size:1rem}
+.camp .pcard:disabled{opacity:.42;cursor:default}
+.pcard.locked{opacity:.48}
+.pcard .lockNote{font-family:var(--f-data);font-size:.72rem;letter-spacing:.04em;color:var(--amber)}
+.pcard .lockNote:empty{display:none}
 .missions .pcard small{font-size:.85rem}
 .planes h4{grid-column:1/-1;margin:8px 0 -2px;font-family:var(--f-data);font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim)}
 .pcard b{font-size:1.35rem}
@@ -109,10 +122,36 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
 #tMsl{width:72px;height:72px;right:calc(max(16px,env(safe-area-inset-right)) + 26px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 124px);border-color:rgba(234,165,60,.95);background:rgba(234,165,60,.22);font-size:.85rem}
 #tMsl.locked{background:rgba(226,85,63,.7);border-color:#ffd0c0}
 #tBomb{width:62px;height:62px;right:calc(max(16px,env(safe-area-inset-right)) + 116px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 206px);font-size:.72rem;border-color:rgba(214,196,140,.95);background:rgba(120,110,70,.35)}
+#tRkt{width:56px;height:56px;right:calc(max(16px,env(safe-area-inset-right)) + 186px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 206px);font-size:.7rem;border-color:rgba(234,165,60,.8);background:rgba(110,70,30,.35)}
+#tWing{width:auto;min-width:64px;height:40px;padding:0 12px;border-radius:20px;font-size:.66rem;left:calc(max(16px,env(safe-area-inset-left)) + 4px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 250px);border-color:rgba(151,196,111,.9);background:rgba(60,90,40,.35)}
+#tBail{width:72px;height:72px;left:50%;margin-left:-36px;bottom:calc(max(16px,env(safe-area-inset-bottom)) + 120px);font-size:.85rem;border-color:#ff8a6d;background:rgba(226,85,63,.45)}
+#tBail.on{background:rgba(255,120,90,.85)}
 #tFlr{width:56px;height:56px;right:calc(max(16px,env(safe-area-inset-right)) + 110px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 136px);font-size:.75rem}
 #tThr b{position:absolute;left:0;right:0;top:0;height:13%;background:rgba(226,85,63,.35);border-bottom:1px dashed rgba(241,232,210,.6)}
 #tThr.boost b{background:rgba(226,85,63,.85)}
 #tThr{position:absolute;right:calc(max(16px,env(safe-area-inset-right)) + 138px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 4px);width:54px;height:min(150px,30vh);border:2px solid rgba(241,232,210,.6);background:rgba(20,24,18,.42);border-radius:8px;overflow:hidden}
+/* iPad and other tablets: bigger targets for thumbs, spaced out */
+.tablet #stickBase{width:164px;height:164px;margin:-82px 0 0 -82px;left:calc(max(20px,env(safe-area-inset-left)) + 120px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 120px)}
+.tablet #stickKnob{width:72px;height:72px;margin:-36px 0 0 -36px}
+.tablet .tbtn{width:68px;height:68px;font-size:.9rem}
+.tablet #tFire{width:132px;height:132px;font-size:1.2rem;right:calc(max(20px,env(safe-area-inset-right)) + 14px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 14px)}
+.tablet #tMsl{width:88px;height:88px;right:calc(max(20px,env(safe-area-inset-right)) + 34px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 160px)}
+.tablet #tFlr{width:68px;height:68px;right:calc(max(20px,env(safe-area-inset-right)) + 44px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 262px)}
+.tablet #tBomb{width:74px;height:74px;right:calc(max(20px,env(safe-area-inset-right)) + 166px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 236px)}
+.tablet #tRkt{width:68px;height:68px;right:calc(max(20px,env(safe-area-inset-right)) + 258px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 236px)}
+.tablet #tThr{right:calc(max(20px,env(safe-area-inset-right)) + 172px);width:64px;height:min(200px,30vh)}
+.tablet .tbtn.sq{width:58px;height:58px;font-size:.8rem}
+.tablet #tPause{right:calc(max(20px,env(safe-area-inset-right)) + 12px)}
+.tablet #tCam{right:calc(max(20px,env(safe-area-inset-right)) + 78px)}
+.tablet #tFlaps{right:calc(max(20px,env(safe-area-inset-right)) + 144px)}
+.tablet #tGear{right:calc(max(20px,env(safe-area-inset-right)) + 210px)}
+.tablet #tMap{right:calc(max(20px,env(safe-area-inset-right)) + 276px)}
+.tablet .tbtn.rud{width:72px;height:56px;bottom:calc(max(20px,env(safe-area-inset-bottom)) + 246px)}
+.tablet #tRudR{left:calc(max(20px,env(safe-area-inset-left)) + 88px)}
+.tablet #tWing{height:48px;font-size:.78rem;bottom:calc(max(20px,env(safe-area-inset-bottom)) + 320px)}
+.tablet #tBail{width:88px;height:88px;margin-left:-44px;bottom:calc(max(20px,env(safe-area-inset-bottom)) + 150px)}
+.tablet #missionBanner{top:calc(max(10px,env(safe-area-inset-top)) + 72px)}
+.tablet .sheet{width:min(900px,100%);font-size:17px}
 #tThr i{position:absolute;left:0;right:0;bottom:0;background:rgba(234,165,60,.72)}
 #tThr span{position:absolute;left:0;right:0;top:6px;text-align:center;font-family:var(--f-data);font-size:.65rem;letter-spacing:.06em;color:var(--ink)}
 #missionBanner{position:fixed;left:50%;top:calc(max(8px,env(safe-area-inset-top)) + 30px);transform:translateX(-50%);z-index:12;display:flex;align-items:center;gap:10px;background:var(--panel);border:2px solid var(--amber);padding:6px 8px 6px 14px;max-width:calc(100vw - 32px);box-shadow:0 4px 18px rgba(0,0,0,.35)}
@@ -143,7 +182,9 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
   <div class="sheet">
     <div class="eyebrow">Sortie briefing · coastal sector 20 × 20 km · summer 1943</div>
     <h1>Coastal Dogfight</h1>
-    <p class="lede">Take off from the airfield behind the cliffs, meet three waves of raiders coming in off the sea, then bring your fighter home and land it.</p>
+    <p class="lede">Take off from the airfield behind the cliffs, fight off raiders, bombers, a battleship and an ammunition train, by day, at sunset and at night, then bring your aircraft home and land it.</p>
+    <div class="tabs" id="modeTabs" role="tablist"><button role="tab" data-mode="campaign">Campaign</button><button role="tab" data-mode="free">Free flight &amp; missions</button></div>
+    <div id="campBox" hidden><p class="hint" id="campInfo"></p><div class="planes missions camp" id="campList" role="radiogroup" aria-label="Campaign mission"></div></div>
     <h3 id="missionHead">Choose your mission</h3>
     <div class="planes missions" id="missionList" role="radiogroup" aria-label="Mission"></div>
     <h3>Choose your aircraft</h3>
@@ -165,7 +206,7 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
         <select id="optWing"><option value="0">None</option><option value="1">One</option><option value="2">Two</option></select>
       </label>
       <label for="optPhone">Phone mode
-        <select id="optPhone"><option value="auto">Auto (on for phones)</option><option value="on">On · touch controls</option><option value="off">Off · keyboard and mouse</option></select>
+        <select id="optPhone"><option value="auto">Auto (on for phones and iPads)</option><option value="on">On · touch controls</option><option value="off">Off · keyboard and mouse</option></select>
       </label>
       <label for="optRudder">Rudder buttons (touch)
         <select id="optRudder"><option value="off">Off</option><option value="on">On · hold ◀ RUD / RUD ▶ to yaw</option></select>
@@ -217,7 +258,7 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
         <select id="setQuality"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select>
       </label>
       <label for="setPhone">Phone mode
-        <select id="setPhone"><option value="auto">Auto (on for phones)</option><option value="on">On · touch controls</option><option value="off">Off · keyboard and mouse</option></select>
+        <select id="setPhone"><option value="auto">Auto (on for phones and iPads)</option><option value="on">On · touch controls</option><option value="off">Off · keyboard and mouse</option></select>
       </label>
       <label for="setDiff" id="setDiffL">Difficulty
         <select id="setDiff"><option value="easy">Easy · forgiving</option><option value="normal">Normal</option><option value="hard">Hard · enemies carry missiles</option><option value="ace">Ace · deadly</option></select>
@@ -265,6 +306,9 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
   <button class="tbtn" id="tMsl">MSL</button>
   <button class="tbtn" id="tFlr">FLARE</button>
   <button class="tbtn" id="tBomb" hidden>BOMB</button>
+  <button class="tbtn" id="tRkt" hidden>RKT</button>
+  <button class="tbtn" id="tWing" hidden>WING</button>
+  <button class="tbtn" id="tBail" hidden>BAIL</button>
   <button class="tbtn sq" id="tMap">MAP</button>
   <button class="tbtn sq" id="tGear">GEAR</button>
   <button class="tbtn sq" id="tFlaps">FLAP</button>
@@ -316,7 +360,11 @@ const nextFrame = () => new Promise(r => setTimeout(r, 0));
 // =====================================================================
 //  Settings & platform
 // =====================================================================
-const touchDevice = (navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches) || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+// iPadOS Safari says it is a Mac; a Mac with a touch screen is an iPad (also with a keyboard and trackpad attached)
+const IPAD = /iPad/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+const touchDevice = IPAD || (navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches) || /Android|iPhone|iPod/i.test(navigator.userAgent);
+// a tablet: room for bigger buttons and the full-size HUD
+const TABLET = touchDevice && Math.min(screen.width, screen.height) >= 700;
 const EMBED = /[?&]embed=1/.test(location.search) && window.parent !== window;
 const AUTOPILOT = /autopilot/.test(location.hash) || /autopilot/.test(location.search);
 function loadSettings() { try { return JSON.parse(localStorage.getItem('dogfight.settings') || '{}'); } catch (e) { return {}; } }
@@ -2442,7 +2490,7 @@ function rearm(p) {
   const d = diff();
   p.hp = { ...p.spec.hp }; p.onFire = false; p.leak = 0; p.engineOn = true; p.fuel = p.spec.fuel; p.ammo = { ...p.spec.ammo };
   p.missiles = p.spec.noMsl ? 0 : d.playerMsl + (p.spec.mslBonus || 0); p.flares = d.flares + (p.spec.flareBonus || 0); p.wep = 1;
-  p.bombs = p.spec.bombs || 0;
+  p.bombs = p.spec.bombs || 0; p.rockets = rocketCount(p.key);
   msg('Rearmed, refuelled and repaired', 'good', 4); Sfx.chime();
 }
 
@@ -2636,6 +2684,8 @@ const MISSIONS = {
   train: { name: 'Train busting', blurb: 'An ammunition train with flak wagons is running up the river valley to the harbour. Rockets and bombs set its wagons off one after another; stop it before it gets there.' },
   intercept: { name: 'Bomber intercept', blurb: 'Enemy bombers are heading for the harbour town with fighter cover. Shoot them down before three of them get through.' },
 };
+// at a Game Center table, is nobody else (no other person) sitting with you?
+function soloTable() { return NET.on && NET.opts.mode === 'coop' && !NET.roster.some(r => r.kind === 'human' && r.seat !== NET.seat); }
 function missionKind() { return CAMP.on ? CAMPAIGN[CAMP.i].kind : MISSIONS[settings.mission] ? settings.mission : 'dogfight'; }
 const TOWN_LIMIT = 3; // bombers through to the town before the intercept fails
 const GW = { units: [], ship: null, flak: [], bombs: [], center: new V3(), gc: new V3(), active: false, own: {}, gready: false, train: [], trainS: 0, trainV: 0, sec: [], tready: false };
@@ -3514,7 +3564,7 @@ function updateTrain(dt) {
 function trainCarDies(u, owner) {
   for (let k = 0; k < 5; k++) GW.sec.push({ u, t: rand(0.3, 3.5) });
   if (!ownsKind('train')) return;
-  for (const j of [u.idx - 1, u.idx + 1]) { const v = GW.train[j]; if (!v || !v.alive || v.chain > 0) continue; if (Math.random() < (v.ammo ? 0.7 : 0.35)) { v.chain = rand(0.8, 1.8); v.chainBy = owner; } }
+  for (const j of [u.idx - 1, u.idx + 1]) { const v = GW.train[j]; if (!v || !v.alive || v.chain > 0) continue; if (Math.random() < (v.ammo ? 0.55 : 0.3)) { v.chain = rand(0.8, 1.8); v.chainBy = owner; } }
 }
 function ownsKind(k) { return !NET.on || !!GW.own[k] || !!(G.mission && G.mission.local); }
 function allUnits() { return GW.train && GW.train.length ? GW.units.concat(GW.train) : GW.units; }
@@ -3558,7 +3608,13 @@ function wingCommand(cmd) {
   msg(cmd === 'attack' ? `${n}: going after that ${WING.target.boss ? BOSSES[WING.target.boss].call : WING.target.spec.name}!` : cmd === 'cover' ? `${n}: on your wing, covering you` : `${n}: rolling in on the target!`, 'info', 3);
   Sfx.chime();
 }
-function cycleWing() { const order = ['cover', 'attack', 'ground']; wingCommand(order[(order.indexOf(WING.cmd) + 1) % 3]); }
+// the WING button steps through the orders that make sense right now
+function cycleWing() {
+  const live = wingAlive(); if (!live.length) return;
+  const ok = { cover: true, attack: !!((LOCK.target && LOCK.target.alive && !LOCK.target.isFlare) || bestTargetAhead()), ground: !!groundTargetFor(live[0]) };
+  const order = ['cover', 'attack', 'ground'];
+  for (let k = 1; k <= 3; k++) { const c = order[(order.indexOf(WING.cmd) + k) % 3]; if (ok[c]) { if (c !== WING.cmd || c !== 'cover') wingCommand(c); else msg('No target ahead and nothing on the ground · wingmen keep covering you', 'warn', 2.5); return; } }
+}
 // what a wingman should strike on the ground: the mission's targets first, then the guns
 function groundTargetFor(p) {
   let best = null, bd = Infinity;
@@ -3577,7 +3633,7 @@ function groundRun(p, dt, gt) {
   if (b.gs === 'extend') { _dir.set(p.fwd.x, 0, p.fwd.z).normalize(); _dir.y = clamp((650 - agl) * 0.003, -0.2, 0.35); steerTo(p, _dir.normalize(), p.inp, 0.7); if (b.gT <= 0) b.gs = 'approach'; return; }
   if (b.gs === 'approach') {
     _dir.set(_c.x, 0, _c.z).normalize(); _dir.y = clamp((650 - agl) * 0.003, -0.25, 0.35); steerTo(p, _dir.normalize(), p.inp, 0.8);
-    if (horiz < 1300 && agl > 280 && p.fwd.dot(_d.copy(_c).normalize()) > 0.6) b.gs = 'dive';
+    if (horiz < 1500 && agl > 300 && p.fwd.dot(_d.copy(_c).normalize()) > 0.6) b.gs = 'dive';
     return;
   }
   // the dive: guns, rockets and a bomb at the bottom, then pull out
@@ -3586,7 +3642,7 @@ function groundRun(p, dt, gt) {
   p.firing = conv > 0.995 && dist < 850;
   if (conv > 0.996 && dist < 1100 && b.rkCool <= 0 && p.rockets > 0) { fireRocket(p); b.rkCool = 0.4; }
   if (p.bombs > 0 && b.bCool <= 0) { const im = bombImpact(p); if (im && im.pos.distanceTo(_gt) < Math.max(16, gt.r * 2.2)) { dropBomb(p); b.bCool = 1.2; } }
-  if (dist < 300 || agl < 170) { b.gs = 'pull'; b.gT = 2.6; }
+  if (dist < 420 || agl < 280) { if (p.bombs > 0 && b.bCool <= 0) { const im = bombImpact(p); if (im && im.pos.distanceTo(_gt) < 70) { dropBomb(p); b.bCool = 1.2; } } b.gs = 'pull'; b.gT = 2.8; }
 }
 function formationFly(p, dt, pl) {
   const i = WING.list.indexOf(p), side = i % 2 ? 1 : -1;
@@ -3676,11 +3732,13 @@ function updateChutes(dt) {
   for (let i = CHUTES.length - 1; i >= 0; i--) {
     const c = CHUTES[i]; c.t += dt;
     if (!c.landed) {
-      if (!c.open && c.t > 1.4) { c.open = true; c.lines.visible = true; if (c.who === G.player) msg('Parachute open', 'info', 2); }
+      // free fall down to a few hundred metres (it would be a long wait under the canopy otherwise), then open
+      const agl0 = c.pos.y - Math.max(groundH(c.pos.x, c.pos.z), waterLevelAt(c.pos.x, c.pos.z));
+      if (!c.open && c.t > 1.4 && (agl0 < 380 || c.t > 14)) { c.open = true; c.openT = c.t; c.sink = -Math.max(7, agl0 / 16); c.lines.visible = true; if (c.who === G.player) msg('Parachute open', 'info', 2); }
       if (!c.open) { c.vel.y -= 9.81 * dt; c.vel.multiplyScalar(1 - 0.3 * dt); c.g.rotation.x += dt * 4; }
       else {
-        const k = Math.min(1, dt * 1.5); c.vel.x += (3 - c.vel.x) * k; c.vel.z += (1.5 - c.vel.z) * k; c.vel.y += (-5.5 - c.vel.y) * Math.min(1, dt * 2.5);
-        const o = Math.min(1, (c.t - 1.4) / 0.6); c.canopy.scale.set(o, 0.5 * o, o);
+        const k = Math.min(1, dt * 1.5); c.vel.x += (3 - c.vel.x) * k; c.vel.z += (1.5 - c.vel.z) * k; c.vel.y += (c.sink - c.vel.y) * Math.min(1, dt * 2.5);
+        const o = Math.min(1, (c.t - c.openT) / 0.6); c.canopy.scale.set(o, 0.5 * o, o);
         c.g.rotation.set(Math.sin(c.t * 1.3) * 0.12, c.t * 0.2, Math.sin(c.t * 1.1) * 0.14);
       }
       c.pos.addScaledVector(c.vel, dt);
@@ -3783,24 +3841,31 @@ function clearWorldPlanes() { for (const p of G.planes) scene.remove(p.model.gro
 function myTeam() { return NET.on && NET.opts.mode === 'versus' ? 't' + NET.seat : 'blue'; }
 function startMission(mode) {
   if (NET.on && NET.seat == null) { msg('You are watching. Ask the host to give you a seat.', 'warn'); return; }
-  const local = !NET.on; // online, missions run alongside free play (see 'Missions online')
+  // the campaign runs on this device alone: offline, or at a Game Center table with nobody else at it
+  if (CAMP.on && NET.on && !soloTable()) CAMP.on = false;
+  const local = !NET.on || CAMP.on; // otherwise online missions run alongside free play (see 'Missions online')
+  const cm = CAMP.on ? CAMPAIGN[CAMP.i] : null;
+  if (cm && !planeUnlocked(settings.plane)) pick('kestrel', true);
   if (local) { clearWorldPlanes(); smokeFX.n = 0; fireFX.n = 0; G.crashSites = []; }
   else if (G.player) removePlane(G.player);
   G.msgs = []; G.ended = false;
-  WAVES = buildWaves(NET.on && !local ? NET.opts.enemies : settings.enemies, NET.on && !local ? NET.opts.waves : settings.waves);
+  WAVES = cm && cm.waves ? cm.waves.map(w => [...w]) : buildWaves(NET.on && !local ? NET.opts.enemies : settings.enemies, NET.on && !local ? NET.opts.waves : settings.waves);
+  clearRockets(); clearChutes(); WING.list = [];
   G.stats = { shots: 0, hits: 0, kills: 0, deaths: 0, score: 0, dmgTaken: 0, killList: [], start: 0 };
   G.time = 0; G.timeScale = 1; G.cam.mode = 'chase'; G.cam.kill = null; G.hitFlash = 0; G.respawnT = null; G.popups = []; G.streak = 0; G.lastKillT = -99; G.rearmT = 0;
   for (const m of MSL) { scene.remove(m.mesh); Sfx.motorStop(m); } MSL.length = 0; FLARES.length = 0; LOCK.target = null;
   camera.near = 1; camera.updateProjectionMatrix();
-  applyTimeOfDay(NET.on ? NET.opts.tod : CAMP.on ? CAMPAIGN[CAMP.i].tod || 'day' : settings.tod);
+  applyTimeOfDay(cm ? cm.tod || 'day' : NET.on ? NET.opts.tod : settings.tod);
   const pl = spawnPlayer(mode);
   if (local) {
-    if (mode === 'sortie') { G.mission = { mode, phase: 'takeoff', wave: 0, next: null, t: 0 }; msg('Full throttle to start your take-off roll', 'info', 6); }
-    else { G.mission = { mode, phase: 'combat', wave: 0, next: 3, t: 0 }; }
+    if (mode === 'sortie') { G.mission = { mode, phase: 'takeoff', wave: 0, next: null, t: 0, local: NET.on }; msg('Full throttle to start your take-off roll', 'info', 6); }
+    else { G.mission = { mode, phase: 'combat', wave: 0, next: 3, t: 0, local: NET.on }; }
+    if (cm) { G.mission.camp = CAMP.i; msg(`Mission ${CAMP.i + 1} · ${cm.title}: ${cm.brief}`, 'info', 9); }
     setupMission(G.mission);
     const k = G.mission.kind;
-    if (mode !== 'sortie') { if (k !== 'dogfight') G.mission.next = k === 'intercept' ? 6 : 30; msg(k === 'dogfight' ? 'Bandits inbound from the sea' : k === 'naval' ? 'Battleship off the coast · bomb it until it sinks (B to drop)' : k === 'ground' ? 'Convoy and depot inland · bomb and strafe them (B to drop)' : 'Bombers heading for the town · stop them', 'info', 5); }
+    if (mode !== 'sortie') { if (k !== 'dogfight') G.mission.next = k === 'intercept' ? 6 : 30; msg(k === 'dogfight' ? 'Bandits inbound from the sea' : k === 'naval' ? 'Battleship off the coast · bomb it until it sinks (B to drop)' : k === 'train' ? 'Ammunition train in the river valley · rockets (K) and bombs (B)' : k === 'ground' ? 'Convoy and depot inland · bomb and strafe them (B to drop)' : 'Bombers heading for the town · stop them', 'info', 5); }
     else if (k !== 'dogfight') msg(`${MISSIONS[k].name}: take off first`, 'info', 6);
+    spawnWingmen(cm ? cm.wingmen || 0 : Number(settings.wingmen) || 0);
   } else {
     G.mission = { mode, phase: mode === 'sortie' ? 'takeoff' : 'air', t: 0, net: true };
     if (NET.host) netHostStart(mode);
@@ -3835,7 +3900,7 @@ function spawnPlayer(mode) {
     pl.place(AF.x + 1500 + s * 90, 1300 + s * 40, AF.z - 2500 + s * 60, -0.9, 0.02, (pl.spec.cruise || 130) * 0.96); pl.gear = pl.gearT = 0; pl.throttle = 0.9;
   }
   pl.missiles = pl.spec.noMsl ? 0 : diff().playerMsl + (pl.spec.mslBonus || 0); pl.flares = diff().flares + (pl.spec.flareBonus || 0);
-  pl.bombs = pl.spec.bombs || 0;
+  pl.bombs = pl.spec.bombs || 0; pl.rockets = rocketCount(pl.key);
   $('tGear').classList.toggle('on', !!pl.gear); $('tFlaps').classList.remove('on');
   return pl;
 }
@@ -3870,7 +3935,10 @@ function spawnWave(i) {
 function missionUpdate(dt) {
   const m = G.mission, pl = G.player; if (!m) return;
   m.t += dt;
-  if (NET.on) return netMission(dt);
+  if (NET.on && !m.local) return netMission(dt);
+  if (G.rescueT != null) { G.rescueT -= dt; if (G.rescueT <= 0) { G.rescueT = null; rescuePilot(); } }
+  // shot down and didn't get out before the wreck hit
+  if (G.bailWin && pl.gone && !pl.bailed) { G.bailWin = false; if (m.phase !== 'over' && m.phase !== 'landed') { m.phase = 'over'; m.endT = 2.5; m.cause = G.downCause || 'went down with the aircraft'; } }
   if (m.phase === 'takeoff') {
     if (!pl.onGround && pl.agl() > 70) { m.phase = 'combat'; m.next = 14; msg('Airborne. Raise the gear and climb', 'good', 4.5); }
   } else if (m.phase === 'combat' && m.kind && m.kind !== 'dogfight') {
@@ -3974,7 +4042,7 @@ function netMission(dt) {
   if (m.phase === 'takeoff' && pl && !pl.onGround && pl.agl() > 70) { m.phase = 'air'; msg('Airborne. Raise the gear and climb', 'good', 4); }
   if (G.respawnT != null && !NET.over) {
     G.respawnT -= dt;
-    if (G.respawnT <= 0) { G.respawnT = null; const np = spawnPlayer('air'); resetAim(np); G.cam.mode = 'chase'; msg('Back in the air', 'good'); }
+    if (G.respawnT <= 0) { G.respawnT = null; G.bailWin = false; const np = spawnPlayer('air'); resetAim(np); G.cam.mode = 'chase'; msg('Back in the air', 'good'); }
   }
   if (NET.opts.mode === 'coop') netMissionsTick(dt);
   if (!NET.host) return;
@@ -4031,6 +4099,7 @@ function handleNet(from, d) {
   else if (d.k === 'say') msg(String(d.text || ''), d.kind || 'info', 4.5);
   else if (d.k === 'rm') { const p = G.planes.find(x => x.id === d.id && x.remote); if (p) removePlane(p); }
   else if (d.k === 'bomb') { if (from != null && Array.isArray(d.pos) && Array.isArray(d.vel)) { const kg = d.kg >= 500 ? 500 : 250, mesh = makeBombMesh(kg), pos = new V3().fromArray(d.pos); mesh.position.copy(pos); scene.add(mesh); GW.bombs.push({ pos, vel: new V3().fromArray(d.vel), owner: null, kg, mesh, age: 0, vis: true }); } }
+  else if (d.k === 'rkt') { if (from != null && Array.isArray(d.pos) && Array.isArray(d.vel)) spawnRocket(new V3().fromArray(d.pos), new V3().fromArray(d.vel), null, true); }
   else if (MSG_MISSION.has(d.k)) handleMission(d);
 }
 const MSG_MISSION = new Set(['mstart', 'mstate', 'mjoin', 'mleave', 'mend', 'mhit', 'mpts']);
@@ -4087,6 +4156,7 @@ function netMenu() {
   $('missionHead').textContent = 'Start in free play, or with a mission';
   $('btnSortie').textContent = 'Take off from runway'; $('btnQuick').textContent = 'Launch airborne';
   $('btnSortie').disabled = $('btnQuick').disabled = !seated;
+  applyMenuMode(); // the campaign is offered when nobody else is at the table
   const pilots = NET.roster.filter(r => r.kind === 'human').map(r => r.name).join(', ');
   const what = o.mode === 'versus' ? `Free-for-all · first to ${o.kills} kills` : `Co-op · free play, and anyone can start a mission the others can join${o.wingmen === 'on' ? ' · computer wingmen' : ''}`;
   $('netInfo').hidden = false;
@@ -4125,13 +4195,21 @@ function playerDown(cause, killer) {
   const m = G.mission; if (!m) return;
   G.stats.deaths = (G.stats.deaths || 0) + 1;
   if (G.cam.mode === 'cockpit') { G.cam.mode = 'chase'; camera.near = 1; camera.updateProjectionMatrix(); }
-  G.player.firing = false;
-  if (NET.on) {
+  const pl = G.player; pl.firing = false; G.downCause = cause;
+  // a chance to get out: bail before the wreck hits (thrown clear of an explosion half the time)
+  if (!pl.bailed) {
+    if (pl.gone && /exploded|burned/.test(cause) && pl.hp.pilot > 0 && Math.random() < 0.5) { pl.bailed = true; G.chute = spawnChute(pl.pos.clone(), pl.vel.clone().multiplyScalar(0.4).setY(10), pl); G.stats.lost = (G.stats.lost || 0) + 1; msg('Thrown clear of the blast!', 'warn', 3); }
+    else if (canBail(pl)) G.bailWin = true;
+  }
+  const bailTxt = G.bailWin ? ` · BAIL OUT! (${isTouch ? 'BAIL' : 'J'})` : '';
+  if (NET.on && !m.local) {
     const by = killer ? (killer.label || (killer.role === 'raider' ? `a ${killer.spec.name}` : '')) : '';
-    if (G.respawnT == null && !NET.over) { G.respawnT = 6; msg(`You ${cause}${by ? ' · ' + by : ''}`, 'danger', 5); }
+    if (G.respawnT == null && !NET.over) { if (!pl.bailed) G.respawnT = 6; msg(`You ${cause}${by ? ' · ' + by : ''}${bailTxt}`, 'danger', 5); }
     return;
   }
   if (m.phase === 'over') return;
+  if (pl.bailed) { if (cause !== 'abandoned the aircraft') msg(`You ${cause}`, 'danger', 4); return; }
+  if (G.bailWin) { msg(`You ${cause}${bailTxt}`, 'danger', 5); return; }
   m.phase = 'over'; m.endT = 4; m.cause = cause;
   msg(`You ${cause}`, 'danger', 5);
 }
@@ -4150,13 +4228,24 @@ function endMission(success) {
   const grade = !pl.alive ? (r > 0.35 ? 'C' : 'D') : r > 0.8 ? 'A' : r > 0.6 ? 'B' : r > 0.4 ? 'C' : 'D';
   const kind = m.kind || 'dogfight', mname = MISSIONS[kind].name;
   $('dbEyebrow').textContent = `${mname} · ${SPECS[settings.plane].full} · ${m.mode === 'sortie' ? 'full sortie' : 'quick start'}`;
-  $('dbTitle').textContent = !pl.alive ? 'Shot down' : m.townLost ? 'The town was bombed' : success ? 'Mission complete' : m.belly ? 'Down safe, aircraft damaged' : 'Mission ended';
-  const goal = kind === 'naval' ? 'The battleship sunk' : kind === 'ground' ? 'The convoy and depot destroyed' : kind === 'intercept' ? 'The town kept safe' : `All ${WAVES.length} wave${WAVES.length === 1 ? '' : 's'} beaten`;
+  $('dbTitle').textContent = !pl.alive ? 'Shot down' : m.townLost ? 'The town was bombed' : m.trainLost ? 'The train got through' : success ? 'Mission complete' : m.belly ? 'Down safe, aircraft damaged' : 'Mission ended';
+  const goal = kind === 'naval' ? 'The battleship sunk' : kind === 'ground' ? 'The convoy and depot destroyed' : kind === 'train' ? 'The ammunition train stopped' : kind === 'intercept' ? 'The town kept safe' : `All ${WAVES.length} wave${WAVES.length === 1 ? '' : 's'} beaten`;
   $('dbLede').textContent = m.townLost ? `${TOWN_LIMIT} bombers got through to the town. You shot down ${st.kills}.` : !pl.alive ? `You ${m.cause || 'went down'} with ${st.kills} kill${st.kills === 1 ? '' : 's'}${st.ground ? ` and ${st.ground} ground target${st.ground === 1 ? '' : 's'}` : ''} to your name.` : success ? `${goal} and the aircraft back on the airfield.` : `${st.kills} kill${st.kills === 1 ? '' : 's'} before the sortie ended.`;
   $('dbGrade').textContent = grade;
-  const cells = [['Score', total], kind === 'naval' || kind === 'ground' ? ['Targets destroyed', st.ground || 0] : ['Kills', `${st.kills}${st.killList.includes('Ace') ? ' · ace' : ''}`], ['Accuracy', `${(acc * 100).toFixed(1)}%`], ['Rounds fired', st.shots], ['Damage taken', Math.round(st.dmgTaken)], ['Flight time', fmtTime(G.time)], ['Landing', landTxt], ['Bonus', `+${landing + survive + accB}`]];
+  const cells = [['Score', total], kind === 'naval' || kind === 'ground' || kind === 'train' ? ['Targets destroyed', st.ground || 0] : ['Kills', `${st.kills}${st.killList.includes('Ace') ? ' · ace' : ''}`], ['Accuracy', `${(acc * 100).toFixed(1)}%`], ['Rounds fired', st.shots], ['Damage taken', Math.round(st.dmgTaken)], ['Flight time', fmtTime(G.time)], ['Landing', landTxt], ['Bonus', `+${landing + survive + accB}`]];
   $('dbGrid').innerHTML = cells.map(([k, v]) => `<div class="cell"><span>${k}</span><b>${v}</b></div>`).join('');
   $('dbBoard').hidden = true; $('btnAgain').textContent = 'Fly again'; $('btnAgain').disabled = false; $('btnMenu').textContent = 'Change aircraft';
+  G.campNext = false;
+  if (m.camp != null) {
+    const c = CAMPAIGN[m.camp], stars = success && pl.alive ? 1 + (st.deaths ? 0 : 1) + (grade === 'A' ? 1 : 0) : 0;
+    const before = CAMP.save.stars[c.id] || 0, medalBefore = medalFor(campStars());
+    if (stars > before) { CAMP.save.stars[c.id] = stars; saveCamp(); }
+    const medalNow = medalFor(campStars()), last = m.camp === CAMPAIGN.length - 1;
+    $('dbEyebrow').textContent = `Campaign · mission ${m.camp + 1} of ${CAMPAIGN.length} · ${c.title}`;
+    $('dbLede').textContent += ` ${starTxt(stars)}${stars > before && before ? ' New best.' : ''}${stars && !before && c.unlock ? ` The ${SPECS[c.unlock].full} is unlocked.` : ''}${medalNow && medalNow !== medalBefore ? ` Medal: ${medalNow}!` : ''}${stars && last ? ' Campaign complete!' : ''}`;
+    G.campNext = stars > 0 && !last;
+    $('btnAgain').textContent = G.campNext ? 'Next mission' : 'Fly it again'; $('btnMenu').textContent = 'Campaign menu';
+  }
   G.state = 'debrief'; showScreen('debrief'); $('touch').hidden = true;
   if (document.pointerLockElement) document.exitPointerLock();
   if (AUTOPILOT) console.log('[QA] debrief', JSON.stringify({ success, alive: pl.alive, kills: st.kills, shots: st.shots, hits: st.hits, time: G.time.toFixed(1), total, grade }));
@@ -4179,6 +4268,8 @@ addEventListener('keydown', e => {
     if (e.code === 'KeyG') toggleGear(); else if (e.code === 'KeyV') toggleFlaps(); else if (e.code === 'KeyC') cycleCam();
     else if (e.code === 'KeyB' && G.player && !G.player.onGround) dropPlayerBomb();
     else if (e.code === 'KeyX' || e.code === 'Enter') firePlayerMissile(); else if (e.code === 'KeyF') playerFlares(); else if (e.code === 'KeyM') cycleMap();
+    else if (e.code === 'KeyK') firePlayerRockets(); else if (e.code === 'KeyJ') bailOut();
+    else if (e.code === 'KeyT') wingCommand('attack'); else if (e.code === 'KeyY') wingCommand('cover'); else if (e.code === 'KeyU') wingCommand('ground');
     else if (e.code === 'Escape' || e.code === 'KeyP' || e.code === 'KeyH') pause(true);
     else if (/^Digit[0-9]$/.test(e.code) && G.player) { const d = +e.code.slice(5); G.player.throttle = d === 0 ? 1 : d / 10; }
   } else if (G.state === 'paused' && (e.code === 'Escape' || e.code === 'KeyP')) pause(false);
@@ -4202,9 +4293,11 @@ addEventListener('mousemove', e => {
 addEventListener('wheel', e => { if (G.state === 'play' && G.player) G.player.throttle = clamp(G.player.throttle - Math.sign(e.deltaY) * 0.05, 0, 1); }, { passive: true });
 document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && G.state === 'play' && settings.control === 'mouse' && !isTouch) pause(true); });
 
+// Safari on iPad and iPhone ignores user-scalable=no: stop pinch and double-tap zoom over the game
+for (const ev of ['gesturestart', 'gesturechange', 'dblclick']) document.addEventListener(ev, e => { if (!e.target.closest || !e.target.closest('.sheet')) e.preventDefault(); }, { passive: false });
 // touch controls
 const stickZone = $('stickZone'), stickBase = $('stickBase'), stickKnob = $('stickKnob');
-const STICK_R = 60;
+let STICK_R = 60;
 function resetStick() { touch.stickId = null; touch.sx = touch.sy = 0; stickKnob.style.transform = ''; stickBase.classList.remove('live'); stickBase.style.left = ''; stickBase.style.top = ''; }
 stickZone.addEventListener('pointerdown', e => {
   e.preventDefault();
@@ -4242,6 +4335,9 @@ function applyRudder() { $('tRudL').hidden = $('tRudR').hidden = settings.rudder
 $('tMsl').addEventListener('pointerdown', e => { e.preventDefault(); firePlayerMissile(); });
 $('tFlr').addEventListener('pointerdown', e => { e.preventDefault(); playerFlares(); });
 $('tBomb').addEventListener('pointerdown', e => { e.preventDefault(); dropPlayerBomb(); });
+$('tRkt').addEventListener('pointerdown', e => { e.preventDefault(); firePlayerRockets(); });
+$('tWing').addEventListener('pointerdown', e => { e.preventDefault(); cycleWing(); });
+$('tBail').addEventListener('pointerdown', e => { e.preventDefault(); if (G.player && G.player.alive && !G.bailWin) G.bailArm = Math.max(G.bailArm || 0, 0.01); bailOut(); });
 $('tMap').addEventListener('click', () => cycleMap());
 function cycleMap() {
   const order = ['radar', 'sector', 'off']; settings.map = order[(order.indexOf(settings.map) + 1) % 3]; saveSettings();
@@ -4278,7 +4374,7 @@ function pollPad() { const pads = navigator.getGamepads ? navigator.getGamepads(
 const dz = (v, d = 0.12) => Math.abs(v) < d ? 0 : (v - Math.sign(v) * d) / (1 - d);
 
 function playerControl(dt) {
-  const p = G.player; if (!p || !p.alive) { if (p) p.firing = false; return; }
+  const p = G.player; if (!p || !p.alive) { if (p) p.firing = false; const gp = !p || p.gone ? null : pollPad(); if (gp && gp.buttons[11] && gp.buttons[11].pressed) bailOut(); return; }
   if (AUTOPILOT) { autopilot(p, dt); return; }
   if (G.state !== 'play') { p.firing = false; if (!p.onGround) assistStick(p, 0, 0, 0, p.inp); else { p.inp.pitch = p.inp.roll = p.inp.yaw = 0; p.brake = 1; p.throttle = 0; } return; }
   const inp = p.inp;
@@ -4302,6 +4398,7 @@ function playerControl(dt) {
     const edge = i => b[i] && !padPrev[i];
     if (edge(0)) toggleGear(); if (edge(1)) cycleCam(); if (edge(2)) toggleFlaps(); if (edge(9)) pause(true);
     if (edge(4)) firePlayerMissile(); if (edge(5)) playerFlares(); if (edge(3)) cycleMap(); if (edge(6) && !p.onGround) dropPlayerBomb();
+    if (edge(10)) firePlayerRockets(); if (edge(11)) bailOut(); if (edge(14)) wingCommand('attack'); if (edge(15)) wingCommand('cover'); if (edge(8)) wingCommand('ground');
     if (b[12] && p.throttle >= 0.99) wantBoost = true;
     if (b[12]) p.throttle = clamp(p.throttle + dt * 0.5, 0, 1); if (b[13]) p.throttle = clamp(p.throttle - dt * 0.5, 0, 1);
     padPrev = b;
@@ -4522,6 +4619,12 @@ function updateCamera(dt, rdt) {
       camera.up.set(0, 1, 0); camera.lookAt(k.pos); camera.near = 1; camera.updateProjectionMatrix(); return;
     }
   }
+  const ch = G.chute;
+  if (ch && ch.who === p) {
+    c.orbit = (c.orbit || 0) + rdt * 0.25;
+    camera.position.set(ch.pos.x + Math.cos(c.orbit) * 24, Math.max(ch.pos.y + 7, groundH(ch.pos.x + Math.cos(c.orbit) * 24, ch.pos.z + Math.sin(c.orbit) * 24) + 3), ch.pos.z + Math.sin(c.orbit) * 24);
+    camera.up.set(0, 1, 0); camera.lookAt(ch.pos.x, ch.pos.y + 3, ch.pos.z); camera.near = 1; camera.updateProjectionMatrix(); return;
+  }
   if (!p.alive && G.mission && (G.mission.phase === 'over' || NET.on)) {
     c.orbit = (c.orbit || 0) + rdt * 0.4; const tp = p.pos;
     camera.position.set(tp.x + Math.cos(c.orbit) * 60, Math.max(tp.y + 20, groundH(tp.x, tp.z) + 25), tp.z + Math.sin(c.orbit) * 60); camera.up.set(0, 1, 0); camera.lookAt(tp); return;
@@ -4552,8 +4655,13 @@ function updateCamera(dt, rdt) {
 //  HUD
 // =====================================================================
 const hud = $('hud'), hx = hud.getContext('2d');
-let HW = 0, HH = 0, HDPR = 1;
-function resizeHUD() { HDPR = Math.min(devicePixelRatio || 1, 2); HW = innerWidth; HH = innerHeight; hud.width = HW * HDPR; hud.height = HH * HDPR; }
+let HW = 0, HH = 0, HDPR = 1, HUDK = 1;
+// on a tablet the HUD is drawn larger (HW and HH are the HUD's own units), and the touch controls grow too
+function resizeHUD() {
+  HDPR = Math.min(devicePixelRatio || 1, 2); const tab = TABLET && isTouch; HUDK = tab ? 1.22 : 1;
+  HW = innerWidth / HUDK; HH = innerHeight / HUDK; hud.width = innerWidth * HDPR; hud.height = innerHeight * HDPR;
+  document.documentElement.classList.toggle('tablet', tab); STICK_R = tab ? 78 : 60;
+}
 const _pv = new V3();
 function proj(v) { _pv.copy(v).project(camera); return { x: (_pv.x + 1) / 2 * HW, y: (1 - _pv.y) / 2 * HH, ok: _pv.z < 1 && Math.abs(_pv.x) < 1.05 && Math.abs(_pv.y) < 1.05 }; }
 const MONO = '"IBM Plex Mono", ui-monospace, Menlo, monospace';
@@ -4562,9 +4670,10 @@ function txt(s, x, y, size = 13, col = '#f1e8d2', align = 'left', font = MONO, w
   hx.font = `${weight} ${size}px ${font}`; hx.textAlign = align; hx.fillStyle = 'rgba(10,12,10,0.7)'; hx.fillText(s, x + 1, y + 1); hx.fillStyle = col; hx.fillText(s, x, y);
 }
 function drawHUD(rdt) {
-  hx.setTransform(HDPR, 0, 0, HDPR, 0, 0); hx.clearRect(0, 0, HW, HH);
+  hx.setTransform(HDPR * HUDK, 0, 0, HDPR * HUDK, 0, 0); hx.clearRect(0, 0, HW, HH);
   const p = G.player; if (!p || (G.state !== 'play' && G.state !== 'paused')) return;
   const safeL = 16, safeT = 14;
+  touchExtras(p);
   // vision effects
   if (p.alive) {
     const gl = clamp((p.gs - 7.8) / 2.4, 0, 1), rl = clamp((-p.gs - 2.4) / 1.6, 0, 1);
@@ -4574,7 +4683,12 @@ function drawHUD(rdt) {
   }
   if (G.hitFlash > 0) { hx.fillStyle = `rgba(200,40,20,${G.hitFlash * 0.5})`; hx.fillRect(0, 0, HW, HH); G.hitFlash = Math.max(0, G.hitFlash - rdt * 1.5); }
   if (G.cam.mode === 'kill') { txt('KILL CAM', HW / 2, HH - 40, 14, '#eaa53c', 'center'); drawMsgs(); return; }
-  if (!p.alive) { if (G.respawnT != null) txt(`BACK IN THE AIR IN ${Math.ceil(G.respawnT)}`, HW / 2, HH * 0.42, 22, '#eaa53c', 'center', COND, 700); drawMsgs(); return; }
+  if (!p.alive) {
+    if (G.bailWin && canBail(p)) txt(`BAIL OUT · ${isTouch ? 'TAP BAIL' : 'PRESS J'}`, HW / 2, HH * 0.36, 28, (G.time * 3) % 1 < 0.6 ? '#ff6a4d' : '#eaa53c', 'center', COND, 800);
+    const ch = G.chute; if (ch && ch.who === p) txt(ch.landed ? (ch.water ? 'IN THE WATER · A BOAT IS COMING' : 'ON THE GROUND · A CAR IS COMING') : ch.open ? `PARACHUTE · ${Math.max(0, Math.round(ch.pos.y - Math.max(groundH(ch.pos.x, ch.pos.z), 0)))} M` : 'FREE FALL', HW / 2, HH * 0.3, 20, '#f1e8d2', 'center', COND, 700);
+    if (G.respawnT != null) txt(`BACK IN THE AIR IN ${Math.ceil(G.respawnT)}`, HW / 2, HH * 0.42, 22, '#eaa53c', 'center', COND, 700);
+    drawMsgs(); return;
+  }
   // gun reticle
   const ck = G.cam.mode === 'cockpit';
   const ret = proj(_a.copy(p.fwd).multiplyScalar(400).add(p.pos));
@@ -4622,7 +4736,7 @@ function drawHUD(rdt) {
       hx.stroke(); if (d < 1800 || r > 30) txt(name, s2.x, s2.y - sz - 5, 10, col, 'center', COND, 600);
     }
     // the objective: a marker on screen, an arrow at the edge when it isn't
-    const op = NET.on ? netObjectivePos() : objectivePos();
+    const op = NET.on && !(G.mission && G.mission.local) ? netObjectivePos() : objectivePos();
     if (op) {
       const so = proj(op), od = op.distanceTo(p.pos);
       if (so.ok && so.x > 0 && so.x < HW && so.y > 0 && so.y < HH) { hx.strokeStyle = '#f2c14e'; hx.lineWidth = 2; hx.beginPath(); hx.moveTo(so.x, so.y - 12); hx.lineTo(so.x + 9, so.y); hx.lineTo(so.x, so.y + 12); hx.lineTo(so.x - 9, so.y); hx.closePath(); hx.stroke(); txt(`OBJECTIVE ${(od / 1000).toFixed(1)} km`, so.x, so.y + 26, 11, '#f2c14e', 'center', COND, 700); }
@@ -4675,8 +4789,13 @@ function drawHUD(rdt) {
     if (s.ok) { hx.strokeStyle = '#97c46f'; hx.lineWidth = 2; hx.strokeRect(s.x - 10, s.y - 10, 20, 20); txt(`BASE ${(d / 1000).toFixed(1)} km`, s.x, s.y + 26, 11, '#97c46f', 'center'); }
   }
   // objective, score
-  const obj = !m ? '' : NET.on ? netObjective() : m.phase === 'takeoff' ? liftOffText() : m.phase === 'combat' && m.kind && m.kind !== 'dogfight' ? missionLine(m) : m.phase === 'combat' ? (m.next !== null ? `Wave ${m.wave + 1} inbound in ${Math.ceil(m.next)} s` : `Wave ${m.wave} of ${WAVES.length} · ${enemies().length} bandit${enemies().length === 1 ? '' : 's'} remaining`) : m.phase === 'rtb' ? 'Return to base and land on the runway' : m.phase === 'landed' ? 'Landed' : '';
+  const obj = !m ? '' : NET.on && !m.local ? netObjective() : m.phase === 'takeoff' ? liftOffText() : m.phase === 'combat' && m.kind && m.kind !== 'dogfight' ? missionLine(m) : !p.alive && G.chute && G.chute.who === p ? 'Bailed out · wait to be picked up' : m.phase === 'combat' ? (m.next !== null ? `Wave ${m.wave + 1} inbound in ${Math.ceil(m.next)} s` : `Wave ${m.wave} of ${WAVES.length} · ${enemies().length} bandit${enemies().length === 1 ? '' : 's'} remaining`) : m.phase === 'rtb' ? 'Return to base and land on the runway' : m.phase === 'landed' ? 'Landed' : '';
   txt(obj.toUpperCase(), HW / 2, safeT + 18, isTouch ? 13 : 15, '#f1e8d2', 'center', COND, 600);
+  // a named ace in the air: name and how much of the aircraft is left
+  const bp = G.planes.find(e => e.boss && e.alive && !e.gone);
+  if (bp) { const B = BOSSES[bp.boss], f = bossHealth(bp), w = 200, x0 = HW / 2 - w / 2, y0 = safeT + 30; hx.fillStyle = 'rgba(20,20,18,0.55)'; hx.fillRect(x0 - 2, y0 - 2, w + 4, 9); hx.fillStyle = bp.lastStand ? '#ff6a4d' : '#e2553f'; hx.fillRect(x0, y0, w * f, 5); txt(`${B.name.toUpperCase()} · ${B.call.toUpperCase()}`, HW / 2, y0 + 20, 11, '#ff8a6d', 'center', COND, 700); }
+  // your wingmen's orders
+  const wl = wingAlive(); if (wl.length) txt(`WINGMEN ${wl.length} · ${WING_CMDS[WING.cmd].toUpperCase()}${isTouch ? '' : ' · T Y U'}`, HW / 2, HH - (isTouch ? 168 : 128), 11, '#97c46f', 'center', COND, 600);
   // on phones the score sits under the button row
   const scoreX = HW - safeL, scoreY = isTouch ? safeT + 66 : safeT;
   txt(`SCORE ${String(G.stats.score).padStart(4, '0')}`, scoreX, scoreY + 18, 13, '#eaa53c', 'right');
@@ -4698,7 +4817,7 @@ function drawHUD(rdt) {
   // flight data
   const MPH = 2.23694; // m/s to mph
   const ias = p.V * MPH * Math.sqrt(Math.exp(-Math.max(0, p.pos.y) / 8500));
-  const ammoTxt = `${Object.entries(p.ammo).map(([k, v]) => `${GUN_LABEL[k] || k.toUpperCase()} ${v}`).join('  ')}  MSL ${p.missiles}  FLR ${p.flares}${p.bombs ? `  BOMB ${p.bombs}` : ''}`;
+  const ammoTxt = `${Object.entries(p.ammo).map(([k, v]) => `${GUN_LABEL[k] || k.toUpperCase()} ${v}`).join('  ')}  MSL ${p.missiles}  FLR ${p.flares}${p.rockets ? `  RKT ${p.rockets}` : ''}${p.bombs ? `  BOMB ${p.bombs}` : ''}`;
   const tb = $('tBomb'); tb.hidden = !(p.bombs > 0); if (!tb.hidden) tb.textContent = `BOMB ${p.bombs}`;
   if (isTouch) {
     const line = `${Math.round(ias)} mph · ${Math.round(p.pos.y)} m · G ${p.gs.toFixed(1)} · THR ${Math.round(p.throttle * 100)}${p.boosting ? ' · BOOST' : ''} · WEP ${Math.round(p.wep * 100)}%`;
@@ -4731,6 +4850,14 @@ function drawHUD(rdt) {
     const gw = Math.min(460, HW * (isTouch ? 0.34 : 0.4)), gh = gw * 224 / 512;
     hx.globalAlpha = 0.95; hx.drawImage(gaugeCanvas, (HW - gw) / 2, HH - gh - (isTouch ? 44 : 8), gw, gh); hx.globalAlpha = 1;
   }
+}
+// the touch buttons that come and go: rockets, wingman orders, bail out
+function touchExtras(p) {
+  if (!isTouch) return;
+  const rk = $('tRkt'), wg = $('tWing'), bl = $('tBail');
+  rk.hidden = !(p.alive && p.rockets > 0); if (!rk.hidden) rk.textContent = `RKT ${p.rockets}`;
+  const wl = wingAlive(); wg.hidden = !wl.length || !p.alive; if (!wg.hidden) wg.textContent = { cover: 'WING · COVER', attack: 'WING · ATTACK', ground: 'WING · GROUND' }[WING.cmd];
+  const bail = canBail(p) && (G.bailWin || (p.alive && playerInTrouble(p))); bl.hidden = !bail; bl.classList.toggle('on', !!G.bailWin && (G.time * 3) % 1 < 0.6);
 }
 function liftOffText() { const p = G.player, v = p ? Math.round(p.stallSpeed() * 1.15 * 2.237 / 5) * 5 : 100; return `Take off · full throttle${p && p.spec.jet ? ', afterburner helps' : ''}, lift off near ${v} mph`; }
 function drawMsgs() {
@@ -4843,11 +4970,11 @@ function pause(on) {
 function fillSettings() {
   $('setControl').value = settings.control; $('setQuality').value = settings.quality; $('setVolume').value = settings.volume; $('setInvert').checked = settings.invert; $('setKill').checked = settings.killcam;
   const help = isTouch ? [
-    ['Steer (stick)', 'left thumb'], ['Throttle', 'slider'], ['Boost', 'drag into the red top of the slider'], ['Fire all guns', 'FIRE'], ['Missile', 'MSL (wait for the lock)'], ['Flares', 'FLARE'], ['Corner map', 'MAP'], ['Gear / flaps', 'GEAR · FLAP'], ['Camera', 'CAM'], ['Pause', 'II'], ['Drop a bomb', 'BOMB (attack missions)'], ['Rudder', 'hold ◀ RUD / RUD ▶ (turn on in settings)'],
+    ['Steer (stick)', 'left thumb'], ['Throttle', 'slider'], ['Boost', 'drag into the red top of the slider'], ['Fire all guns', 'FIRE'], ['Missile', 'MSL (wait for the lock)'], ['Flares', 'FLARE'], ['Corner map', 'MAP'], ['Gear / flaps', 'GEAR · FLAP'], ['Camera', 'CAM'], ['Pause', 'II'], ['Drop a bomb', 'BOMB'], ['Rockets', 'RKT (fires a pair)'], ['Wingmen', 'WING cycles cover / attack / ground'], ['Bail out', 'BAIL (shows when you are hit)'], ['Rudder', 'hold ◀ RUD / RUD ▶ (turn on in settings)'],
     ['Stick, assisted', 'auto-levels, holds height'], ['Touch-drag aim', 'drag anywhere, plane follows'], ['Tilt', 'tilt to steer · tap the left side to re-centre'],
   ] : [
     ['Aim (mouse mode)', 'move mouse'], ['Fire', 'click · Space'], ['Missile', 'right click · X'], ['Flares', 'F'], ['Pitch', 'W / S'], ['Roll', 'A / D'], ['Rudder', 'Q / E'], ['Throttle', 'Shift / Z · wheel · 1–0'],
-    ['Boost', 'hold Shift at full throttle'], ['Drop a bomb', 'B in the air'], ['Corner map', 'M'], ['Gear', 'G'], ['Flaps', 'V'], ['Brakes', 'B'], ['Camera', 'C'], ['Pause', 'Esc · P'], ['Gamepad', 'RT fire · LB missile · RB flares · LT bomb · Y map'],
+    ['Boost', 'hold Shift at full throttle'], ['Drop a bomb', 'B in the air'], ['Rockets', 'K (a pair)'], ['Wingmen', 'T attack my target · Y cover me · U ground'], ['Bail out', 'J (twice if not hit)'], ['Corner map', 'M'], ['Gear', 'G'], ['Flaps', 'V'], ['Brakes', 'B'], ['Camera', 'C'], ['Pause', 'Esc · P'], ['Gamepad', 'RT fire · LB missile · RB flares · LT bomb · L3 rockets · R3 bail · D-pad ◀ attack ▶ cover · Back ground · Y map'],
   ];
   $('helpGrid').innerHTML = help.map(([a, b]) => `<div><span>${a}</span><span>${b}</span></div>`).join('');
   $('pauseEyebrow').textContent = G.player ? `${SPECS[settings.plane].full} · ${fmtTime(G.time)} airborne · ${G.stats ? G.stats.kills : 0} kills` : 'Settings';
@@ -4870,7 +4997,7 @@ $('btnEnd').addEventListener('click', () => {
   if (NET.on) { if (NET.host) { G.state = 'play'; showScreen(null); NET.w.done = true; finishNet('ended'); } else post({ type: 'leave' }); return; }
   G.state = 'play'; endMission(false);
 });
-$('btnAgain').addEventListener('click', () => { if (NET.on) { post({ type: 'rematch' }); if (!NET.host) { NET.rmSent = true; rematchButton(); } return; } startMission(G.mission ? G.mission.mode : 'sortie'); });
+$('btnAgain').addEventListener('click', () => { if (G.mission && G.mission.camp != null && G.campNext) { CAMP.i = CAMP.sel = Math.min(CAMPAIGN.length - 1, G.mission.camp + 1); CAMP.on = true; } if (NET.on && !(G.mission && G.mission.local)) { post({ type: 'rematch' }); if (!NET.host) { NET.rmSent = true; rematchButton(); } return; } startMission(G.mission ? G.mission.mode : 'sortie'); });
 // The Game Center's shared rematch: the host's tap starts a new round for everyone at the table
 // (same pilots, same room code); anyone else's tap says "I'm in" and the host sees who is ready.
 function rematchButton() {
@@ -4880,12 +5007,12 @@ function rematchButton() {
   else if (rm.mine || NET.rmSent) { b.textContent = `You're in ✓ — waiting for ${rm.host}`; b.disabled = true; }
   else { b.textContent = "Rematch — I'm in"; b.disabled = false; }
 }
-$('btnMenu').addEventListener('click', () => { if (NET.on) { post({ type: 'leave' }); return; } G.state = 'menu'; clearWorldPlanes(); clearGroundWar(); G.player = null; G.mission = null; showScreen('menu'); });
+$('btnMenu').addEventListener('click', () => { const local = G.mission && G.mission.local; if (NET.on && !local) { post({ type: 'leave' }); return; } G.state = 'menu'; clearWorldPlanes(); clearGroundWar(); clearRockets(); clearChutes(); G.player = null; G.mission = null; CAMP.on = false; showScreen('menu'); if (NET.on) netMenu(); else applyMenuMode(); });
 function setPhoneMode(v) {
   settings.phone = v; isTouch = v === 'on' || (v !== 'off' && touchDevice);
   if (isTouch && settings.control === 'mouse') settings.control = 'stick-assist';
   if (!isTouch && (settings.control === 'touch-aim' || settings.control === 'tilt')) settings.control = touchDevice ? 'stick-assist' : 'mouse';
-  saveSettings(); $('optPhone').value = $('setPhone').value = v; $('setControl').value = settings.control;
+  saveSettings(); $('optPhone').value = $('setPhone').value = v; $('setControl').value = settings.control; resizeHUD();
   if (G.state === 'play') $('touch').hidden = !isTouch;
   applyControlMode(); updateHint();
 }
@@ -4896,8 +5023,9 @@ const syncSetting = (key, ids) => ids.forEach(id => $(id).addEventListener('chan
 syncSetting('rudder', ['optRudder', 'setRudder']); $('optRudder').addEventListener('change', applyRudder); $('setRudder').addEventListener('change', applyRudder);
 syncSetting('difficulty', ['optDiff', 'setDiff']); syncSetting('tod', ['optTod']); syncSetting('wingmen', ['optWing']); syncSetting('lock', ['optLock', 'setLock']); syncSetting('map', ['optMap', 'setMap']);
 $('optWaves').addEventListener('change', e => { settings.waves = Number(e.target.value); saveSettings(); });
-$('btnSortie').addEventListener('click', () => { if (settings.control === 'tilt') askTilt(); startMission('sortie'); });
-$('btnQuick').addEventListener('click', () => { if (settings.control === 'tilt') askTilt(); startMission('quick'); });
+const launch = mode => { if (settings.control === 'tilt') askTilt(); CAMP.on = menuCamp(); if (CAMP.on) CAMP.i = CAMP.sel; startMission(mode); };
+$('btnSortie').addEventListener('click', () => launch('sortie'));
+$('btnQuick').addEventListener('click', () => launch('quick'));
 $('btnMenuSettings').addEventListener('click', () => { G.state = 'paused-menu'; fillSettings(); showScreen('pause'); });
 const fsOK = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
 $('btnFull').hidden = !fsOK;
@@ -4919,7 +5047,7 @@ $('btnFull').addEventListener('click', () => {
       b.innerHTML = `<div class="ph"><img src="planes/${k}.jpg" alt="${esc(sp.full)}" width="128" height="64" loading="lazy"><div><b>${esc(sp.full)}</b><small>${esc(blurb)}</small></div></div>`
         + `<span class="spec">Top ${sp.top} mph · ${gunTxt} · ${sp.noMsl ? 0 : DIFF.normal.playerMsl + (sp.mslBonus || 0)} missiles · ${sp.bombs} bomb${sp.bombs === 1 ? '' : 's'}</span>`
         + ['Turn', 'Speed', 'Climb', 'Guns'].map((n, i) => `<div class="stat">${n}<div class="bar"><i style="width:${bars[i]}%"></i></div></div>`).join('')
-        + `<ul class="facts">${(sp.facts || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul>`;
+        + `<ul class="facts">${(sp.facts || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul><span class="lockNote"></span>`;
       b.addEventListener('click', () => pick(k)); box.append(b);
     }
   }
@@ -4953,7 +5081,7 @@ $('btnMissionHere').addEventListener('click', startMissionHere);
 // the pause menu's mission list: online it starts with free play and shows who is flying what
 function fillMissionSelect() {
   const sel = $('setMission'), online = NET.on && NET.opts.mode === 'coop';
-  $('missionHere').hidden = !G.player || !G.player.alive || (NET.on && !online);
+  $('missionHere').hidden = !G.player || !G.player.alive || (NET.on && !online) || (G.mission && G.mission.camp != null);
   const opts = (online ? [['free', 'Free play']] : []).concat(Object.entries(MISSIONS).map(([k, ms]) => {
     const r = online && NM.kinds[k]; return [k, ms.name + (!r ? '' : NM.mine === k ? ' · you are in it' : ` · join ${r.name}`)];
   }));
@@ -4962,11 +5090,46 @@ function fillMissionSelect() {
   $('btnMissionHere').textContent = online ? 'Go' : 'Start it here, now';
   $('missionHere').querySelector('label').firstChild.textContent = online ? 'Mission ' : 'Switch mission ';
 }
+// ---- campaign menu
+function menuCamp() { return settings.mode === 'campaign' && (!NET.on || soloTable()); }
+function lockText(k) { const i = CAMPAIGN.findIndex(c => c.unlock === k); return i < 0 ? '' : `Finish mission ${i + 1}, ${CAMPAIGN[i].title}, to fly it.`; }
+function applyMenuMode(mode) {
+  if (mode) { settings.mode = mode === 'campaign' ? 'campaign' : 'free'; saveSettings(); }
+  const camp = menuCamp();
+  $('modeTabs').hidden = NET.on && !soloTable();
+  for (const b of $('modeTabs').querySelectorAll('button')) b.setAttribute('aria-selected', String((b.dataset.mode === 'campaign') === camp));
+  $('campBox').hidden = !camp;
+  $('missionHead').hidden = $('missionList').hidden = camp || (NET.on && NET.opts.mode !== 'coop');
+  if (!NET.on) for (const id of ['optEnemiesL', 'optWavesL', 'optTodL', 'optWingL']) $(id).hidden = camp || (EMBED && (id === 'optEnemiesL' || id === 'optWavesL'));
+  if (camp) buildCampCards();
+  for (const b of $('planeList').querySelectorAll('.pcard')) { const lk = camp && !planeUnlocked(b.dataset.plane); b.classList.toggle('locked', lk); b.querySelector('.lockNote').textContent = lk ? 'Campaign: ' + lockText(b.dataset.plane) : ''; }
+  if (camp && !planeUnlocked(settings.plane)) pick('kestrel', true);
+  $('btnSortie').textContent = camp ? 'Fly the mission · take off' : NET.on ? 'Take off from runway' : 'Full sortie · take off';
+  $('btnQuick').textContent = camp ? 'Fly the mission · start airborne' : NET.on ? 'Launch airborne' : 'Quick fight · start airborne';
+}
+function buildCampCards() {
+  const box = $('campList'); box.innerHTML = '';
+  if (!campOpen(CAMP.sel)) CAMP.sel = 0;
+  CAMPAIGN.forEach((c, i) => {
+    const b = document.createElement('button'), open = campOpen(i), st = CAMP.save.stars[c.id] || 0;
+    b.className = 'pcard'; b.setAttribute('role', 'radio'); b.dataset.camp = i; b.disabled = !open;
+    const ace = (c.waves || []).flat().some(k => k.startsWith('boss')), wm = c.wingmen ? ` · ${c.wingmen} wingm${c.wingmen > 1 ? 'en' : 'an'}` : '';
+    b.innerHTML = `<b>${i + 1}. ${c.title}</b><small>${MISSIONS[c.kind].name}${ace ? ' · named ace' : ''} · ${TOD_PRESETS[c.tod || 'day'].name}${wm}${c.unlock ? ` · unlocks the ${SPECS[c.unlock].name}` : ''}</small><small>${open ? c.brief : 'Finish the mission before it to open it.'}</small><span class="stars" aria-label="${st} of 3 stars">${starTxt(st)}</span>`;
+    b.addEventListener('click', () => pickCamp(i)); box.append(b);
+  });
+  const n = campStars(), md = medalFor(n), nx = MEDALS.find(([k]) => n < k);
+  $('campInfo').textContent = `${n} of ${CAMPAIGN.length * 3} stars${md ? ' · ' + md : ''}${nx ? ` · ${nx[0] - n} more for ${nx[1]}` : ''}. A star each for finishing the mission, not losing an aircraft, and an A grade. Finishing missions unlocks aircraft for the campaign.`;
+  pickCamp(CAMP.sel);
+}
+function pickCamp(i) { if (!campOpen(i)) return; CAMP.sel = i; for (const b of $('campList').querySelectorAll('.pcard')) b.setAttribute('aria-checked', String(+b.dataset.camp === i)); }
+for (const b of $('modeTabs').querySelectorAll('button')) b.addEventListener('click', () => applyMenuMode(b.dataset.mode));
+// the first mission not yet flown
+CAMP.sel = Math.max(0, CAMPAIGN.findIndex((c, i) => campOpen(i) && !campDone(i))); if (CAMP.sel < 0 || !campOpen(CAMP.sel)) CAMP.sel = 0;
 function pickMission(k) {
   if (NET.on) NM.pick = k = MISSIONS[k] ? k : 'free';
   else { if (!MISSIONS[k]) k = 'dogfight'; settings.mission = k; saveSettings(); }
   for (const b of $('missionList').querySelectorAll('.pcard')) b.setAttribute('aria-checked', b.dataset.mission === k); }
-function pick(k) { if (!SPECS[k]) k = 'kestrel'; settings.plane = k; saveSettings(); for (const b of $('planeList').querySelectorAll('.pcard')) b.setAttribute('aria-checked', b.dataset.plane === k); }
+function pick(k, force) { if (!SPECS[k]) k = 'kestrel'; if (!force && menuCamp() && !planeUnlocked(k)) { $('campInfo').textContent = `The ${SPECS[k].full} is locked in the campaign. ${lockText(k)}`; return; } settings.plane = k; saveSettings(); for (const b of $('planeList').querySelectorAll('.pcard')) b.setAttribute('aria-checked', b.dataset.plane === k); }
 function updateHint() {
   const h = $('ctrlHint');
   if (isTouch) h.innerHTML = 'Phone controls: left thumb steers, slide the throttle on the right, hold <kbd>FIRE</kbd>, tap <kbd>MSL</kbd> when the box turns red, <kbd>FLARE</kbd> when a missile is coming. The assisted stick levels the wings and holds your height when you let go. Switch to touch-drag aim or tilt steering in settings.';
@@ -4982,9 +5145,9 @@ const TOD_PRESETS = {
   day: { name: 'Day', sun: [-0.45, 0.7, 0.55], zen: '#3d6aa3', mid: '#93b4d6', hor: '#c3d3df', sea: '#7a92a3', sunCol: [1, 0.95, 0.85], halo: 1, cirrus: [1, 0.98, 0.95], stars: 0,
     light: [0xfff0d8, 2.9], hemi: [0xd6e4f5, 0x5d5c42, 1.35], water: 1, glint: [1, 0.93, 0.82], cloud: [1, 1, 1], smoke: 1, env: 0x51603c, tracer: 1, tracerFog: 1, lights: false },
   sunset: { name: 'Sunset', sun: [0.86, 0.1, 0.5], zen: '#2c3d6e', mid: '#9a7a86', hor: '#f0a466', sea: '#6c5a5c', sunCol: [1, 0.62, 0.32], halo: 2.6, cirrus: [1, 0.66, 0.5], stars: 0,
-    light: [0xffa860, 2.3], hemi: [0xc8a0a0, 0x45362c, 0.95], water: 0.6, glint: [1, 0.6, 0.3], cloud: [1, 0.78, 0.66], smoke: 0.75, env: 0x4a3d30, tracer: 1.25, tracerFog: 0.8, lights: true },
-  night: { name: 'Night', sun: [-0.35, 0.55, -0.6], zen: '#03060f', mid: '#08101f', hor: '#141e33', sea: '#0a1220', sunCol: [0.75, 0.8, 0.9], halo: 0.12, cirrus: [0.16, 0.18, 0.24], stars: 1,
-    light: [0x9fb4ff, 0.5], hemi: [0x34446a, 0x0c0f14, 0.4], water: 0.18, glint: [0.6, 0.66, 0.8], cloud: [0.2, 0.22, 0.28], smoke: 0.22, env: 0x0d1210, tracer: 1.7, tracerFog: 0.45, lights: true },
+    light: [0xffa860, 2.3], hemi: [0xc8a0a0, 0x45362c, 0.95], water: 0.5, glint: [1, 0.6, 0.3], cloud: [1, 0.78, 0.66], smoke: 0.75, env: 0x4a3d30, tracer: 1.25, tracerFog: 0.8, lights: true },
+  night: { name: 'Night', sun: [-0.35, 0.55, -0.6], zen: '#03060f', mid: '#08101f', hor: '#141e33', sea: '#0a1220', sunCol: [0.75, 0.8, 0.9], halo: 0.12, cirrus: [0.035, 0.04, 0.055], stars: 1,
+    light: [0x9fb4ff, 0.5], hemi: [0x34446a, 0x0c0f14, 0.4], water: 0.05, glint: [0.6, 0.66, 0.8], cloud: [0.05, 0.055, 0.075], smoke: 0.12, env: 0x0d1210, tracer: 1.7, tracerFog: 0.45, lights: true },
 };
 const TOD = { key: 'day', tracer: 1, tracerFog: 1, night: false };
 let lightsFX = null;
@@ -5004,11 +5167,11 @@ function applyTimeOfDay(key) {
   // lit windows, runway edge lights and the lighthouse
   if (P.lights && !lightsFX) {
     lightsFX = new Particles(WINDOWS.length * 2 + 200, true); const r = mulberry32(5);
-    for (const [x, y, z, w] of WINDOWS) { if (r() < 0.35) continue; for (let k = r() < 0.5 ? 1 : 2; k > 0; k--) lightsFX.spawn(x + (r() - 0.5) * w, y + (r() - 0.5) * 2, z + (r() - 0.5) * w, 0, 0, 0, 1e9, 2.6, 0, 1, 0.72 + r() * 0.12, 0.38, 0.85, 0, 0, 3); }
-    for (let zz = -AF.len / 2; zz <= AF.len / 2; zz += 60) for (const sx of [-1, 1]) lightsFX.spawn(AF.x + sx * (AF.wid / 2 + 2), AF.h + 0.8, AF.z + zz, 0, 0, 0, 1e9, 2.2, 0, 1, 0.9, 0.6, 0.95, 0, 0, 3);
-    for (const sx of [-1, 1]) for (let k = -3; k <= 3; k++) { lightsFX.spawn(AF.x + k * 5, AF.h + 0.8, AF.z + sx * (AF.len / 2 + 6), 0, 0, 0, 1e9, 2.4, 0, sx > 0 ? 0.4 : 1, 1, sx > 0 ? 0.5 : 0.4, 1, 0, 0, 3); }
-    if (LIGHTHOUSE) lightsFX.spawn(LIGHTHOUSE.x, LIGHTHOUSE.y, LIGHTHOUSE.z, 0, 0, 0, 1e9, 14, 0, 1, 0.9, 0.6, 1, 0, 0, 3);
-    lightsFX.update(0);
+    for (const [x, y, z, w] of WINDOWS) { if (r() < 0.35) continue; for (let k = r() < 0.5 ? 1 : 2; k > 0; k--) lightsFX.spawn(x + (r() - 0.5) * w, y + (r() - 0.5) * 2, z + (r() - 0.5) * w, 0, 0, 0, 1e9, 7, 0, 1, 0.72 + r() * 0.12, 0.38, 0.85, 0, 0, 3); }
+    for (let zz = -AF.len / 2; zz <= AF.len / 2; zz += 60) for (const sx of [-1, 1]) lightsFX.spawn(AF.x + sx * (AF.wid / 2 + 2), AF.h + 0.8, AF.z + zz, 0, 0, 0, 1e9, 5, 0, 1, 0.9, 0.6, 0.95, 0, 0, 3);
+    for (const sx of [-1, 1]) for (let k = -3; k <= 3; k++) { lightsFX.spawn(AF.x + k * 5, AF.h + 0.8, AF.z + sx * (AF.len / 2 + 6), 0, 0, 0, 1e9, 5, 0, sx > 0 ? 0.4 : 1, 1, sx > 0 ? 0.5 : 0.4, 1, 0, 0, 3); }
+    if (LIGHTHOUSE) lightsFX.spawn(LIGHTHOUSE.x, LIGHTHOUSE.y, LIGHTHOUSE.z, 0, 0, 0, 1e9, 30, 0, 1, 0.9, 0.6, 1, 0, 0, 3);
+    lightsFX.uScale.value = smokeFX.uScale.value; lightsFX.update(0);
   }
   if (lightsFX) lightsFX.points.visible = P.lights;
 }
@@ -5085,7 +5248,7 @@ function clearSearchlights(kind) { GW.lights = (GW.lights || []).filter(s => { i
 // =====================================================================
 //  Main loop
 // =====================================================================
-function onResize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); resizeHUD(); const sc = renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)); if (smokeFX) { smokeFX.uScale.value = sc; fireFX.uScale.value = sc; } }
+function onResize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); resizeHUD(); const sc = renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)); if (smokeFX) { smokeFX.uScale.value = sc; fireFX.uScale.value = sc; } if (lightsFX) lightsFX.uScale.value = sc; }
 addEventListener('resize', onResize);
 const STEP = 1 / 120;
 let acc = 0, last = performance.now();
@@ -5102,7 +5265,9 @@ function simulate(dt) {
   G.time += dt;
   const pl = G.player;
   playerControl(dt);
-  for (const p of G.planes) if (!p.player && !p.remote && p.alive && p.brain) { if (p.bomber) bomberThink(p, dt); else aiThink(p, dt, pickTarget(p, dt)); }
+  for (const p of G.planes) if (!p.player && !p.remote && p.alive && p.brain) { if (p.bomber) bomberThink(p, dt); else if (p.role === 'wingman') wingThink(p, dt); else aiThink(p, dt, pickTarget(p, dt)); }
+  if (pl && pl.rktPair > 0) { pl.rktPair -= dt; if (pl.rktPair <= 0) fireRocket(pl); }
+  if (G.bailArm > 0) G.bailArm -= dt;
   let rem = dt;
   while (rem > 1e-6) { const h = Math.min(STEP, rem); for (const p of G.planes) if (!p.gone && !p.remote) p.physics(h); rem -= h; }
   for (const p of G.planes) if (p.remote && !p.gone) remoteStep(p, dt);
@@ -5115,12 +5280,12 @@ function simulate(dt) {
   // keep player in sector
   if (pl && pl.alive && Math.hypot(pl.pos.x, pl.pos.z) > COMBAT * 1.25 && !pl.onGround) { _dir.set(-pl.pos.x, 0, -pl.pos.z).normalize(); _dir.y = 0.05; steerTo(pl, _dir, pl.inp, 0.8); G.aimYaw = Math.atan2(-_dir.x, -_dir.z); G.aimPitch = 0.05; }
   updateBullets(dt);
-  updateMissiles(dt); updateFlares(dt); updateGroundWar(dt);
+  updateMissiles(dt); updateFlares(dt); updateGroundWar(dt); updateRockets(dt); updateChutes(dt);
   if (pl) { pl.mslCool -= dt; updateLock(pl, dt); }
   // land and stop on the airfield to rearm, refuel and repair
   if (pl && pl.alive) {
     if (!pl.onGround && pl.agl() > 60) pl.flown = true;
-    const ending = G.mission && !NET.on && (G.mission.phase === 'rtb' || G.mission.phase === 'landed');
+    const ending = G.mission && (!NET.on || G.mission.local) && (G.mission.phase === 'rtb' || G.mission.phase === 'landed');
     if (pl.flown && pl.onGround && pl.V < 3 && onAirfield(pl.pos.x, pl.pos.z) && !ending) { G.rearmT = (G.rearmT || 0) + dt; if (G.rearmT > 3) { rearm(pl); pl.flown = false; G.rearmT = 0; } }
     else G.rearmT = 0;
   }
@@ -5208,7 +5373,7 @@ window.__game = { get post() { return !!renderPipeline; }, get fx() { return { s
       resolve(canvas.toDataURL('image/png'));
     }));
   }, G, settings, startMission, SPECS, NET, netSend, finishNet, MSL, LOCK, launchMissile, dropFlares, DIFF, explosion, Sfx };
-window.__gw = GW; window.__gwDrop = p => { while (p.bombs > 0 && dropBomb(p)); }; window.__town = TOWN; window.__simNoPlayer = dt => { updateBullets(dt); updateGroundWar(dt); }; window.__kill = p => destroy(p, 'shot down', G.player, false); window.__net = NET; window.__netMenu = () => netMenu(); window.__nm = NM; window.__handleNet = handleNet; window.__netMissionStart = netMissionStart; window.__blast = blastDamage; window.__damageUnit = damageUnit; window.__netObjective = netObjective;
+window.__gw = GW; window.__gwDrop = p => { while (p.bombs > 0 && dropBomb(p)); }; window.__town = TOWN; window.__simNoPlayer = dt => { updateBullets(dt); updateGroundWar(dt); }; window.__kill = p => destroy(p, 'shot down', G.player, false); window.__net = NET; window.__netMenu = () => netMenu(); window.__nm = NM; window.__handleNet = handleNet; window.__netMissionStart = netMissionStart; window.__x = { waterU, skyU, CAMP, CAMPAIGN, WING, wingCommand, bailOut, firePlayerRockets, fireRocket, ROCKETS, CHUTES, endMission, applyTimeOfDay, TOD, BOSSES, bossHealth, rail: () => RAIL, applyMenuMode, spawnChute, canBail, simulate }; window.__blast = blastDamage; window.__damageUnit = damageUnit; window.__netObjective = netObjective;
 
 (async function boot() {
   resizeHUD();
@@ -5216,7 +5381,7 @@ window.__gw = GW; window.__gwDrop = p => { while (p.bombs > 0 && dropBomb(p)); }
   catch (e) { console.error(e); progress('Could not build the world: ' + e.message, 1); return; }
   progress('Ready', 1);
   await setupPost();
-  onResize(); pick(settings.plane); pickMission(settings.mission); updateHint();
+  onResize(); pick(settings.plane, true); pickMission(settings.mission); applyMenuMode(); updateHint();
   $('optPhone').value = settings.phone; $('optRudder').value = settings.rudder; applyRudder(); $('optEnemies').value = String(settings.enemies); $('optWaves').value = String(settings.waves);
   $('optDiff').value = settings.difficulty; $('optTod').value = settings.tod; $('optWing').value = String(settings.wingmen); $('optLock').value = settings.lock; $('optMap').value = settings.map;
   if (EMBED) { $('optEnemiesL').hidden = $('optWavesL').hidden = true; }

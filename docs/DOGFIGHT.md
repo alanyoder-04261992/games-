@@ -30,14 +30,50 @@ Rendering uses ACES tone mapping. The aircraft have metallic and glossy material
 
 The **High** graphics setting adds bloom, which makes the sun, tracers, fires and explosions glow. It also turns on 4× multisampling, finer terrain and textures, and more trees. Phones default to Medium.
 
+## Campaign (single player)
+
+The menu has two tabs: **Campaign** and **Free flight & missions**. The campaign is single player. In the Game Center it shows when nobody else is sitting at your table; with friends there, everyone uses Free flight. It is ten missions in a row:
+
+| # | Mission | What | Time | Unlocks |
+|---|---|---|---|---|
+| 1 | First Patrol | Dogfight, two rookies | Day | Swift |
+| 2 | Two's Company | Dogfight, two wingmen with you | Day | Ranger |
+| 3 | The Coast Road | Ground attack | Day | Thunder |
+| 4 | Iron Rails | Train busting | Day | Brute |
+| 5 | Dusk Raid | Bomber intercept, two formations | Sunset | |
+| 6 | The Black Heron | Dogfight with a named ace | Sunset | Lancer |
+| 7 | Ship in the Dark | Naval strike under searchlights | Night | |
+| 8 | Night Train | Train busting with searchlights | Night | Talon |
+| 9 | Searchlights | Bomber intercept, three formations | Night | Striker |
+| 10 | The Last Duel | Dogfight, ending with the Red Wasp | Day | |
+
+- **Unlocking.** Each mission opens when the one before is finished.
+- **Stars.** A mission earns up to three: one for finishing it, one for not losing an aircraft (being shot down or bailing out), one for an A grade. The best result is kept in this browser (`localStorage` key `dogfight.campaign`).
+- **Medals** for the star total: Bronze wings (8), Silver wings (16), Gold wings (24), Ace of the coast (30).
+- **Aircraft.** The Kestrel and Falke are open from the start. Missions unlock the rest *for the campaign*; Free flight always has every aircraft.
+- **Debrief.** It shows the stars, any unlock or new medal, and a **Next mission** button.
+
+## Named aces
+
+The last wave of a single-player dogfight brings a named ace instead of an ordinary one: Viktor Kessel, *the Black Heron* (black, yellow trim); Ilse Brandt, *the Red Wasp* (red); or with jets, Arkady Volk, *the Grey Ghost* (grey). Each flies a painted aircraft with nose art and a checkered spinner, has a health bar at the top of the HUD, and takes about 1.8 times the damage of a normal aircraft.
+
+- **Hard to stay behind.** An ace notices you on its tail quickly and scissors, reversing its turn every second or so.
+- **Last stand.** Badly hit, it stops dodging, goes to full power and fires every missile it has.
+- **Reward.** Shooting one down is worth +1000.
+
 ## Single player options
 
 The game's menu has:
 
+- **Time of day**: Day, Sunset or Night. At sunset the sun sits low over the sea. At night there are stars and a moon; the town's windows, the runway lights and the lighthouse are lit; tracers glow brighter; and **searchlights** sweep the sky round the targets (the battleship carries two). A searchlight that catches you locks on until you turn hard out of it, and while you are lit the flak is far more accurate. In the dark, unlit, it is far less accurate. Online, it is a table option.
+- **Wingmen**: none, one or two (Mack and Dutch). They cover you by default. **T** sends them after your target (the locked one, or the nearest ahead). **Y** brings them back to cover you; they form up on your wings and go after anything that comes near you. **U** sends them in on the ground target: they dive with guns, rockets and bombs, pull out and come round again. On a phone or iPad, **WING** steps through the orders that make sense at that moment.
+- **Rockets**: every fighter carries rockets: six on most fighters, ten on the Thunder, twelve on the jets, nineteen on the Striker, none on the bomber. **K**, **RKT** or **L3** fires a pair. They burn for a second, then fall like shells, and burst on aircraft, vehicles, wagons, the battleship or the ground (about 14 m blast). Land to rearm.
+- **Bailing out**: when you are shot down and the wreck is still falling, the HUD flashes **BAIL OUT**. Press **J**, **BAIL** or **R3** to jump. The same key works from a damaged aircraft at any time (twice from a healthy one). You fall clear, open the parachute a few hundred metres up and float down; a car or a boat picks you up and you are back in the air in a fresh aircraft, −100 points, and the mission goes on. If the wreck hits first, the mission is over. Half the time you are thrown clear when your aircraft explodes. Computer pilots often bail out too.
 - **Mission**. The pause menu can **switch mission mid-flight**: the old fight is cleared and the new one starts round you. Online in co-op, missions are shared (see Multiplayer).
   - *Dogfight*: waves of enemy fighters come in off the sea; shoot them all down, then land.
   - *Naval strike*: a 190 m battleship steams up and down the coast about 5 km out. Its ten light AA mounts throw up flak bursts timed to where you will be and streams of tracer when you come close, its turrets turn to follow you, and its main battery shells the coast now and then. Bomb it (two to four direct hits, more for near misses) until it rolls over and sinks, then land. Fighters scramble to defend it.
   - *Ground attack*: a convoy of tanks and trucks drives up a track to a fuel depot (four fuel tanks and two supply sheds) guarded by three flak guns. Bomb and strafe them: trucks fall to guns, tanks need cannon or bombs, and fuel tanks go up in a fireball. Flak guns are optional targets. Fighters scramble to defend it.
+  - *Train busting*: an ammunition train (locomotive, tender, two flak wagons, six ammunition wagons) runs up the river valley on the north bank to a depot by the harbour, about 10 km. An ammunition wagon that blows up can set off the cars next to it, so the train goes up car by car. Destroy every ammunition wagon before it reaches the depot; knocking out the locomotive stops the train.
   - *Bomber intercept*: formations of twin-engine bombers with fighter cover fly for the harbour town. Their top and tail gunners shoot back. If three bombers get through and drop on the town, the mission fails. The *Waves* option sets how many formations come (one to three).
   - **Bombs**: every aircraft carries bombs, in every mission (two to four on fighters, eight on the attack jet, ten in the bomber). Drop with **B** in the air (B is still the brake on the ground), **BOMB** on touch, or **LT** on a gamepad. A bomb sight on the HUD shows where a bomb released now would land and how long it would fall. Land on the airfield to rearm.
   - Targets show as red brackets on screen and squares on the radar; a gold marker (or an arrow at the edge of the screen) points to the objective.
@@ -130,6 +166,11 @@ A co-op round starts in **free play**: no raiders. The menu shows a *Free play* 
 | Gear / flaps | **GEAR**, **FLAP** |
 | Camera / pause | **CAM**, **II** |
 | Rudder (optional) | hold **◀ RUD** or **RUD ▶**; turn on *Rudder buttons* in the menu or pause menu |
+| Bomb / rockets | **BOMB**, **RKT** (they appear while you carry them) |
+| Wingmen | **WING** (cover → attack → ground) |
+| Bail out | **BAIL** (appears when you are badly hit or going down) |
+
+**iPad.** iPadOS Safari reports itself as a Mac, so the game also counts a Mac with a touch screen as an iPad and turns the touch controls on (even with a keyboard attached; switch *Phone mode* off to use the keyboard and trackpad instead). On a tablet the HUD is drawn about 20% larger, and the stick and buttons are bigger and spread out for thumbs. Pinch and double-tap zoom are blocked over the game. *Add to Home Screen* opens it full screen.
 
 The control style is set in the pause menu:
 
@@ -151,10 +192,13 @@ Landscape works best, and the menu has a Full screen button on Android.
 | Gear / flaps / brakes | G / V / B |
 | Camera | C |
 | Pause and settings | Esc or P |
+| Rockets (a pair) | K |
+| Wingmen | T attack my target · Y cover me · U hit the ground target |
+| Bail out | J (twice from an aircraft that isn't damaged) |
 
 ### Gamepad
 
-Left stick pitches and rolls, the right stick's X axis is rudder and its Y axis is throttle, RT fires, LT brakes, A is gear, B is camera, X is flaps, and Start pauses.
+Left stick pitches and rolls, the right stick's X axis is rudder and its Y axis is throttle, RT fires, LT brakes (and drops bombs in the air), A is gear, B is camera, X is flaps, LB fires a missile, RB drops flares, Y switches the map, L3 fires rockets, R3 bails out, D-pad left and right send your wingmen after your target or back to cover you, Back sends them at the ground target, and Start pauses.
 
 ## Flight model
 
