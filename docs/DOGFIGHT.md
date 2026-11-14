@@ -152,7 +152,7 @@ A co-op round starts in **free play**: no raiders. The menu shows a *Free play* 
 
 - **World.** About 30 km of procedural terrain. It has hills and ridges inland, chalk cliffs and beaches along the coast, a river with its estuary, a mountain lake, forests, a patchwork of fields with hedges, farms with barns and sheds, a harbour town with a church and fishing boats, and a lighthouse. The sea uses a wave shader, the sky has a sun, and there are sprite cumulus clouds you can fly through.
 - **Airfield.** A marked runway (36/18), apron, three hangars, a control tower, a windsock, fuel tanks and two parked fighters.
-- **Nine aircraft.** Five 1940s fighters, a twin-engine bomber, two modern jets and an attack jet.
+- **Ten aircraft.** Six 1940s fighters (one a two-seater with a rear gunner), a twin-engine bomber, two modern jets and an attack jet.
   - *Kestrel Mk IX*: elliptical wing, low wing loading, turns tightly, two cannon and four MGs.
   - *Falke G-6*: small wing, faster with a better climb, a nose cannon and two cowl MGs.
   - *Ranger D-20*: bare-metal long-range escort with a laminar wing and belly radiator; fast, six heavy machine guns.
