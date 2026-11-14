@@ -431,7 +431,7 @@ function playSheet(game, mode) {
     h(
       'div.gc-play-sheet',
       { style: { '--accent': game.accent } },
-      h('div.gc-play-head', h('span.gc-play-art', { html: game.tile }), h('div', h('h2', game.name), h('small', solo ? 'Single player · against the computer' : canShare ? 'Multiplayer · online or on this device' : 'Multiplayer · friends join with a code'))),
+      h('div.gc-play-head', h('span.gc-play-art', { html: game.tile }), h('div', h('h2', game.name), h('small', solo ? 'Single player · against the computer' : canShare ? 'Multiplayer · online or on this device' : 'Multiplayer · friends join with a code'), h('button.gc-link.gc-play-rules', { type: 'button', onclick: () => rulesSheet(game) }, 'How to play'))),
       whereField,
       namesBox,
       ...fields,
@@ -501,6 +501,7 @@ function showSetup(game) {
           'div.gc-setup-body',
           h('h1', game.name, game.version ? h('span.gc-ver.inline', `v${game.version}`) : null),
           h('p.lead', game.description),
+          h('button.btn.text.gc-rulebook-link', { onclick: () => rulesSheet(game) }, h('span', { html: ICON.help }), 'Rule book — how to play, with pictures'),
           ...fields,
           h(
             'div.gc-actions',
@@ -1262,21 +1263,34 @@ function seatManager(room, redraw) {
   );
 }
 
+// The game's rule book (public/games/<id>/rules.html, written to docs/RULEBOOK.md), full screen:
+// a contents bar that jumps to each section, illustrations, and a close button that stays put.
 async function rulesSheet(game, online = false) {
-  let html = '<p>No rules page yet.</p>';
+  let html = '<p>No rule book yet.</p>';
   try {
     const res = await fetch(new URL(`../games/${game.id}/rules.html`, import.meta.url));
     if (res.ok) html = await res.text();
   } catch {
-    /* offline */
+    /* offline and not cached */
   }
+  const doc = h('div.gc-doc.rules.rb-doc', { html });
+  const sections = [...doc.querySelectorAll('h2')];
+  sections.forEach((h2, i) => (h2.id ||= `rb-${i}`));
+  const toc = sections.length > 2
+    ? h(
+        'nav.rb-toc',
+        { 'aria-label': 'Sections' },
+        sections.map((h2) => h('button.rb-toc-btn', { type: 'button', onclick: () => h2.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, h2.dataset.short || h2.textContent)),
+      )
+    : null;
   const sheet = modal(
     h(
-      'div',
-      h('div.gc-doc.rules', { html }),
-      h('div.gc-actions', h('button.btn.ghost', { onclick: () => (sheet.close(), showGuide()) }, online ? 'Online play help' : 'How to play online with friends')),
+      'div.rb-wrap',
+      h('div.rb-bar', h('span.rb-bar-art', { html: game.tile }), h('div.rb-bar-title', h('strong', game.name), h('small', 'Rule book')), toc),
+      doc,
+      h('div.gc-actions.rb-end', h('button.btn.gold', { onclick: () => sheet.close() }, 'Back to the game'), h('button.btn.ghost', { onclick: () => (sheet.close(), showGuide()) }, online ? 'Online play help' : 'How to play online with friends')),
     ),
-    { cls: 'wide' },
+    { cls: 'rulebook' },
   );
 }
 

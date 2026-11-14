@@ -66,7 +66,7 @@ Medium and Low skip the post chain entirely: each material tone-maps itself and 
 
 ## Phone layout
 
-On a phone the map sits at the top centre and the speedometer at the bottom centre, between the thumbs. On short screens (under 430 px tall, typical in landscape with the browser bars and the Game Center header showing), DRIFT moves beside BRAKE and the buttons and readouts shrink a size. Under 300 px they shrink again and the best-lap line is hidden.
+On a phone the map sits at the top centre and the speedometer at the bottom centre, between the thumbs. On short screens (under 430 px tall, typical in landscape with the browser bars and the Game Center header showing), TURBO moves beside BRAKE and the buttons and readouts shrink a size. Under 300 px they shrink again and the best-lap line is hidden.
 
 ## Playing online
 

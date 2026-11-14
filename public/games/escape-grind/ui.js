@@ -408,8 +408,8 @@ export function mount(ctx) {
       }
       case 'pick':
         kids.push(
-          h('div.eg-prompt', h('strong', 'Opportunity!'), h('span', `Small deals cost $5,000 or less. Big deals need more cash, but pay more. You have ${money(p.cash)}.`)),
-          h('div.eg-actions', btn('Small Deal', () => act(L('pick', (m) => m.size === 'small')), { primary: p.cash < 12000, sub: 'up to $5,000' }), btn('Big Deal', () => act(L('pick', (m) => m.size === 'big')), { primary: p.cash >= 12000, sub: '$6,000 and up' })),
+          h('div.eg-prompt', h('strong', 'Opportunity!'), h('span', `Small deals need $7,000 or less down. Big deals need $10,000 or more, but pay more. You have ${money(p.cash)}.`)),
+          h('div.eg-actions', btn('Small Deal', () => act(L('pick', (m) => m.size === 'small')), { primary: p.cash < 12000, sub: 'up to $7,000' }), btn('Big Deal', () => act(L('pick', (m) => m.size === 'big')), { primary: p.cash >= 12000, sub: '$10,000 and up' })),
         );
         break;
       case 'deal': {
@@ -535,10 +535,10 @@ export function mount(ctx) {
       return btn(`Pay off ${d.label}`, () => act(m), { sub: `${money(d.balance)} · saves ${money(p.exp[m.key])}/mo`, cls: 'wide' });
     });
     const owed = Object.entries(p.debts).filter(([k, d]) => d && !legal.some((m) => m.type === 'payoff' && m.key === k));
-    const repay = legal.filter((m) => m.type === 'repay').map((m) => btn(m.amount === p.bank ? `Repay all ${money(m.amount)}` : `Repay ${money(m.amount)}`, () => act(m), { sub: `saves ${money(m.amount * 0.1)}/mo` }));
-    const borrow = [1000, 5000, 10000, 25000].map((a) => btn(`Borrow ${money(a)}`, () => act({ type: 'borrow', amount: a }), { sub: `costs ${money(a * 0.1)}/mo` }));
+    const repay = legal.filter((m) => m.type === 'repay').map((m) => btn(m.amount === p.bank ? `Repay all ${money(m.amount)}` : `Repay ${money(m.amount)}`, () => act(m), { sub: `saves ${money(m.amount * (p.loanRate ?? 0.1))}/mo` }));
+    const borrow = [1000, 5000, 10000, 25000].map((a) => btn(`Borrow ${money(a)}`, () => act({ type: 'borrow', amount: a }), { sub: `costs ${money(a * (p.loanRate ?? 0.1))}/mo` }));
     bar.replaceChildren(
-      h('div.eg-prompt', h('strong', 'Loans & payoffs'), h('span', `Cash ${money(p.cash)} · bank loan ${money(p.bank)} (10% a month). Paying off debt raises your cash flow.`)),
+      h('div.eg-prompt', h('strong', 'Loans & payoffs'), h('span', `Cash ${money(p.cash)} · bank loan ${money(p.bank)} (${Math.round((p.loanRate ?? 0.1) * 100)}% a month). Paying off debt raises your cash flow.`)),
       h('div.eg-actions.col', payoffs, owed.length ? h('small.eg-note', `Not enough cash yet to pay off: ${owed.map(([, d]) => `${d.label} ${money(d.balance)}`).join(', ')}`) : null),
       h('div.eg-actions', repay, borrow, btn('Done', () => ((panelMode = null), renderBar(), focusFirst()), { back: true, primary: true })),
     );

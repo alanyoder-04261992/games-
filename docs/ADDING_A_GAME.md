@@ -23,7 +23,7 @@ public/games/my-game/
   ui.js        the screen (required)
   my-game.css  styles (optional)
   scene.js     a 3D board (optional, see "3D games" below)
-  rules.html   shown by the ? button at the table (optional)
+  rules.html   the illustrated rule book (required, see docs/RULEBOOK.md)
 ```
 
 ## 2. Write the manifest (`index.js`)
@@ -226,6 +226,13 @@ settings: () => [{ label: '3D board', value: want3d, set: (v) => (ctx.prefs.set(
 - If headless Chromium's WebGPU canvas stays blank (the device is lost at once), add
   `--use-vulkan=swiftshader` to the flags above. Software rendering runs at a few frames a
   second, so give animations time before taking screenshots.
+
+## Rule book
+
+Every game needs `rules.html`: an illustrated rule book players open from the **?** button,
+the Options page and the play pop-up. Write it to [RULEBOOK.md](RULEBOOK.md) before the game
+is merged, and keep it in step with the game: each time you bump `version`, re-read the rule
+book against the code, fix what changed, and set its `data-checked` to the new version.
 
 ## 4. Register it
 
