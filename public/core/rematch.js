@@ -19,7 +19,7 @@ export function rematchControl(client, { big = false, label } = {}) {
   const paint = () => {
     const lobby = client.lobby;
     const players = lobby?.players || [];
-    const humans = players.filter((p) => p.seat != null);
+    const humans = players.filter((p) => p.seat != null && !p.device); // people sharing a device don't vote separately
     const solo = !lobby?.online || humans.length <= 1;
     const ready = new Set(lobby?.rematch || []);
     const names = humans.filter((p) => ready.has(p.id)).map((p) => p.name);

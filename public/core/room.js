@@ -246,6 +246,76 @@ export class HostRoom extends Emitter {
     return i < 0 ? null : i;
   }
 
+  // ---------- several people on one device (pass and play) ----------
+  // Extra people at a device are "companions": players with `device` set to the id of the
+  // device's own player. They have no connection of their own; the device shows and plays
+  // whichever of its seats has to act (see #focus), and is online when its player is.
+  #device(p) {
+    return p?.device ? this.players.get(p.device) : p;
+  }
+
+  #online(p) {
+    return !!this.#device(p)?.connected;
+  }
+
+  // every seat played from this device (its own player's and its companions')
+  deviceSeats(deviceId) {
+    const out = [];
+    this.seats.forEach((s, i) => {
+      if (s.kind !== 'human') return;
+      const p = this.players.get(s.playerId);
+      if (s.playerId === deviceId || p?.device === deviceId) out.push(i);
+    });
+    return out;
+  }
+
+  // The seat a device shows right now: one of its seats that has to act (staying on the same
+  // one while it still has moves), otherwise the seat it showed last.
+  #focus(p) {
+    const seats = this.deviceSeats(p.id);
+    if (!seats.length) return null;
+    const actors = this.state && !this.game.engine.isOver(this.state) ? this.game.engine.actors(this.state) : [];
+    const acting = seats.filter((i) => actors.includes(i));
+    if (acting.includes(p.focus)) return p.focus;
+    if (acting.length) return (p.focus = acting[0]);
+    if (seats.includes(p.focus)) return p.focus;
+    return (p.focus = seats[0]);
+  }
+
+  // Seat another person at this device. Before the game: an open seat, else a computer's seat.
+  addLocalPlayer(deviceId, name, seat = null) {
+    if (!this.game.sameDevice || this.started) return null;
+    const device = this.players.get(deviceId);
+    if (!device || device.device) return null;
+    if (seat == null || this.seats[seat]?.kind === 'human') {
+      seat = this.seats.findIndex((x) => x.kind === 'open');
+      if (seat < 0) seat = this.seats.findIndex((x) => x.kind === 'bot');
+    }
+    if (seat < 0 || !this.seats[seat] || this.seats[seat].kind === 'human') return null;
+    const taken = new Set([...this.players.values()].map((x) => x.hue));
+    const hue = [20, 140, 270, 330, 190, 50, 100, 230].find((x) => !taken.has(x)) ?? Math.floor(Math.random() * 360);
+    const p = { id: uid(8), device: deviceId, name: String(name || 'Player').trim().slice(0, 20) || 'Player', hue, autopilot: false };
+    this.players.set(p.id, p);
+    this.seats[seat] = { kind: 'human', playerId: p.id };
+    this.#system(`${p.name} is playing on ${device.name}'s device`);
+    this.#broadcastLobby();
+    return p.id;
+  }
+
+  removeLocalPlayer(id) {
+    const p = this.players.get(id);
+    if (!p?.device) return;
+    const seat = this.seatOf(id);
+    if (seat != null) this.seats[seat] = this.started ? this.#newBot(seat) : this.online ? { kind: 'open' } : this.#newBot(seat);
+    this.players.delete(id);
+    this.#broadcastLobby();
+    if (this.started) {
+      this.#broadcastState(this.lastEvent);
+      this.schedule();
+    }
+    this.#persist();
+  }
+
   seatInfo() {
     return this.seats.map((s, i) => {
       if (s.kind === 'human') {
@@ -256,9 +326,10 @@ export class HostRoom extends Emitter {
           playerId: s.playerId,
           name: p?.name || 'Player',
           hue: p?.hue ?? 200,
-          connected: !!p?.connected,
+          connected: this.#online(p),
           isHost: s.playerId === 'host',
           autopilot: !!p?.autopilot,
+          device: p?.device || null, // set for someone playing on another player's device
         };
       }
       if (s.kind === 'bot') return { seat: i, kind: 'bot', name: s.name, hue: s.hue, level: s.level, connected: true };
@@ -281,15 +352,16 @@ export class HostRoom extends Emitter {
           id: p.id,
           name: p.name,
           hue: p.hue,
-          connected: !!p.connected,
+          connected: this.#online(p),
           isHost: !!p.isHost,
+          device: p.device || null,
           seat: this.seatOf(p.id),
           voice: p.voice || null,
           hostMuted: !!p.hostMuted,
         })),
       started: this.started,
       // ids of players ready for a rematch (only after a game has ended)
-      rematch: [...this.rematchVotes].filter((id) => this.players.has(id) && !this.players.get(id).kicked && this.seatOf(id) != null),
+      rematch: [...this.rematchVotes].filter((id) => this.players.has(id) && !this.players.get(id).kicked && this.deviceSeats(id).length),
     };
   }
 
@@ -355,6 +427,8 @@ export class HostRoom extends Emitter {
   kick(playerId) {
     const p = this.players.get(playerId);
     if (!p || p.isHost) return;
+    if (p.device) return this.removeLocalPlayer(playerId);
+    for (const q of [...this.players.values()]) if (q.device === playerId) this.removeLocalPlayer(q.id);
     p.kicked = true;
     this.#send(p, { t: 'kicked' });
     const seat = this.seatOf(playerId);
@@ -402,7 +476,7 @@ export class HostRoom extends Emitter {
   #rematchVote(p) {
     if (!this.started || !this.state || !this.game.engine.isOver(this.state)) return;
     if (p.isHost) return this.rematch();
-    if (this.seatOf(p.id) == null || this.rematchVotes.has(p.id)) return; // watchers don't get a say
+    if (p.device || !this.deviceSeats(p.id).length || this.rematchVotes.has(p.id)) return; // watchers don't get a say
     this.rematchVotes.add(p.id);
     this.#system(`${p.name} is in for a rematch`);
     this.#send(this.players.get('host'), { t: 'toast', text: `${p.name} wants a rematch` });
@@ -417,7 +491,9 @@ export class HostRoom extends Emitter {
         this.#send(p, { t: 'pong' });
         break;
       case 'action': {
-        const seat = this.seatOf(playerId);
+        // a device plays for any of its seats (pass and play); default to the one it shows
+        const mine = this.deviceSeats(playerId);
+        const seat = mine.includes(msg.seat) ? msg.seat : this.#focus(p);
         if (seat == null || !this.started) return;
         if (this.claim != null) return; // the round is being played out automatically
         const err = this.game.engine.check
@@ -470,6 +546,14 @@ export class HostRoom extends Emitter {
       case 'rematch':
         this.#rematchVote(p);
         break;
+      case 'local-add':
+        this.addLocalPlayer(p.id, msg.name, msg.seat ?? null);
+        break;
+      case 'local-remove': {
+        const q = this.players.get(msg.id);
+        if (q?.device === p.id && !this.started) this.removeLocalPlayer(q.id);
+        break;
+      }
       case 'rt': {
         // Real-time channel for action games (see docs/ADDING_A_GAME.md). Relayed to everyone
         // else at the table as-is: no rules engine, no saving, no seat checks. Games that use
@@ -503,8 +587,8 @@ export class HostRoom extends Emitter {
   }
 
   #sendState(p, event) {
-    if (!this.state) return;
-    const seat = this.seatOf(p.id);
+    if (!this.state || p.device) return; // companions see their device's screen
+    const seat = this.#focus(p);
     const engine = this.game.engine;
     const view = engine.view(this.state, seat);
     let ev = null;
@@ -564,7 +648,7 @@ export class HostRoom extends Emitter {
       else if (s.kind === 'human') {
         const p = this.players.get(s.playerId);
         if (p?.autopilot) delay = pace(seat, this.settings.botLevel);
-        else if (!p?.connected) delay = 9000; // give a dropped player a moment, then the computer covers
+        else if (!this.#online(p)) delay = 9000; // give a dropped player a moment, then the computer covers
       }
       if (delay == null) continue;
       delay *= this.claim != null ? Math.min(speed, 1) : speed;
@@ -608,7 +692,7 @@ export class HostRoom extends Emitter {
       options: this.options,
       settings: this.settings,
       seats: this.seats,
-      players: [...this.players.values()].map(({ id, name, hue, token, isHost, kicked }) => ({ id, name, hue, token, isHost, kicked })),
+      players: [...this.players.values()].map(({ id, name, hue, token, isHost, kicked, device }) => ({ id, name, hue, token, isHost, kicked, device })),
       state: this.state,
       seq: this.seq,
       chat: this.chatLog.slice(-30),
@@ -661,7 +745,7 @@ class LocalClient extends Emitter {
     this.room.handle('host', msg);
   }
   act(action) {
-    this.send({ t: 'action', action });
+    this.send({ t: 'action', action, seat: this.lastState?.seat }); // the seat on screen (pass and play)
   }
   chat(text, emote = false) {
     this.send({ t: 'chat', text, emote });
@@ -818,7 +902,7 @@ export class GuestClient extends Emitter {
     }
   }
   act(action) {
-    this.send({ t: 'action', action });
+    this.send({ t: 'action', action, seat: this.lastState?.seat }); // the seat on screen (pass and play)
   }
   chat(text, emote = false) {
     this.send({ t: 'chat', text, emote });

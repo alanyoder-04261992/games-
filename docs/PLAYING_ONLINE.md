@@ -27,6 +27,18 @@ home page, **Step-by-step guide** in the lobby, the **?** button at the table, o
   nobody has to rejoin. The host taps **Rematch — same players** to start. Anyone else taps
   **Rematch** to say they're in; the host's button then shows who's ready.
 
+## Several people on one device (pass and play)
+Most turn-based games let people share a phone or tablet:
+- **Everyone in the same room, one device:** tap **Multiplayer**, choose **This device (pass
+  and play)**, and type a name for each person. Empty seats get computer players. No
+  internet needed.
+- **Some online, some sharing:** in the online lobby, tap **Add a player on this device**.
+  That person gets their own seat and plays on your screen. Friends can do the same on theirs.
+- The device shows whoever has to move next. In games with hidden hands (cards, dice, fleets)
+  a **Pass to Sam** screen covers everything until Sam taps, so nobody sees another hand.
+- Not in real-time games (Spit & Speed, Coastal Dogfight, Ridgeline Rally), where everyone
+  plays at once.
+
 ## Voice chat
 - Tap the **microphone** at the top of the table (or **Join voice** in the lobby) and allow
   the microphone. Everyone in voice hears everyone — players and watchers, as many as are at

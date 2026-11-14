@@ -332,7 +332,7 @@ function showAddGame() {
 // ---------------------------------------------------------------------
 // The game's table options, computer skill and speed, remembered per game. Used by the game's
 // Options page and by the pop-up that opens from a tile's Single player / Multiplayer buttons.
-function setupForm(game) {
+function setupForm(game, { onChange = () => {} } = {}) {
   const saved = prefs.get(`setup.${game.id}`) || {};
   const options = {};
   for (const o of game.options || []) options[o.key] = saved.options?.[o.key] ?? o.default;
@@ -355,6 +355,7 @@ function setupForm(game) {
                 persist();
                 [...e.currentTarget.parentNode.children].forEach((b) => b.classList.remove('on'));
                 e.currentTarget.classList.add('on');
+                onChange();
               },
             },
             c.label,
@@ -374,15 +375,65 @@ function setupForm(game) {
 
 // Tapping Single player or Multiplayer on a tile: check the game's settings first, then Continue.
 function playSheet(game, mode) {
-  const { fields, options, settings } = setupForm(game);
   const solo = mode === 'solo';
+  // Multiplayer in games that allow it: everyone on their own device, or pass this one around
+  const canShare = !solo && !!game.sameDevice;
+  let where = canShare ? prefs.get(`where.${game.id}`) || 'online' : 'online';
+  const names = (prefs.get('localNames') || []).slice();
+  const namesBox = h('div.gc-local');
+  const { fields, options, settings } = setupForm(game, { onChange: () => drawNames() });
+  const seatTotal = () => {
+    const n = game.seatCount ? Number(game.seatCount(options)) : game.seats;
+    return Number.isInteger(n) && n > 0 ? n : game.seats;
+  };
+  function drawNames() {
+    if (where !== 'here') return namesBox.replaceChildren();
+    const n = seatTotal();
+    namesBox.replaceChildren(
+      h('span.gc-local-title', 'Players on this device'),
+      h('div.gc-local-row', avatar(displayName(), profile().hue), h('div.gc-local-you', displayName(), h('small', ' (you)'))),
+      ...Array.from({ length: n - 1 }, (_, k) =>
+        h(
+          'div.gc-local-row',
+          avatar(names[k] || '?', [140, 270, 330, 190, 50, 100, 230][k % 7], { bot: !names[k] }),
+          h('input.gc-input.gc-local-name', {
+            value: names[k] || '',
+            placeholder: 'Computer player',
+            maxlength: 20,
+            autocomplete: 'off',
+            'aria-label': `Player ${k + 2} name (leave empty for a computer player)`,
+            oninput: (e) => {
+              names[k] = e.target.value.trim();
+              prefs.set('localNames', names);
+              const av = avatar(names[k] || '?', [140, 270, 330, 190, 50, 100, 230][k % 7], { bot: !names[k] });
+              e.target.previousElementSibling.replaceWith(av);
+            },
+          }),
+        ),
+      ),
+      h('p.gc-play-note', game.sameDevice === 'private' ? 'Type a name for each person playing here; empty seats get computer players. Between turns the screen hides everyone\u2019s hand until the next player taps.' : 'Type a name for each person playing here; empty seats get computer players. Hand the device to whoever\u2019s turn it is.'),
+    );
+  }
+  const whereField = canShare
+    ? seg2('Where is everyone?', () => where, [
+        { value: 'online', label: 'Own phones (online)' },
+        { value: 'here', label: 'This device (pass and play)' },
+      ], (v) => {
+        where = v;
+        prefs.set(`where.${game.id}`, v);
+        drawNames();
+      })
+    : null;
   const save = solo ? store.get(`gc.save.${game.id}`) : null;
   const hasSave = save && !save.over;
+  drawNames();
   const sheet = modal(
     h(
       'div.gc-play-sheet',
       { style: { '--accent': game.accent } },
-      h('div.gc-play-head', h('span.gc-play-art', { html: game.tile }), h('div', h('h2', game.name), h('small', solo ? 'Single player · against the computer' : 'Multiplayer · friends join with a code'))),
+      h('div.gc-play-head', h('span.gc-play-art', { html: game.tile }), h('div', h('h2', game.name), h('small', solo ? 'Single player · against the computer' : canShare ? 'Multiplayer · online or on this device' : 'Multiplayer · friends join with a code'))),
+      whereField,
+      namesBox,
       ...fields,
       hasSave ? h('p.gc-play-note', `Continue starts a new game and replaces your saved one from ${ago(save.savedAt)}.`) : null,
       h(
@@ -392,7 +443,9 @@ function playSheet(game, mode) {
           {
             onclick: () => {
               sheet.close();
-              solo ? startSolo(game, options, settings, { replace: true }) : hostOnline(game, options, settings);
+              if (solo) startSolo(game, options, settings, { replace: true });
+              else if (where === 'here') startLocal(game, options, settings, names.slice(0, seatTotal() - 1));
+              else hostOnline(game, options, settings);
             },
           },
           'Continue',
@@ -405,6 +458,31 @@ function playSheet(game, mode) {
     { cls: 'play' },
   );
   setTimeout(() => sheet.el.querySelector('.btn.gold')?.focus({ preventScroll: true }), 60);
+}
+
+// a segmented choice that updates itself in place
+function seg2(label, value, choices, onchange) {
+  return h(
+    'label.gc-field',
+    h('span', label),
+    h(
+      'div.gc-seg',
+      choices.map((c) =>
+        h(
+          'button.gc-seg-btn' + (c.value === value() ? '.on' : ''),
+          {
+            type: 'button',
+            onclick: (e) => {
+              onchange(c.value);
+              [...e.currentTarget.parentNode.children].forEach((b) => b.classList.remove('on'));
+              e.currentTarget.classList.add('on');
+            },
+          },
+          c.label,
+        ),
+      ),
+    ),
+  );
 }
 
 function showSetup(game) {
@@ -454,6 +532,19 @@ function startSolo(game, options, settings, { replace = false } = {}) {
   if (existing && !existing.over && !replace && !confirm(`Start a new ${game.name} game? Your saved game will be replaced.`)) return;
   leaveCurrent(false);
   const room = new HostRoom({ game, profile: { ...profile(), name: displayName() }, online: false, options, settings });
+  current = { game, room, client: room.local, mode: 'solo' };
+  room.start();
+  go('#/table');
+}
+
+// Pass and play: one offline table on this device, with a seat for each name given (the rest
+// are computer players). The device shows whoever has to move next.
+function startLocal(game, options, settings, names) {
+  const existing = store.get(`gc.save.${game.id}`);
+  if (existing && !existing.over && !confirm(`Start a new ${game.name} game? Your saved game will be replaced.`)) return;
+  leaveCurrent(false);
+  const room = new HostRoom({ game, profile: { ...profile(), name: displayName() }, online: false, options, settings });
+  names.forEach((name, k) => name && room.addLocalPlayer('host', name, k + 1));
   current = { game, room, client: room.local, mode: 'solo' };
   room.start();
   go('#/table');
@@ -596,8 +687,10 @@ function showLobby() {
       const label = game.seatLabels?.[s.seat] || `Seat ${s.seat + 1}`;
       const team = game.teams ? game.teams.findIndex((t) => t.includes(s.seat)) : -1;
       const mine = s.playerId === client.playerId;
+      const here = !mine && s.device === client.playerId; // someone playing on this device
+      const deviceName = s.device ? lobby.players.find((p) => p.id === s.device)?.name : null;
       return h(
-        `div.gc-seat.kind-${s.kind}${mine ? '.mine' : ''}`,
+        `div.gc-seat.kind-${s.kind}${mine || here ? '.mine' : ''}`,
         { dataset: { team } },
         h('div.gc-seat-label', label, team >= 0 ? h('span.gc-team-tag', `Team ${team + 1}`) : null),
         s.kind === 'open'
@@ -605,7 +698,7 @@ function showLobby() {
           : h(
               'div.gc-seat-who',
               avatar(s.name, s.hue, { bot: s.kind === 'bot' }),
-              h('div', h('strong', s.name + (mine ? ' (you)' : '')), h('small', s.kind === 'bot' ? `Computer · ${game.botLevels?.[s.level] || ''}` : s.isHost ? 'Host' : s.connected ? 'Ready' : 'Reconnecting…')),
+              h('div', h('strong', s.name + (mine ? ' (you)' : '')), h('small', s.kind === 'bot' ? `Computer · ${game.botLevels?.[s.level] || ''}` : s.device ? (here ? 'On this device' : `On ${deviceName || 'a friend'}’s device`) : s.isHost ? 'Host' : s.connected ? 'Ready' : 'Reconnecting…')),
             ),
         h(
           'div.gc-seat-actions',
@@ -613,6 +706,7 @@ function showLobby() {
           isHost && s.kind === 'open' ? h('button.btn.chip', { onclick: () => room.setSeat(s.seat, 'bot') }, h('span', { html: ROBOT_SVG }), 'Add computer') : null,
           isHost && s.kind === 'bot' ? h('button.btn.chip', { onclick: () => room.setSeat(s.seat, 'open') }, 'Open seat') : null,
           isHost && s.kind === 'human' && !s.isHost ? h('button.btn.chip.danger', { onclick: () => confirm(`Remove ${s.name}?`) && room.kick(s.playerId) }, 'Remove') : null,
+          !isHost && here ? h('button.btn.chip.danger', { onclick: () => client.send({ t: 'local-remove', id: s.playerId }) }, 'Remove') : null,
         ),
       );
     };
@@ -642,6 +736,9 @@ function showLobby() {
           h('h2', 'Seats'),
           game.teams ? h('p.gc-hint', 'Partners sit across from each other: South & North vs West & East.') : null,
           h('div.gc-seat-grid', { dataset: { seats: lobby.seats.length } }, lobby.seats.map(seatCard)),
+          game.sameDevice && lobby.seats.some((x) => x.kind !== 'human')
+            ? h('button.btn.ghost.gc-add-local', { onclick: () => addLocalSheet(game, client, room) }, '+ Add a player on this device')
+            : null,
           watchers.length ? h('p.gc-hint', `Watching: ${watchers.map((w) => w.name).join(', ')}`) : null,
         ),
         h(
@@ -672,6 +769,30 @@ function showLobby() {
   current.offLobby?.();
   current.offLobby = client.on('lobby', render);
   if (client.isHost) client.on('status', () => render(room.lobby()));
+}
+
+// Someone sitting next to you joins on your device: they get their own seat, and your screen
+// hands over to them on their turns.
+function addLocalSheet(game, client, room) {
+  const input = h('input.gc-input', { placeholder: 'Their name', maxlength: 20, autocomplete: 'off', 'aria-label': 'Name' });
+  const add = () => {
+    const name = input.value.trim();
+    if (!name) return input.focus();
+    if (client.isHost) room.addLocalPlayer('host', name);
+    else client.send({ t: 'local-add', name });
+    sheet.close();
+  };
+  input.addEventListener('keydown', (e) => e.key === 'Enter' && add());
+  const sheet = modal(
+    h(
+      'div.gc-form',
+      h('h2', 'Add a player on this device'),
+      h('p.gc-hint', game.sameDevice === 'private' ? 'They get their own seat and share your screen. Before each of their turns the screen hides your hand until they tap.' : 'They get their own seat and share your screen: hand them the device on their turns.'),
+      input,
+      h('div.gc-actions', h('button.btn.gold', { onclick: add }, 'Add player'), h('button.btn.text', { onclick: () => sheet.close() }, 'Cancel')),
+    ),
+  );
+  setTimeout(() => input.focus(), 60);
 }
 
 function lobbyOptions(game, room) {
@@ -797,6 +918,7 @@ async function showTable() {
   await loadStyles(game);
   const mod = await game.ui();
   if (!current || current.client !== client) return;
+  passAndPlay(stage, client, game); // before the game's own listener, so a cover is up first
   current.ui = mod.mount({
     el: stage,
     client,
@@ -813,6 +935,45 @@ async function showTable() {
   rematchFallback(stage, client);
   if (client.isHost) client.send({ t: 'sync' });
   else client.send({ t: 'sync' });
+}
+
+// Pass and play: when the device moves on to another person sitting at it, games with hidden
+// hands (manifest sameDevice: 'private') cover the screen until that person taps; open games
+// just say whose turn it is.
+function passAndPlay(stage, client, game) {
+  if (!game.sameDevice) return;
+  let shown = null; // the seat whose screen the device last showed
+  let cover = null;
+  client.on('state', (msg) => {
+    if (!stage.isConnected) return;
+    const seats = msg.seats || [];
+    const local = seats.filter((x) => x.kind === 'human' && (x.playerId === client.playerId || x.device === client.playerId));
+    if (local.length < 2 || msg.seat == null) {
+      shown = msg.seat;
+      return;
+    }
+    if (shown == null) shown = local.find((x) => x.playerId === client.playerId)?.seat ?? msg.seat;
+    if (msg.seat === shown || msg.over) {
+      if (msg.over) cover?.remove();
+      return;
+    }
+    shown = msg.seat;
+    const who = seats[msg.seat];
+    if (game.sameDevice !== 'private') return toast(`${who.name}’s turn`);
+    cover?.remove();
+    cover = h(
+      'div.gc-pass',
+      h(
+        'div.gc-pass-card',
+        avatar(who.name, who.hue, { size: 'lg' }),
+        h('h2', `Pass to ${who.name}`),
+        h('p', `Hand the device to ${who.name}. Everyone else, look away.`),
+        h('button.btn.gold.big', { onclick: () => (cover.remove(), (cover = null)) }, `I’m ${who.name} — show my game`),
+      ),
+    );
+    stage.append(cover);
+    cover.querySelector('button').focus({ preventScroll: true });
+  });
 }
 
 // A game that ends without putting ctx.rematch() on its screen (or marking the stage with

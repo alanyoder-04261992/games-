@@ -6,7 +6,8 @@ import { TILE_ART } from './art.js';
 
 export default {
   id: 'shed-tycoon',
-  version: '1.0', // shown on the home tile; bump it whenever you improve the game
+  version: '1.1', // shown on the home tile; bump it whenever you improve the game
+  sameDevice: 'private', // pass and play: several people on one device (hands are hidden: a cover screen between people)
   name: 'Shed Tycoon',
   tagline: 'Buy materials, build sheds, grow a backyard empire.',
   description:

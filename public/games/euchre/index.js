@@ -6,7 +6,8 @@ import { EUCHRE_TILE as TILE } from './tile.js';
 
 export default {
   id: 'euchre',
-  version: '1.1', // shown on the home tile; bump it whenever you improve the game (1.1: new home tile)
+  version: '1.2', // shown on the home tile; bump it whenever you improve the game
+  sameDevice: 'private', // pass and play: several people on one device (hands are hidden: a cover screen between people)
   name: 'Euchre',
   tagline: 'Bowers, loners and a quick race to 10 with your partner.',
   description:

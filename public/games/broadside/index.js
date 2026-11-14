@@ -10,7 +10,8 @@ const tile = `<svg viewBox="0 0 400 240" preserveAspectRatio="xMidYMid slice" ar
 
 export default {
   id: 'broadside',
-  version: '1.7', // shown on the home tile; bump it whenever you improve the game
+  version: '1.8', // shown on the home tile; bump it whenever you improve the game
+  sameDevice: 'private', // pass and play: several people on one device (hands are hidden: a cover screen between people)
   name: 'Broadside',
   tagline: 'Hide your fleet, then trade shots on a 3D sea.',
   description:

@@ -47,4 +47,8 @@ Games plug in as folders under `public/games/` — read `docs/ADDING_A_GAME.md` 
 - Games register with one line in `public/games/index.js`; online play, chat, voice,
   computer players, saving and the Rematch button (`ctx.rematch()` on the game-over
   screen; same players, seats and room code) come from `public/core/`.
+- Pass and play (several people on one device) comes from core too: set `sameDevice: 'open'`
+  (nothing hidden) or `'private'` (hidden hands: a "Pass to …" cover between people) in the
+  manifest of any turn-based game. Leave it off for real-time games. A game's UI always draws
+  `msg.seat`, which can change between turns on a shared device.
 - Run `npm test` before pushing. Rules engines need bot-vs-bot tests that play full games.

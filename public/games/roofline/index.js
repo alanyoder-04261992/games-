@@ -12,7 +12,8 @@ const TILE = `<svg viewBox="0 0 400 240" preserveAspectRatio="xMidYMid slice" ar
 
 export default {
   id: 'roofline',
-  version: '1.1', // shown on the home tile; bump it whenever you improve the game
+  version: '1.2', // shown on the home tile; bump it whenever you improve the game
+  sameDevice: 'open', // pass and play: several people on one device (everything is on the table)
   name: 'Roofline',
   tagline: 'Draft shingle bundles, lay the best shed roof.',
   description:
