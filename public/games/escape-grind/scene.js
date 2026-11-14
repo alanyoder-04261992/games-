@@ -652,13 +652,24 @@ export class Table3D {
     });
     grp.userData.presented = true;
   }
+  // Where the card held up to the camera sits, and how big. The UI tells us the free band of the
+  // screen (cardBox: below the money strip, above the action bar, clear of the side buttons, as
+  // fractions of the screen), so on a phone the card's title never hides behind the HUD.
   #cardTarget() {
     const d = 6;
     const vh = 2 * d * Math.tan((this.camera.fov * Math.PI) / 360);
     const vw = vh * this.camera.aspect;
-    const s = Math.min((vh * 0.58) / 1.54, (vw * 0.62) / 1.1);
-    const narrow = this.camera.aspect < 0.8;
-    return { pos: new THREE.Vector3(0, vh * (narrow ? 0.18 : 0.15), -d), scale: s };
+    const box = this.cardBox;
+    if (!box) {
+      const s = Math.min((vh * 0.58) / 1.54, (vw * 0.62) / 1.1);
+      return { pos: new THREE.Vector3(0, vh * (this.camera.aspect < 0.8 ? 0.18 : 0.15), -d), scale: s };
+    }
+    const band = Math.max(0.2, box.bottom - box.top);
+    const s = Math.min((vh * band * 0.94) / 1.54, (vw * box.width) / 1.1, (vh * 0.62) / 1.54);
+    // the view is drawn shifted up by viewShift of the screen (see resize), so the camera's centre
+    // line sits that much above the middle of the screen
+    const mid = (box.top + box.bottom) / 2;
+    return { pos: new THREE.Vector3(0, vh * (0.5 - (this.viewShift || 0) - mid), -d), scale: s };
   }
   // send the presented card somewhere: a player's tray (bought) or off the table (passed)
   async dismissCard(seat = null, speed = 1) {
@@ -1035,6 +1046,7 @@ export class Table3D {
     this.camera.fov = w / h < 0.8 ? 50 : 38;
     // render the scene a little higher on screen so the action bar never hides the table edge
     this.camera.setViewOffset(w, h, 0, Math.round(h * 0.07), w, h);
+    this.viewShift = Math.round(h * 0.07) / h;
     this.camera.updateProjectionMatrix();
     this.renderer?.setSize(w, h, false);
     if (was !== this.camera.aspect && this.controls) {

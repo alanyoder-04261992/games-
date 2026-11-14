@@ -5,7 +5,7 @@ import { ESCAPE_TILE as TILE } from './tile.js';
 
 export default {
   id: 'escape-grind',
-  version: '2.6', // shown on the home tile; bump it whenever you improve the game
+  version: '2.7', // shown on the home tile; bump it whenever you improve the game
   sameDevice: 'open', // pass and play: several people on one device (everything is on the table)
   name: 'Escape the Grind',
   tagline: 'A 3D money board game: build passive income and break out of the paycheck loop.',

@@ -273,6 +273,8 @@
 }
 /* phones only: squeeze the money strip and side panels */
 @media (max-width: 699px) {
+  .eg-tools { transition: opacity 0.25s; }
+  .eg.card-up .eg-tools { opacity: 0; pointer-events: none; }
   .eg-chip { padding: 6px 8px; gap: 6px; }
   .eg-chip .avatar { display: none; }
   .eg-chip-top small { display: none; }
