@@ -296,9 +296,6 @@ export function tileTexture(kind, w = 256, h = 300) {
   g.strokeStyle = shade(info.color, 0.75);
   g.lineWidth = 14;
   g.strokeRect(7, 7, w - 14, h - 14);
-  g.strokeStyle = 'rgba(255,255,255,0.7)';
-  g.lineWidth = 4;
-  g.strokeRect(20, 20, w - 40, split - 26);
   g.save();
   g.translate(w / 2, split * 0.52);
   g.fillStyle = 'rgba(0,0,0,0.3)';
@@ -336,7 +333,7 @@ export function tileTexture(kind, w = 256, h = 300) {
     line(lines[0], 40, mid - 21);
     line(lines[1], 40, mid + 21);
   }
-  return tex(c, { aniso: 8 });
+  return tex(c, { aniso: 16 });
 }
 
 // ---- cards ------------------------------------------------------------------------------------

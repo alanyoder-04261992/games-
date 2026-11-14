@@ -874,6 +874,12 @@ export function mount(ctx) {
     e.preventDefault();
   };
   window.addEventListener('keydown', onKey);
+  // iPhone Safari zooms the whole page when you pinch over the panels (it ignores the viewport's
+  // no-zoom hint), leaving the HUD huge and cut off. The table has its own pinch-to-zoom, so the
+  // page itself never zooms while the game is open.
+  const noPageZoom = (e) => e.preventDefault();
+  document.addEventListener('gesturestart', noPageZoom);
+  document.addEventListener('gesturechange', noPageZoom);
 
   let padActive = false;
   const held = new Map();
@@ -933,6 +939,8 @@ export function mount(ctx) {
       clearInterval(cardWatch);
       cancelAnimationFrame(padRaf);
       window.removeEventListener('keydown', onKey);
+      document.removeEventListener('gesturestart', noPageZoom);
+      document.removeEventListener('gesturechange', noPageZoom);
       window.removeEventListener('gamepadconnected', onPad);
       table.dispose();
       root.remove();

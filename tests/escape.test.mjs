@@ -118,3 +118,34 @@ test('escape the grind: shorting profits when the price falls', () => {
   assert.equal(s.players[seat].cash, 10600);
   assert.equal(engine.check(s, seat, { type: 'short', sym: 'NPK', qty: 5000 }), 'Shorting needs cash of 50% of the position');
 });
+
+test('escape the grind: render resolution keeps a floor and does not flip back and forth', async () => {
+  const { newAdapt, adaptStep } = await import('../public/games/escape-grind/adapt.js');
+  const run = (a, fps, seconds, max) => {
+    const changes = [];
+    for (let t = 0; t < seconds * fps; t++) {
+      const s = adaptStep(a, 1 / fps, max);
+      if (s != null) changes.push(s);
+    }
+    return changes;
+  };
+  // a slow phone (2x screen, 20 fps) lowers, but never below 1.5 pixels per point
+  const a = newAdapt();
+  run(a, 20, 60, 2);
+  assert.ok(a.scale * 2 >= 1.5 - 1e-9, `pixel ratio ${a.scale * 2} fell below 1.5`);
+  // a frame rate that wobbles between slow and fast every 2 s does not resize the canvas each time
+  const b = newAdapt();
+  let changes = 0;
+  for (let i = 0; i < 20; i++) changes += run(b, i % 2 ? 60 : 25, 2, 2).length;
+  assert.ok(changes <= 1, `resolution changed ${changes} times on a wobbling frame rate`);
+  // after having to lower twice it settles and stops raising again
+  const c = newAdapt();
+  run(c, 20, 30, 3);
+  const settled = c.scale;
+  run(c, 60, 60, 3);
+  if (c.drops >= 2) assert.equal(c.scale, settled);
+  // a fast device stays at full resolution
+  const d = newAdapt();
+  assert.deepEqual(run(d, 60, 60, 2), []);
+  assert.equal(d.scale, 1);
+});
