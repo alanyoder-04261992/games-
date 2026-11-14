@@ -24,7 +24,8 @@ import { chooseAction, suggestDiscard } from './ai.js';
 
 const POS = ['bottom', 'left', 'top', 'right'];
 const SPEED = { relaxed: 1.45, normal: 1, fast: 0.6, turbo: 0.3 };
-const PREF_DEFAULTS = { autoSingle: true, autoContinue: true, hints: false, bigCards: false, sortTrumpRight: true, table3d: true };
+// prefsV 2: auto-play now starts off; older saved prefs drop their auto-play choice once.
+const PREF_DEFAULTS = { prefsV: 2, autoSingle: false, autoContinue: true, hints: false, bigCards: false, sortTrumpRight: true, table3d: true };
 
 export function mount(ctx) {
   const ui = new RookTable(ctx);
@@ -45,7 +46,9 @@ class RookTable {
     this.waiting = false;
     this.seq = -1;
     this.speed = 1;
-    this.prefs = { ...PREF_DEFAULTS, ...(ctx.prefs.get('rook') || {}) };
+    const saved = { ...(ctx.prefs.get('rook') || {}) };
+    if (saved.prefsV !== PREF_DEFAULTS.prefsV) delete saved.autoSingle, delete saved.prefsV;
+    this.prefs = { ...PREF_DEFAULTS, ...saved };
     this.unsub = [];
     this.timers = new Set();
     this.build();
@@ -97,6 +100,7 @@ class RookTable {
       const { createTable3D } = await import('./scene.js');
       const made = createTable3D(stage, {
         onTap: (card) => this.tap3d(card),
+        onPile: (pos) => this.view?.tricks?.length && this.showTricks(teamOf(this.seatAt(pos))),
         onLost: () => this.fallback2d('The 3D table stopped (graphics reset) — switched to the 2D table.'),
       });
       const t = await Promise.race([made, sleep(15000).then(() => null)]);
@@ -308,6 +312,10 @@ class RookTable {
     const base = this.mySeat ?? 0;
     return POS[(seat - base + 4) % 4];
   }
+  // the seat sitting at a table position (inverse of pos)
+  seatAt(p) {
+    return ((this.mySeat ?? 0) + POS.indexOf(p)) % 4;
+  }
   seatEl(seat) {
     return this.seatEls[POS.indexOf(this.pos(seat))];
   }
@@ -509,7 +517,13 @@ class RookTable {
         h('div.rk-team-top', h('span.rk-team-label', label), h('span.rk-team-names', this.teamName(t))),
         h('div.rk-team-score', h('span.rk-score', score), live != null ? h('span.rk-live', { title: 'Points this round' }, `+${live}`) : null),
         h('div.rk-progress', h('div', { style: { width: pct + '%' } })),
-        v.phase === 'play' ? h('div.rk-tricks', `${trickCount} trick${trickCount === 1 ? '' : 's'}`) : null,
+        v.phase === 'play'
+          ? h(
+              'button.rk-tricks',
+              { type: 'button', title: 'See the tricks this team won', disabled: !trickCount, onclick: () => this.showTricks(t) },
+              `${trickCount} trick${trickCount === 1 ? '' : 's'}`,
+            )
+          : null,
       );
     };
     const c = v.contract;
@@ -537,6 +551,9 @@ class RookTable {
       'div.rk-hud-buttons',
       v.lastTrick && v.phase === 'play' && v.tricks.length
         ? h('button.rk-icon', { title: 'Last trick', onclick: () => this.showLastTrick() }, h('span', { html: ICONS.last }))
+        : null,
+      v.phase === 'play' && v.tricks.length
+        ? h('button.rk-icon', { title: 'Tricks won: see what was played', onclick: () => this.showTricks(this.myTeam()) }, h('span', { html: ICONS.won }))
         : null,
       h('button.rk-icon', { title: 'Score sheet', onclick: () => this.showScoreSheet() }, h('span', { html: ICONS.sheet })),
       this.mySeat != null && !['score', 'over'].includes(v.phase)
@@ -713,7 +730,9 @@ class RookTable {
     const cw = this.cw * 1.08;
     const narrow = W < 700;
     const maxStep = cw * 0.72;
-    const step = n > 1 ? Math.min(maxStep, (W - cw * (narrow ? 1.6 : 1.4)) / (n - 1)) : 0;
+    // tablets (iPad portrait): keep the fan off the screen's rounded edges
+    const edge = narrow ? 0 : Math.max(12, W * 0.035);
+    const step = n > 1 ? Math.min(maxStep, (W - cw * (narrow ? 1.6 : 1.4) - 2 * edge) / (n - 1)) : 0;
     const spread = Math.min(narrow ? 1.2 : 3, (narrow ? 12 : 30) / Math.max(n, 1));
     const hintCard = this.prefs.hints && interactive ? this.hintCard() : null;
     const els = hand.map((card, i) => {
@@ -1513,6 +1532,54 @@ class RookTable {
     this.openModal(body, 'small');
   }
 
+  // Every trick a team has taken this round, newest first, with who played what.
+  showTricks(team) {
+    const v = this.view;
+    if (!v?.tricks?.length) return;
+    const us = this.myTeam();
+    const numbered = v.tricks.map((t, i) => ({ ...t, n: i + 1 }));
+    const tab = (t) => {
+      const mine = numbered.filter((x) => teamOf(x.winner) === t);
+      const pts = mine.reduce((a, x) => a + x.points, 0);
+      return { t, mine, pts, label: `${t === us ? 'Us' : 'Them'} · ${mine.length} trick${mine.length === 1 ? '' : 's'} · ${pts} pts` };
+    };
+    const draw = (team) => {
+      const cur = tab(team);
+      const body = h(
+        'div.rk-won',
+        h('h3', 'Tricks won'),
+        h(
+          'div.rk-won-tabs',
+          [us, 1 - us].map((t) => h('button.rk-won-tab' + (t === team ? '.on' : ''), { type: 'button', onclick: () => draw(t) }, tab(t).label)),
+        ),
+        cur.mine.length
+          ? h(
+              'div.rk-won-list',
+              [...cur.mine].reverse().map((x) =>
+                h(
+                  'div.rk-won-trick',
+                  h('div.rk-won-head', h('strong', `Trick ${x.n}`), h('span', `${this.name(x.winner)} took it · ${x.points} pts`)),
+                  h(
+                    'div.rk-won-row',
+                    x.plays.map((p) =>
+                      h(
+                        'div.rk-last-card' + (p.seat === x.winner ? '.won' : ''),
+                        h('div.rk-card.mid', { html: cardFace(p.card) }),
+                        h('small', (p.seat === x.leader ? 'Led · ' : '') + this.name(p.seat)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            )
+          : h('p', 'No tricks yet this round.'),
+        h('button.btn.gold', { onclick: () => this.closeModal() }, 'Close'),
+      );
+      this.openModal(body, 'wide');
+    };
+    draw(team ?? us);
+  }
+
   showScoreSheet() {
     const v = this.view;
     const us = this.myTeam();
@@ -1567,6 +1634,7 @@ function legalBids(v) {
 }
 
 const ICONS = {
+  won: '<svg viewBox="0 0 24 24"><rect x="5" y="9" width="14" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7 6.5h10M9 4h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M9.5 14.5l2 2 3.5-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   last: '<svg viewBox="0 0 24 24"><rect x="4" y="6" width="9" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="10" y="4" width="9" height="13" rx="2" fill="currentColor" opacity=".35"/><path d="M14 20l3-3-3-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
   sheet: '<svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 8h8M8 12h8M8 16h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
   bulb: '<svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
