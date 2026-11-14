@@ -14,7 +14,11 @@ for (const id of registered) {
     const file = path.join(games, id, 'rules.html');
     assert.ok(fs.existsSync(file), `public/games/${id}/rules.html is missing (see docs/RULEBOOK.md)`);
     const html = fs.readFileSync(file, 'utf8');
-    assert.match(html, /<header class="rb-hero">[\s\S]*<h1>/, 'starts with an rb-hero header and an <h1>');
+    assert.match(html, /<header class="rb-hero"[^>]*>[\s\S]*<h1>/, 'starts with an rb-hero header and an <h1>');
+    // kept up to date: the book records the game version it was last checked against
+    const version = fs.readFileSync(path.join(games, id, 'index.js'), 'utf8').match(/^\s*version:\s*'([\d.]+)'/m)?.[1];
+    const checked = html.match(/<header class="rb-hero"[^>]*\bdata-checked="([^"]+)"/)?.[1];
+    assert.equal(checked, version, `public/games/${id}/rules.html was last checked for version ${checked ?? '(none)'}, but the game is now ${version}. Re-read the rule book against the code, fix what changed, then set data-checked="${version}" on its rb-hero header (docs/RULEBOOK.md).`);
     assert.ok((html.match(/<h2[\s>]/g) || []).length >= 6, 'has at least six <h2> sections for the contents bar');
     const svgs = html.match(/<svg[\s\S]*?<\/svg>/g) || [];
     assert.ok(svgs.length >= 6, `has at least six pictures (inline SVG), found ${svgs.length}`);

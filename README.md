@@ -60,6 +60,15 @@ Plain HTML, CSS and JavaScript modules — no build step, hosts anywhere static 
   plus computer cars, and a time trial against your own ghost. Phone touch controls, keyboard
   and gamepad. Details in [docs/RALLY.md](docs/RALLY.md).
 
+## Rule books
+
+Every game has an illustrated rule book: goal, setup, how a turn works, scoring, a worked
+example, every table option, how to play it in this app, tips, a quick reference and a
+glossary, with diagrams drawn in the game's own style. Open it from the **?** button at the
+table, **Rule book** on the game's Options page, or **How to play** in the Single player /
+Multiplayer pop-up. Each book is checked against the game's code; see
+[docs/RULEBOOK.md](docs/RULEBOOK.md).
+
 ## Versions, updates and graphics
 
 - Each game's version (for example `v1.7`) is shown small in the corner of its home tile and

@@ -6,7 +6,7 @@ import { PINOCHLE_TILE as TILE } from './tile.js';
 
 export default {
   id: 'pinochle',
-  version: '1.2', // shown on the home tile; bump it whenever you improve the game
+  version: '1.3', // shown on the home tile; bump it whenever you improve the game
   sameDevice: 'private', // pass and play: several people on one device (hands are hidden: a cover screen between people)
   name: 'Pinochle',
   tagline: 'Bid, meld and take tricks with your partner.',
