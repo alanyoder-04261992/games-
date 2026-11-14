@@ -51,6 +51,9 @@ Games plug in as folders under `public/games/` — read `docs/ADDING_A_GAME.md` 
   (nothing hidden) or `'private'` (hidden hands: a "Pass to …" cover between people) in the
   manifest of any turn-based game. Leave it off for real-time games. A game's UI always draws
   `msg.seat`, which can change between turns on a shared device.
+- Play insights for the owner (`#/insights`, docs/INSIGHTS.md): `public/core/insights.js` records
+  play through core automatically; the Netlify functions in `netlify/` store and summarise it
+  behind the `INSIGHTS_KEY` setting. Never expose the data without that key.
 ## Rule books (every game, kept up to date)
 
 - **A new game ships with its rule book**: `public/games/<id>/rules.html`, an illustrated

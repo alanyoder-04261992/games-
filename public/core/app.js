@@ -8,6 +8,7 @@ import { onlineGuide } from './guide.js';
 import { Voice } from './voice.js';
 import { startUpdates } from './updates.js';
 import { rematchControl } from './rematch.js';
+import { track } from './insights.js';
 
 const app = document.getElementById('app');
 const GAMES = new Map();
@@ -44,6 +45,7 @@ async function boot() {
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
   // "update ready" bar + pull to refresh (not at the table: dragging there belongs to the game)
   startUpdates({ games: GAMES, allowPull: () => !/^#\/?table/.test(location.hash) });
+  track('open');
 }
 
 function go(hash) {
@@ -68,6 +70,10 @@ function route() {
     return showGuide();
   }
   if (page === 'game' && GAMES.has(arg)) return showSetup(GAMES.get(arg));
+  if (page === 'insights') {
+    leaveCurrent(false);
+    return import('./insights-dashboard.js').then((m) => m.showInsights({ app, games: GAMES, topbar, go }));
+  }
   leaveCurrent(false);
   showHome();
 }
@@ -83,6 +89,7 @@ function leaveCurrent(ask = true) {
       : 'Leave this game? You can rejoin with the same code while it is still going.';
     if (started && !confirm(msg)) return false;
   }
+  playEnded('leave');
   current.ui?.destroy?.();
   current.voice?.destroy();
   current.client.leave();
@@ -594,7 +601,7 @@ function undoToast(text, undo) {
 function resumeHost(game, save) {
   leaveCurrent(false);
   const room = new HostRoom({ game, profile: { ...profile(), name: displayName() }, online: save.online, saved: save });
-  current = { game, room, client: room.local, mode: save.online ? 'host' : 'solo' };
+  current = { game, room, client: room.local, mode: save.online ? 'host' : 'solo', resumed: true };
   room.local.lobby = room.lobby();
   go('#/table');
   // send the saved table to our own screen
@@ -677,6 +684,10 @@ function showLobby() {
   const chat = chatBox(client);
   const render = (lobby) => {
     if (!lobby) return;
+    if (!client.isHost && !current.joinTracked) {
+      current.joinTracked = true;
+      track('join', { g: lobby.gameId, m: 'guest' });
+    }
     if (lobby.started) {
       location.hash = '#/table';
       return;
@@ -919,6 +930,7 @@ async function showTable() {
   const mod = await game.ui();
   if (!current || current.client !== client) return;
   passAndPlay(stage, client, game); // before the game's own listener, so a cover is up first
+  watchPlay(client, game);
   current.ui = mod.mount({
     el: stage,
     client,
@@ -935,6 +947,35 @@ async function showTable() {
   rematchFallback(stage, client);
   if (client.isHost) client.send({ t: 'sync' });
   else client.send({ t: 'sync' });
+}
+
+// Play stats for the owner's dashboard (core/insights.js): one start per game on this device,
+// then an end (finished) or a leave (walked away), with how long it lasted.
+function watchPlay(client, game) {
+  const cur = current;
+  client.on('state', (msg) => {
+    if (current !== cur) return;
+    const fresh = msg.event?.type === 'start';
+    if (cur.play && !fresh) {
+      if (msg.over && !cur.play.done) playEnded('end');
+      return;
+    }
+    if (cur.play && !cur.play.done) playEnded('leave'); // a rematch started before the old game ended
+    const seats = msg.seats || [];
+    const humans = seats.filter((x) => x.kind === 'human');
+    const mine = humans.filter((x) => x.playerId === client.playerId || x.device === client.playerId);
+    const mode = cur.mode === 'guest' ? 'guest' : cur.mode === 'host' ? 'host' : mine.length > 1 ? 'local' : 'solo';
+    cur.play = { g: game.id, m: mode, tb: Math.random().toString(36).slice(2, 12), at: Date.now(), done: false };
+    track('start', { g: game.id, m: mode, tb: cur.play.tb, h: humans.length, b: seats.filter((x) => x.kind === 'bot').length, p: humans.map((x) => x.name), v: game.version, r: cur.resumed && !fresh ? 1 : 0 });
+    if (msg.over) playEnded('end');
+  });
+}
+
+function playEnded(t) {
+  const play = current?.play;
+  if (!play || play.done) return;
+  play.done = true;
+  track(t, { g: play.g, m: play.m, tb: play.tb, dur: Math.round((Date.now() - play.at) / 1000) });
 }
 
 // Pass and play: when the device moves on to another person sitting at it, games with hidden

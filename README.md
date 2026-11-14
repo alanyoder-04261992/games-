@@ -69,6 +69,11 @@ table, **Rule book** on the game's Options page, or **How to play** in the Singl
 Multiplayer pop-up. Each book is checked against the game's code; see
 [docs/RULEBOOK.md](docs/RULEBOOK.md).
 
+## Play insights (owner only)
+
+A private dashboard at `/#/insights` shows who plays which games, how often and how long. It
+needs the owner's key, set as `INSIGHTS_KEY` in Netlify. See [docs/INSIGHTS.md](docs/INSIGHTS.md).
+
 ## Versions, updates and graphics
 
 - Each game's version (for example `v1.7`) is shown small in the corner of its home tile and

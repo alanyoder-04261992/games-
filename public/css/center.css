@@ -598,3 +598,67 @@ body.gc-reloading { opacity: 0.6; transition: opacity 0.2s; }
   .rb-hero h1 { font-size: 28px; }
   .rb-fig { padding: 10px; }
 }
+
+/* =====================================================================
+   Play insights: the owner's dashboard (#/insights, core/insights-dashboard.js)
+   ===================================================================== */
+.gi-wrap { max-width: 1100px; margin: 0 auto; padding: 8px 16px calc(40px + var(--safe-bottom)); display: grid; gap: 16px; }
+.gi-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; margin-top: 8px; }
+.gi-head h1 { font-family: var(--display); font-size: 34px; margin: 0; }
+.gi-head small { color: var(--muted); }
+.gi-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.gi-controls .gc-seg { padding: 4px; }
+.gi-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.gi-tile { padding: 16px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+.gi-tile small { color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; font-size: 12px; }
+.gi-tile strong { font-family: var(--display); font-size: 40px; line-height: 1.1; color: var(--gold); }
+.gi-tile span { color: var(--muted); font-size: 13px; }
+.gi-card { padding: 18px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line); min-width: 0; }
+.gi-card h2 { margin: 0 0 12px; font-family: var(--display); font-size: 22px; text-transform: none; letter-spacing: 0; color: var(--text); }
+.gi-chart svg { width: 100%; height: auto; display: block; }
+.gi-legend { display: flex; gap: 14px; align-items: center; color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+.gi-legend i { display: inline-block; width: 12px; height: 12px; margin-right: -8px; border-radius: 3px; }
+.gi-legend i.bar { background: #f0c35a; }
+.gi-legend i.dot { background: #5b8cff; border-radius: 50%; }
+.gi-modebar { display: flex; height: 16px; border-radius: 999px; overflow: hidden; gap: 2px; }
+.gi-modekey { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 14px; }
+.gi-modekey i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+.gi-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.gi-table th { text-align: left; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.gi-table td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
+.gi-game { display: flex; align-items: center; gap: 10px; }
+.gi-game-art { width: 52px; height: 34px; border-radius: 7px; overflow: hidden; flex: none; }
+.gi-game-art svg { width: 100%; height: 100%; display: block; }
+.gi-spark { width: 120px; height: 5px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); margin-top: 5px; overflow: hidden; }
+.gi-spark span { display: block; height: 100%; background: var(--gold); }
+.gi-players { display: grid; gap: 6px; }
+.gi-player { border: 1px solid var(--line); border-radius: 14px; background: rgba(0, 0, 0, 0.18); }
+.gi-player-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.gi-player-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.gi-player-main small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gi-when { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.gi-player-more { padding: 0 14px 12px 52px; font-size: 14px; color: #c6d1e0; }
+.gi-player-more p { margin: 4px 0; }
+.gi-device { color: var(--muted); font-size: 12px; }
+.gi-feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+.gi-feed li { display: grid; grid-template-columns: 90px 1fr; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.gi-hint { color: var(--muted); font-size: 14px; margin: 0 0 8px; }
+.gi-lock { max-width: 420px; margin: 12vh auto 0; padding: 0 16px; display: grid; gap: 12px; text-align: center; }
+.gi-lock h1 { font-family: var(--display); margin: 0; }
+.gi-lock p { color: var(--muted); margin: 0; }
+.gi-loading { display: grid; place-items: center; gap: 12px; padding: 60px; color: var(--muted); }
+.gi-players { grid-template-columns: minmax(0, 1fr); }
+.gi-player { min-width: 0; }
+.gi-player-more { overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .gi-wide { display: none; }
+  .gi-player-more { padding-left: 14px; }
+  .gi-feed li { grid-template-columns: 74px 1fr; }
+  .gi-head h1 { font-size: 28px; }
+}
+@media (max-width: 560px) {
+  .gi-spark { width: 64px; }
+  .gi-game-art { width: 42px; height: 28px; }
+  .gi-table td, .gi-table th { padding: 8px 6px; }
+  .gi-table td:first-child { white-space: normal; }
+}
