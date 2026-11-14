@@ -444,7 +444,7 @@ export function apply(prev, p, a) {
         pl.pieces.homestead--;
         s.setupVert = v;
         log(s, { k: 'build', p, what: 'homestead', v });
-        if (s.step >= 4) {
+        if (s.step >= s.players.length) { // second homestead (snake order: everyone's first, then everyone's second)
           const got = emptyRes();
           for (const hi of G(s).VERTS[v].hexes) {
             const r = TERRAIN[s.hexes[hi].t].res;

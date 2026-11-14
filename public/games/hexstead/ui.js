@@ -293,7 +293,7 @@ export function mount(ctx) {
     const dice = view.dice ? h('span.hx-dice-mini', { html: DICE_ICON }) : null;
     switch (view.phase) {
       case 'setup': {
-        const second = view.step >= 4;
+        const second = view.step >= view.players.length;
         if (cur === p) {
           title = view.setupVert == null ? (second ? 'Place your second homestead' : 'Place your first homestead') : 'Add a trail next to it';
           sub = view.setupVert == null ? (second ? 'You collect one of each resource around it.' : 'Pick a glowing corner — high numbers with dots roll most often.') : 'Tap a glowing edge.';
