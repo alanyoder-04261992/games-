@@ -54,7 +54,7 @@ const tile = `<svg viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg" role
 
 export default {
   id: 'dogfight',
-  version: '2.5', // shown on the home tile; bump it whenever you improve the game
+  version: '2.6', // shown on the home tile; bump it whenever you improve the game
   name: 'Coastal Dogfight',
   tagline: '1940s fighters over a 20 km coastline. Fly together against raiders, or shoot each other down.',
   description:
@@ -81,6 +81,7 @@ export default {
       choices: [{ value: 'normal', label: 'Standard' }, { value: 1, label: '1' }, { value: 2, label: '2' }, { value: 3, label: '3' }, { value: 4, label: '4' }, { value: 6, label: '6' }, { value: 8, label: '8' }, { value: 12, label: '12' }],
     },
     { key: 'waves', label: 'Waves (dogfight and bomber missions)', type: 'select', default: 3, choices: [{ value: 1, label: '1' }, { value: 2, label: '2' }, { value: 3, label: '3' }, { value: 5, label: '5' }, { value: 8, label: '8' }] },
+    { key: 'ff', label: 'Friendly fire in free play (co-op)', type: 'select', default: 'on', choices: [{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }] },
     { key: 'tod', label: 'Time of day', type: 'select', default: 'day', choices: [{ value: 'day', label: 'Day' }, { value: 'sunset', label: 'Sunset' }, { value: 'night', label: 'Night' }] },
     { key: 'kills', label: 'Kills to win (free-for-all)', type: 'select', default: 5, choices: [{ value: 3, label: '3' }, { value: 5, label: '5' }, { value: 10, label: '10' }] },
     { key: 'wingmen', label: 'Computer wingmen (co-op)', type: 'select', default: 'off', choices: [{ value: 'off', label: 'Off' }, { value: 'on', label: 'Fill empty seats' }] },

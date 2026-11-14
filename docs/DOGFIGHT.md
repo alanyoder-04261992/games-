@@ -68,10 +68,14 @@ The game's menu has:
 - **Time of day**: Day, Sunset or Night. At sunset the sun sits low over the sea. At night there are stars and a moon; the town's windows, the runway lights and the lighthouse are lit; tracers glow brighter; and **searchlights** sweep the sky round the targets (the battleship carries two). A searchlight that catches you locks on until you turn hard out of it, and while you are lit the flak is far more accurate. In the dark, unlit, it is far less accurate. Online, it is a table option.
 - **Wingmen**: none, one or two (Mack and Dutch). They cover you by default. **T** sends them after your target (the locked one, or the nearest ahead). **Y** brings them back to cover you; they form up on your wings and go after anything that comes near you. **U** sends them in on the ground target: they dive with guns, rockets and bombs, pull out and come round again. On a phone or iPad, **WING** steps through the orders that make sense at that moment.
 - **Rockets**: every fighter carries rockets: six on most fighters, ten on the Thunder, twelve on the jets, nineteen on the Striker, none on the bomber. **K**, **RKT** or **L3** fires a pair. They burn for a second, then fall like shells, and burst on aircraft, vehicles, wagons, the battleship or the ground (about 14 m blast). Land to rearm.
+- **Flaps in a fight**: lowering the flaps (V or FLAP) in the air gives combat flaps: your aircraft turns about half as fast again (in a Kestrel, from about 18 to about 27 degrees a second), rolls quicker, and bleeds speed fast. They blow back above about 290 mph. Raise them to get the speed back.
+- **Rudder**: Q and E (or the rudder buttons) skid the nose round, and the flight path follows it, so a rudder turn keeps its new heading when you let go. In mouse or touch-drag aim it turns the aim point with it.
+- **Altitude lock** (L, or ALT on touch): holds the height you are at, through turns too, until you push or pull the stick hard (or move the mouse up or down).
+- **Formation** (O, or FORM): your aircraft flies itself onto the right wing of the nearest friend (another pilot first, otherwise a wingman), about 40 m out, and keeps station; you can still shoot. Move the stick to take over. A wingman you form up on holds a steady course for you.
 - **Bailing out**: when you are shot down and the wreck is still falling, the HUD flashes **BAIL OUT**. Press **J**, **BAIL** or **R3** to jump. The same key works from a damaged aircraft at any time (twice from a healthy one). You fall clear, open the parachute a few hundred metres up and float down; a car or a boat picks you up and you are back in the air in a fresh aircraft, −100 points, and the mission goes on. If the wreck hits first, the mission is over. Half the time you are thrown clear when your aircraft explodes. Computer pilots often bail out too.
 - **Mission**. The pause menu can **switch mission mid-flight**: the old fight is cleared and the new one starts round you. Online in co-op, missions are shared (see Multiplayer).
   - *Dogfight*: waves of enemy fighters come in off the sea; shoot them all down, then land.
-  - *Naval strike*: a 190 m battleship steams up and down the coast about 5 km out. Its ten light AA mounts throw up flak bursts timed to where you will be and streams of tracer when you come close, its turrets turn to follow you, and its main battery shells the coast now and then. Bomb it (two to four direct hits, more for near misses) until it rolls over and sinks, then land. Fighters scramble to defend it.
+  - *Naval strike*: a 190 m battleship steams up and down the coast about 5 km out. Its ten light AA mounts throw up flak bursts timed to where you will be and streams of tracer when you come close, its turrets turn to follow you, and its main battery shells the coast now and then. Bomb and rocket it until it rolls over and sinks: its hull takes about 1,600 points, so two direct 250 kg bomb hits and a few pairs of rockets do it in one sortie (four 500 kg bombs on their own; cannon fire helps a little), then land. Fighters scramble to defend it.
   - *Ground attack*: a convoy of tanks and trucks drives up a track to a fuel depot (four fuel tanks and two supply sheds) guarded by three flak guns. Bomb and strafe them: trucks fall to guns, tanks need cannon or bombs, and fuel tanks go up in a fireball. Flak guns are optional targets. Fighters scramble to defend it.
   - *Train busting*: an ammunition train (locomotive, tender, two flak wagons, six ammunition wagons) runs up the river valley on the north bank to a depot by the harbour, about 10 km. An ammunition wagon that blows up can set off the cars next to it, so the train goes up car by car. Destroy every ammunition wagon before it reaches the depot; knocking out the locomotive stops the train.
   - *Bomber intercept*: formations of twin-engine bombers with fighter cover fly for the harbour town. Their top and tail gunners shoot back. If three bombers get through and drop on the town, the mission fails. The *Waves* option sets how many formations come (one to three).
@@ -97,6 +101,8 @@ In the Game Center, choose **Multiplayer** on its tile or options page. Friends 
 | Waves (dogfight missions; bomber formations up to 3) | 1, 2, 3, 5 or 8 |
 | Kills to win (free-for-all) | 3, 5 or 10 |
 | Computer wingmen (co-op) | Off, or fill the empty seats with computer pilots |
+| Friendly fire in free play (co-op) | On (default) or off: while neither of you is in a mission, your rounds, rockets and missiles can hit other pilots, and they show in amber instead of green |
+| Time of day | Day, Sunset or Night |
 
 Computer pilots always fly the empty seats in a free-for-all. Their skill follows the table's computer player setting: Rookie, Veteran or Ace. A pilot who is shot down is back in the air after 6 seconds. In co-op the round runs until the host ends it from the pause menu; in a free-for-all it ends when someone reaches the kill target (the host can end it early the same way). The debrief shows the scoreboard, and the host starts a new round for everyone.
 
@@ -132,6 +138,7 @@ A co-op round starts in **free play**: no raiders. The menu shows a *Free play* 
   - *Swift A6*: feather-light, with a radial engine; out-turns anything, but it does not take punishment. Two cowl MGs and two wing cannon.
   - *Lancer F-2* (modern jet): single engine, cropped-delta wing, quick roll, a rotary cannon (50 rounds a second) and six missiles.
   - *Talon T-27* (modern jet): twin engines, twin canted fins, big wing, long range and tough.
+  - *Warden Mk II*: a two-seater. A gunner in a powered turret behind the pilot fires on his own at enemies that come within about 700 m, anywhere above and behind you (not through the propeller or the floor). His guns turn to follow the target. Four wing guns for you, two bombs. Campaign: unlocked by mission 5. If you fly the Brute, its two gunners fire on their own the same way.
   - *Thunder TB-1*: heavy fighter-bomber with a big radial engine; rugged, eight heavy machine guns, four 500 kg bombs.
   - *Brute B-25*: twin-engine bomber with a glazed nose, two engines on the wings, a top turret and a tail gunner, and ten bombs in the bay (it drops them in pairs). No missiles.
   - *Striker A-12* (attack jet): straight thick wing, two engines in pods on top, twin tails on the tailplane tips, a heavy rotary cannon (65 rounds a second), eight bombs; slow for a jet, no afterburner, but it takes a lot of punishment.
@@ -169,12 +176,14 @@ A co-op round starts in **free play**: no raiders. The menu shows a *Free play* 
 | Bomb / rockets | **BOMB**, **RKT** (they appear while you carry them) |
 | Wingmen | **WING** (cover → attack → ground) |
 | Bail out | **BAIL** (appears when you are badly hit or going down) |
+| Hold this height | **ALT**; push or pull the stick to release it |
+| Fly on a friend's wing | **FORM** (shows when a friend or wingman is in the air); move the stick to take over |
 
 **iPad.** iPadOS Safari reports itself as a Mac, so the game also counts a Mac with a touch screen as an iPad and turns the touch controls on (even with a keyboard attached; switch *Phone mode* off to use the keyboard and trackpad instead). On a tablet the HUD is drawn about 20% larger, and the stick and buttons are bigger and spread out for thumbs. Pinch and double-tap zoom are blocked over the game. *Add to Home Screen* opens it full screen.
 
 The control style is set in the pause menu:
 
-- **Stick · assisted** (the default on phones). Wings level themselves when you let go, the aircraft holds your climb or descent angle, it holds height in turns, rudder is automatic, and a limiter stops you from stalling or overstressing.
+- **Stick · assisted** (the default on phones). Moving the stick part of the way sideways banks to an angle and holds it (up to 80°); all the way to the edge rolls freely. The stick has a curve, gentle near the centre and full at the edge. Let go and the wings level; let go in a gentle climb or dive (under about 15°) and it levels off and holds that height, and steeper it holds the angle. It holds height in turns, the rudder is automatic, and a limiter stops you stalling or overstressing. The rudder buttons bank it gently into a flat turn, so the new heading stays when you let go.
 - **Stick · manual.** Raw control surfaces.
 - **Touch-drag aim.** Drag anywhere to move an aim point, and the aircraft flies toward it.
 - **Tilt.** Tilt the phone to steer (assisted). If the browser blocks motion sensors, the game switches back to the stick.
@@ -195,6 +204,8 @@ Landscape works best, and the menu has a Full screen button on Android.
 | Rockets (a pair) | K |
 | Wingmen | T attack my target · Y cover me · U hit the ground target |
 | Bail out | J (twice from an aircraft that isn't damaged) |
+| Hold this height (altitude lock) | L; a big pull or push releases it |
+| Fly on a friend's wing (formation) | O; moving the stick takes over |
 
 ### Gamepad
 

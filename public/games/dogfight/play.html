@@ -124,6 +124,15 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
 #tBomb{width:62px;height:62px;right:calc(max(16px,env(safe-area-inset-right)) + 116px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 206px);font-size:.72rem;border-color:rgba(214,196,140,.95);background:rgba(120,110,70,.35)}
 #tRkt{width:56px;height:56px;right:calc(max(16px,env(safe-area-inset-right)) + 186px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 206px);font-size:.7rem;border-color:rgba(234,165,60,.8);background:rgba(110,70,30,.35)}
 #tWing{width:auto;min-width:64px;height:40px;padding:0 12px;border-radius:20px;font-size:.66rem;left:calc(max(16px,env(safe-area-inset-left)) + 4px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 250px);border-color:rgba(151,196,111,.9);background:rgba(60,90,40,.35)}
+/* ALT and FORM: on a phone they sit with WING in the gap right of the corner map, clear of the score and the messages */
+#touch .tbtn.pill{width:56px;height:34px;border-radius:17px;font-size:.64rem}
+#tForm{border-color:rgba(151,196,111,.9)}
+html:not(.tablet) #touch #tWing{height:34px;bottom:auto;left:calc(max(16px,env(safe-area-inset-left)) + 124px);top:calc(max(10px,env(safe-area-inset-top)) + 92px)}
+html:not(.tablet) #touch #tAlt{left:calc(max(16px,env(safe-area-inset-left)) + 124px);top:calc(max(10px,env(safe-area-inset-top)) + 132px)}
+html:not(.tablet) #touch #tForm{left:calc(max(16px,env(safe-area-inset-left)) + 188px);top:calc(max(10px,env(safe-area-inset-top)) + 132px)}
+.tablet #touch .tbtn.pill{width:66px;height:48px;font-size:.76rem}
+.tablet #touch #tAlt{right:calc(max(20px,env(safe-area-inset-right)) + 36px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 340px)}
+.tablet #touch #tForm{right:calc(max(20px,env(safe-area-inset-right)) + 342px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 248px)}
 #tBail{width:72px;height:72px;left:50%;margin-left:-36px;bottom:calc(max(16px,env(safe-area-inset-bottom)) + 120px);font-size:.85rem;border-color:#ff8a6d;background:rgba(226,85,63,.45)}
 #tBail.on{background:rgba(255,120,90,.85)}
 #tFlr{width:56px;height:56px;right:calc(max(16px,env(safe-area-inset-right)) + 110px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 136px);font-size:.75rem}
@@ -309,6 +318,8 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
   <button class="tbtn" id="tRkt" hidden>RKT</button>
   <button class="tbtn" id="tWing" hidden>WING</button>
   <button class="tbtn" id="tBail" hidden>BAIL</button>
+  <button class="tbtn pill" id="tAlt">ALT</button>
+  <button class="tbtn pill" id="tForm" hidden>FORM</button>
   <button class="tbtn sq" id="tMap">MAP</button>
   <button class="tbtn sq" id="tGear">GEAR</button>
   <button class="tbtn sq" id="tFlaps">FLAP</button>
@@ -1159,6 +1170,23 @@ const SPECS = {
       scoops: [[0, -0.92, -2.4, 0.36, 1.1, 1.35]], exh: 2, hoops: [-0.62], gearX: 1.95, camoSeed: 41, insignia: 'star', tail: { dz: 0.55, k: 1.12 },
       bombPos: [[-1.7, -0.82, -0.45], [1.7, -0.82, -0.45], [-2.6, -0.76, -0.4], [2.6, -0.76, -0.4]] },
   },
+  // a two-seat fighter: a gunner in a turret behind the pilot swings his twin guns onto anything that comes close
+  warden: {
+    name: 'Warden', full: 'Warden Mk II', mass: 3900, S: 24.2, AR: 6.0, e: 0.88, CL0: 0.15, CLa: 5.1, stallA: 0.27, CD0: 0.022,
+    power: 1160e3, Tstatic: 16500, Ke: 3.2, Cma: 9.0, Cmq: 3.7, Ka: 7.8, Clp: 5.0, rollFadeV: 150, Kr: 1.6, Cnb: 6.0, Cnr: 3.2, trimA: 0.03,
+    hp: { engine: 110, wingL: 130, wingR: 130, tail: 100, fuel: 80, pilot: 50, fuse: 185 }, fuel: 460,
+    guns: [-3.3, -2.9, 2.9, 3.3].map(x => ({ x, y: -0.25, z: -0.75, t: 'm' })),
+    ammo: { m: 2000 }, turrets: [[0, 1.02, 1.05]], gunner: true,
+    span: 12.0, length: 10.2, noseZ: -4.3, R: 1.05,
+    camoA: '#556042', camoB: '#82724e', bottom: '#b7c0aa', spinner: '#b02a22', blades: 3,
+    era: 'prop', side: 'blue', role: 'fighter', bombs: 2, bombKg: 250, top: 320,
+    card: ['Two-seater: your gunner shoots whatever gets behind you', 64, 56, 56, 92],
+    facts: ['The gunner sits in a power-driven turret and fires on his own: he covers your tail while you chase the one in front.', 'He cannot fire through his own propeller or tail, so a raider straight ahead or right underneath is yours to deal with.'],
+    look: { prof: [[0, 0.05], [0.04, 0.16], [0.14, 0.3], [0.34, 0.46], [0.52, 0.58], [0.66, 0.63], [0.8, 0.61], [0.9, 0.56], [0.97, 0.45], [1, 0.3]],
+      wing: { shape: 'taper', root: 2.7, tip: 1.4, tipC: 1.0, from: 0.92, sweep: 0.05, round: 0.9 }, band: [2.49, 2.81], bandCol: 0xcfc6a6,
+      scoops: [[0, -0.85, -0.3, 0.3, 1.0, 1.35]], exh: 6, hoops: [-0.62, 0.38], gearX: 1.3, camoSeed: 61, insignia: 'roundel', tail: { dz: 0.4, k: 1.1 },
+      bombPos: [[-1.75, -0.78, -0.45], [1.75, -0.78, -0.45]] },
+  },
   // a twin-engine medium bomber: glazed nose, gun turrets top and tail, ten bombs in the bay
   brute: {
     name: 'Brute', full: 'Brute B-25', mass: 12500, S: 61, AR: 7.4, e: 0.8, CL0: 0.15, CLa: 5.0, stallA: 0.25, CD0: 0.026,
@@ -1411,7 +1439,7 @@ function fuselageShape(key) {
 
 // The aircraft is built once per type as a template, then cloned for every plane that flies it.
 const PLANE_TEMPLATES = {};
-const MODEL_PARTS = ['wingL', 'wingR', 'ailL', 'ailR', 'elev', 'rud', 'rud2', 'canopy', 'head', 'prop', 'blades', 'disc', 'gearL', 'gearR', 'gearN', 'ab', 'glow'];
+const MODEL_PARTS = ['wingL', 'wingR', 'ailL', 'ailR', 'elev', 'rud', 'rud2', 'canopy', 'head', 'prop', 'blades', 'disc', 'gearL', 'gearR', 'gearN', 'ab', 'glow', 'tgun'];
 let gaugeCanvas = null;
 function makePlaneModel(key, opts) {
   const id = key + (opts.boss ? '.boss.' + opts.boss : opts.ace ? '.ace' : '') + (opts.cockpit ? '.ck' : '');
@@ -1688,6 +1716,15 @@ function buildPlaneTemplate(key, opts) {
   }
   // gun turrets: a glass dome with twin guns on top, and a glazed tail position
   for (const [i, t] of (s.turrets || []).entries()) {
+    // a gunner's turret that turns: the twin guns are their own group, aimed every frame (see gunnerFire)
+    if (i === 0 && s.gunner) {
+      const d = new THREE.Mesh(new THREE.SphereGeometry(0.5, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), M.glass); d.position.set(t[0], t[1] - 0.12, t[2]); d.renderOrder = 4; g.add(d);
+      put(g, M.dark, new THREE.CylinderGeometry(0.56, 0.6, 0.16, 18).translate(t[0], t[1] - 0.16, t[2]));
+      const tg = named(new THREE.Group(), 'tgun'); tg.position.set(t[0], t[1] + 0.02, t[2]); g.add(tg);
+      for (const sx of [-0.12, 0.12]) { const m = new THREE.Mesh(rodGeo(new V3(sx, 0, 0.1), new V3(sx, 0, 1.25), 0.035), M.dark); m.castShadow = true; tg.add(m); }
+      const hd = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), M.helmet); hd.position.set(0, -0.05, -0.05); tg.add(hd);
+      continue;
+    }
     if (i === 0) { const d = new THREE.Mesh(new THREE.SphereGeometry(0.5, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), M.glass); d.position.set(t[0], t[1] - 0.12, t[2]); d.renderOrder = 4; g.add(d); for (const sx of [-0.1, 0.1]) put(g, M.dark, rodGeo(new V3(sx, t[1] + 0.05, t[2]), new V3(sx, t[1] + 0.12, t[2] + 1.1), 0.03)); }
     else { const c = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 10), M.glass); c.scale.set(1, 1, 1.5); c.position.set(t[0], t[1], t[2]); c.renderOrder = 4; g.add(c); for (const sx of [-0.1, 0.1]) put(g, M.dark, rodGeo(new V3(sx, t[1], t[2] + 0.3), new V3(sx, t[1], t[2] + 1.1), 0.03)); }
   }
@@ -1960,18 +1997,20 @@ class Plane {
     if (aa <= as) CL = s.CL0 + s.CLa * alpha;
     else if (aa < 0.7) { stall = Math.min(1, (aa - as) / 0.3); CL = (s.CL0 + s.CLa * as * Math.sign(alpha)) * (1 - 0.5 * stall); }
     else { stall = 1; CL = 0.85 * Math.sin(2 * alpha); }
-    CL += this.flapT * 0.38 * (stall > 0.3 ? 0.5 : 1);
-    const lk = this.liftK || 1; CL *= lk; // more lift for the same angle of attack: a tighter turn
+    CL += this.flapT * (this.player ? 0.8 : 0.38) * (stall > 0.3 ? 0.5 : 1);
+    // flaps down in the air: combat flaps, a much tighter turn that bleeds speed fast (they blow back above 290 mph)
+    const flapK = this.onGround ? 0 : this.flapT * clamp((130 - V) / 20, 0, 1);
+    const lk = (this.liftK || 1) * (1 + (this.player ? 0.6 : 0.15) * flapK); CL *= lk; this.lkEff = lk; // more lift for the same angle of attack: a tighter turn
     if (!this.stall && stall > 0.05) this.dropSign = Math.abs(this.w.z) > 0.15 ? -Math.sign(this.w.z) : (Math.random() < 0.5 ? -1 : 1);
     this.stall = stall;
     const wingF = 0.5 * (fL + fR); CL *= wingF;
     const k = 1 / (Math.PI * s.e * s.AR) / lk; // and the turn bleeds less speed
-    const CD = s.CD0 + k * Math.min(CL * CL, 2.6) + 0.9 * Math.max(0, Math.sin(aa) ** 2 - Math.sin(as) ** 2) + 0.45 * beta * beta + this.flapT * 0.04 + this.gearT * 0.022 + (1 - wingF) * 0.03 + (this.engineOn ? 0 : 0.008) + (s.mdd ? 0.1 * smooth(s.mdd, s.mdd + 0.3, V / 340) : 0); // transonic drag rise
+    const CD = s.CD0 + k * Math.min(CL * CL, 2.6) + 0.9 * Math.max(0, Math.sin(aa) ** 2 - Math.sin(as) ** 2) + 0.45 * beta * beta + this.flapT * 0.05 + this.gearT * 0.022 + (1 - wingF) * 0.03 + (this.engineOn ? 0 : 0.008) + (s.mdd ? 0.1 * smooth(s.mdd, s.mdd + 0.3, V / 340) : 0); // transonic drag rise
     _F.set(0, 0, 0);
     if (V > 0.5) {
       _vd.copy(this.vel).multiplyScalar(1 / V);
       _ld.crossVectors(this.right, _vd); const ll = _ld.length(); if (ll > 1e-4) _ld.multiplyScalar(1 / ll);
-      _F.addScaledVector(_ld, qd * s.S * CL).addScaledVector(_vd, -qd * s.S * CD).addScaledVector(this.right, -qd * s.S * 0.9 * beta);
+      _F.addScaledVector(_ld, qd * s.S * CL).addScaledVector(_vd, -qd * s.S * CD).addScaledVector(this.right, -qd * s.S * 1.6 * beta);
     }
     if (this.hp.engine <= 0 && this.engineOn) this.engineOn = false;
     const engF = this.engineOn ? 0.3 + 0.7 * clamp(this.hp.engine / s.hp.engine, 0, 1) : 0;
@@ -1993,7 +2032,7 @@ class Plane {
     if (s.gLimit && V > 30 && this.alive) { const aMax = (s.gLimit * s.mass * 9.81 / Math.max(1, qd * s.S * lk) - s.CL0) / s.CLa; const lim = Math.max(0.05, (aMax - s.trimA) * s.Cma / (s.Ke * Math.max(0.2, tailF * comp))); pc = clamp(pc, -lim * 0.45, lim); }
     let pA = qn * (s.Ke * pc * tailF * comp * (1 - 0.5 * stall) - s.Cma * (alpha - s.trimA)) - s.Cmq * this.w.x * sq;
     const rollFade = V > s.rollFadeV ? clamp(1 - (V - s.rollFadeV) / 130, 0.35, 1) : 1;
-    let rA = -qn * s.Ka * (this.player ? 1.15 : 1) * rollFade * comp * this.ctrl.roll - s.Clp * this.w.z * sq + qn * 3.0 * (fR - fL) * clamp(CL, -1.5, 1.5);
+    let rA = -qn * s.Ka * (this.player ? 1.15 : 1) * (1 + 0.25 * flapK) * rollFade * comp * this.ctrl.roll - s.Clp * this.w.z * sq + qn * 3.0 * (fR - fL) * clamp(CL, -1.5, 1.5);
     let yA = qn * (-s.Kr * this.ctrl.yaw * tailF - s.Cnb * beta) - s.Cnr * this.w.y * sq;
     if (stall > 0 && !this.onGround) { rA += this.dropSign * stall * qn * 5.5; pA -= stall * qn * 1.5 * Math.sign(alpha); yA += this.dropSign * stall * qn * 1.2; }
     if (this.wreck) { rA += this.wreckSpin * 3; }
@@ -2082,6 +2121,11 @@ class Plane {
       pr.g.rotation.z += this.rpm / 60 * Math.PI * 2 * 0.48 * dt;
       const fast = this.rpm > 500; pr.blades.visible = !fast; pr.disc.visible = fast;
     }
+    if (p.tgun) { // the gunner's guns follow his target, or rest pointing back
+      if (this.gunAim && this.gunAimT > 0) { _tmp.copy(this.gunAim).applyQuaternion(this.invQ); this.tgYaw = approach(this.tgYaw ?? 0, Math.atan2(_tmp.x, _tmp.z), dt * 4); this.tgPitch = approach(this.tgPitch || 0, -Math.asin(clamp(_tmp.y, -1, 1)), dt * 4); this.gunAimT -= dt; }
+      else { this.tgYaw = approach(this.tgYaw ?? 0, 0, dt * 1.5); this.tgPitch = approach(this.tgPitch || 0, -0.15, dt); }
+      p.tgun.rotation.set(this.tgPitch, this.tgYaw, 0, 'YXZ');
+    }
     for (let i = 0; i < p.bombs.length; i++) p.bombs[i].visible = (this.bombs || 0) > i && !this.wreck;
     if (p.ab) { // afterburner plume, flickering
       const on = this.boosting && this.engineOn && this.alive; p.ab.visible = on;
@@ -2134,7 +2178,7 @@ function updateBullets(dt) {
     if (!dead) {
       const mx = (ox + nx) * 0.5, my = (oy + ny) * 0.5, mz = (oz + nz) * 0.5; const half = Math.hypot(nx - ox, ny - oy, nz - oz) * 0.5 + 9;
       for (const p of planes) {
-        if (p === owner || p.gone || (owner && owner.team === p.team)) continue;
+        if (p === owner || p.gone || (owner && owner.team === p.team && !freeFire(owner, p))) continue;
         const dx = p.pos.x - mx, dy = p.pos.y - my, dz = p.pos.z - mz; if (dx * dx + dy * dy + dz * dz > half * half) continue;
         _c.set(ox, oy, oz).sub(p.pos).applyQuaternion(p.invQ); _d.set(nx, ny, nz).sub(p.pos).applyQuaternion(p.invQ);
         let best = 2, zone = null;
@@ -2431,7 +2475,7 @@ function detonate(m, idx) {
   if (!m.vis) blastDamage(m.pos, 16, 140, m.owner);
   if (m.vis) return;
   for (const p of G.planes) {
-    if (p.gone || !p.alive || p === m.owner || (m.owner && p.team === m.owner.team) || p.pos.distanceTo(m.pos) > 32) continue;
+    if (p.gone || !p.alive || p === m.owner || (m.owner && !canHurt(m.owner, p)) || p.pos.distanceTo(m.pos) > 32) continue;
     let any = false;
     for (const z of p.zones) {
       _b.set(z.x, z.y, z.z).applyQuaternion(p.q).add(p.pos); const d = _b.distanceTo(m.pos);
@@ -2470,7 +2514,7 @@ function updateLock(p, dt) {
   LOCK.need = auto ? 0.8 : 1.6;
   let best = null, bs = Infinity;
   for (const e of G.planes) {
-    if (e === p || !e.alive || e.gone || !hostile(e, p)) continue;
+    if (e === p || !e.alive || e.gone || !canHurt(p, e)) continue;
     _b.subVectors(e.pos, p.pos); const d = _b.length(); if (d > range || d < 120) continue;
     const ang = Math.acos(clamp(p.fwd.dot(_b.multiplyScalar(1 / d)), -1, 1)); if (ang > cone) continue;
     const score = ang * 3 + d / range * (auto ? 1 : 0.2) - (e === LOCK.target ? 0.3 : 0);
@@ -2527,14 +2571,14 @@ function emitTrails(p, dt) {
 function pitchCaps(p) {
   const s = p.spec, V = Math.max(p.V, 25);
   const qd = 0.5 * 1.225 * Math.exp(-Math.max(0, p.pos.y) / 8500) * V * V;
-  const aG = ((8.5 * s.mass * 9.81) / (qd * s.S) - s.CL0 - p.flapT * 0.38) / s.CLa;
+  const aG = ((8.5 * s.mass * 9.81) / (qd * s.S * (p.lkEff || 1)) - s.CL0 - p.flapT * (p.player ? 0.8 : 0.38)) / s.CLa;
   const aMax = Math.min(s.stallA * 0.9, aG);
   return { hi: s.Cma * (aMax - s.trimA) / s.Ke, lo: s.Cma * (-s.stallA * 0.6 - s.trimA) / s.Ke };
 }
 function trimFor(p, nz) {
   const s = p.spec, V = Math.max(p.V, 25);
   const qd = 0.5 * 1.225 * Math.exp(-Math.max(0, p.pos.y) / 8500) * V * V;
-  const a = ((nz * s.mass * 9.81) / (qd * s.S) - s.CL0 - p.flapT * 0.38) / s.CLa;
+  const a = ((nz * s.mass * 9.81) / (qd * s.S * (p.lkEff || 1)) - s.CL0 - p.flapT * (p.player ? 0.8 : 0.38)) / s.CLa;
   return s.Cma * (a - s.trimA) / s.Ke;
 }
 const _sd = new V3();
@@ -2559,16 +2603,30 @@ function steerTo(p, dirW, out, maxPull = 1) {
   out.yaw = clamp(yawErr * 2.5 * (1 - bw) + p.beta * 3, -1, 1);
   return off;
 }
-let holdGamma = 0;
+let holdGamma = 0, holdAlt = null;
+// a stick curve: fine control near the centre, full authority at the edge
+const expo = v => v * (0.4 + 0.6 * v * v);
 function assistStick(p, sx, sy, sz, out) {
-  const bank = p.bank();
+  const bank = p.bank(), ax = Math.abs(sx);
   const gamma = Math.asin(clamp(p.vel.y / Math.max(p.V, 1), -1, 1));
-  if (Math.abs(sx) > 0.06) out.roll = sx; else out.roll = clamp(-bank * 1.6 + p.w.z * 0.25, -0.7, 0.7) * (Math.abs(bank) < 2.6 ? 1 : 0.4);
-  const ff = trimFor(p, Math.cos(gamma) / Math.max(0.35, Math.cos(clamp(bank, -1.25, 1.25))));
-  if (Math.abs(sy) > 0.06) { out.pitch = ff * (1 - Math.abs(sy)) + sy; holdGamma = gamma; }
+  // roll: the stick sets a bank angle (up to 80°) and holds it there; right to the edge it rolls freely.
+  // Rudder on its own banks gently into a flat turn, so the new heading stays when you let go.
+  if (ax > 0.92) out.roll = sx;
   else {
-    if (Math.abs(bank) > 1.4) holdGamma = gamma;
-    out.pitch = ff + (holdGamma - gamma) * 3.0 - p.w.x * 0.3 * (Math.abs(bank) < 1.4 ? 1 : 0);
+    const want = ax > 0.06 ? sx * 1.4 : Math.abs(sz) > 0.05 ? sz * 0.45 : 0;
+    out.roll = clamp(((want - bank) * 2.0 + p.w.z * 0.3) * (ax > 0.06 || Math.abs(bank) < 2.6 ? 1 : 0.4), -1, 1);
+  }
+  const ff = trimFor(p, Math.cos(gamma) / Math.max(0.35, Math.cos(clamp(bank, -1.25, 1.25))));
+  if (Math.abs(sy) > 0.06) {
+    out.pitch = ff * (1 - Math.abs(sy)) + sy; holdGamma = gamma; holdAlt = null;
+    if (G.altLock != null && Math.abs(sy) > 0.3) { G.altLock = null; msg('Altitude lock off', 'info', 1.5); }
+  } else {
+    if (Math.abs(bank) > 1.4) { holdGamma = gamma; holdAlt = null; }
+    let tg = holdGamma;
+    // let go of the stick nearly level and it holds that height; ALT (L) locks a height until you pull or push
+    if (G.altLock != null) tg = clamp((G.altLock - p.pos.y) * 0.004, -0.25, 0.25);
+    else if (Math.abs(holdGamma) < 0.26 && Math.abs(bank) < 1.4) { if (holdAlt == null) holdAlt = p.pos.y + p.vel.y * 2; tg = clamp((holdAlt - p.pos.y) * 0.003, -0.1, 0.1); } // a gentle climb or dive levels off
+    out.pitch = ff + (tg - gamma) * 3.0 - p.w.x * 0.3 * (Math.abs(bank) < 1.4 ? 1 : 0);
   }
   const caps = pitchCaps(p); out.pitch = clamp(out.pitch, Math.max(-1, caps.lo), Math.min(1, caps.hi));
   out.yaw = clamp(sz + p.beta * 3, -1, 1);
@@ -2820,7 +2878,7 @@ function makeShip() {
   for (const z of [-30, -8, 10, 26, 42]) for (const sx of [-1, 1]) { const x = sx * (shipW(z / (SHIP_L / 2)) - 2.2); put(M.sdark, new THREE.CylinderGeometry(1.1, 1.3, 1.0, 10).translate(x, D0 + 0.5, z)); aa.push({ pos: new V3(x, D0 + 1.6, z), t: rand(0, 3), lt: rand(0, 2), burst: 0, heavy: sx > 0 }); }
   const extra = new THREE.Mesh(mergeGeometries(lists.get(M.sdark).slice(-10)), M.sdark); g.add(extra);
   scene.add(g);
-  return { g, turrets, aa, pos: new V3(), hdg: 0, speed: 9, hp: 3000, max: 3000, alive: true, sinkT: 0, wakeT: 0, salvoT: 10, wp: 1, q: new Q4(), inv: new Q4() };
+  return { g, turrets, aa, pos: new V3(), hdg: 0, speed: 9, hp: 1600, max: 1600, alive: true, sinkT: 0, wakeT: 0, salvoT: 10, wp: 1, q: new Q4(), inv: new Q4() };
 }
 function setupNaval(m) {
   const S = makeShip(), z = -2600; S.pos.set(coastX(z) + 5400, 0, z);
@@ -2961,7 +3019,7 @@ function unitDies(u, owner) {
 }
 function hitShip(S, dmg, owner) {
   if (!S || !S.alive) return; S.hp -= dmg;
-  if (owner && owner.player && dmg >= 40) msg(`Battleship hit · ${Math.max(0, Math.round(S.hp / S.max * 100))}% left`, 'good', 2.2);
+  if (owner && owner.player && (dmg >= 40 || (S.hp > 0 && Math.floor(S.hp / S.max * 10) < Math.floor((S.hp + dmg) / S.max * 10)))) msg(`Battleship hit · ${Math.max(0, Math.round(S.hp / S.max * 100))}% left`, 'good', 2.2);
   if (S.hp > 0) return;
   S.alive = false; S.sinkT = 0;
   if (owner && owner.player) { G.stats.score += 1500; G.stats.ground = (G.stats.ground || 0) + 1; msg('The battleship is sinking!  +1500', 'good', 5); G.popups.push({ pos: S.pos.clone().setY(30), text: '+1500', t: 2.2 }); }
@@ -2975,7 +3033,7 @@ function blastDamage(pos, radius, dmg, owner) {
 // a bullet segment against the targets; true if it hit something
 function bulletVsGround(ox, oy, oz, nx, ny, nz, dmg, cannon, owner) {
   if (!GW.active) return false;
-  if (GW.ship && GW.ship.alive) { _a.set(nx, ny, nz); if (insideShip(GW.ship, _a) || insideShip(GW.ship, _b.set((ox + nx) / 2, (oy + ny) / 2, (oz + nz) / 2))) { damageShip(GW.ship, dmg * 0.05, owner); for (let s = 0; s < 3; s++) fireFX.spawn(nx, ny, nz, rand(-20, 20), rand(0, 25), rand(-20, 20), rand(0.1, 0.25), cannon ? 1.2 : 0.6, 2, 1, 0.85, 0.55, 1, 2, 9, 1); return true; } }
+  if (GW.ship && GW.ship.alive) { _a.set(nx, ny, nz); if (insideShip(GW.ship, _a) || insideShip(GW.ship, _b.set((ox + nx) / 2, (oy + ny) / 2, (oz + nz) / 2))) { damageShip(GW.ship, dmg * 0.1, owner); for (let s = 0; s < 3; s++) fireFX.spawn(nx, ny, nz, rand(-20, 20), rand(0, 25), rand(-20, 20), rand(0.1, 0.25), cannon ? 1.2 : 0.6, 2, 1, 0.85, 0.55, 1, 2, 9, 1); return true; } }
   for (const u of GW.train) {
     if (!u.alive || Math.abs(u.pos.x - nx) > 40 || Math.abs(u.pos.z - nz) > 40) continue; _b.set(u.pos.x, u.pos.y + 2, u.pos.z);
     if (segPointDist(_c.set(ox, oy, oz), _d.set(nx, ny, nz), _b) < u.r) { damageUnit(u, dmg * u.armor * (cannon ? 1.6 : 1), owner); for (let s = 0; s < (cannon ? 6 : 3); s++) fireFX.spawn(nx, ny, nz, rand(-15, 15), rand(2, 18), rand(-15, 15), rand(0.1, 0.25), cannon ? 1.2 : 0.6, 2, 1, 0.85, 0.55, 1, 2, 9, 1); return true; }
@@ -3058,6 +3116,29 @@ function spawnBombers(m, n, wave) {
     G.planes.push(e);
   }
   spawnEscorts(2, new V3(cx, alt + 300, cz), 'Bombers inbound for the town with fighter cover');
+}
+// a gunner in his turret: picks the nearest enemy he can bring his guns on and fires bursts at it
+const _gfrom = new V3();
+function gunnerFire(p, dt) {
+  const tur = p.spec.turrets; if (!tur || !p.alive || p.onGround) return;
+  p.tgT = p.tgT || tur.map(() => rand(0, 0.5));
+  for (let i = 0; i < tur.length; i++) {
+    p.tgT[i] -= dt; if (p.tgT[i] > 0) continue;
+    _gfrom.set(tur[i][0], tur[i][1], tur[i][2]).applyQuaternion(p.q).add(p.pos);
+    let tgt = null, td = 720;
+    for (const e of G.planes) {
+      if (e.gone || !e.alive || !hostile(p, e)) continue;
+      const d = e.pos.distanceTo(_gfrom); if (d > td) continue;
+      _b.subVectors(e.pos, _gfrom).multiplyScalar(1 / d);
+      const fw = _b.dot(p.fwd), up = _b.dot(p.up);
+      if (i === 0 ? (up < -0.25 || fw > (p.spec.gunner ? 0.8 : 0.92)) : fw > -0.15) continue; // not through the propeller, the cockpit or the floor
+      td = d; tgt = e;
+    }
+    if (!tgt) { p.tgT[i] = 0.35; continue; }
+    p.gunAim = (p.gunAim || new V3()).subVectors(tgt.pos, _gfrom).normalize(); p.gunAimT = 0.6;
+    p.tgT[i] = 0.12; spawnRound(p, _gfrom, tgt, 870, 7, 0.018 * (p.player ? 1 : diff().aim));
+    if (p.player && !(p.gunnerT > G.time)) { msg('Gunner: firing on your tail!', 'info', 2); p.gunnerT = G.time + 20; }
+  }
 }
 function bomberThink(p, dt) {
   const b = p.brain, pl = G.player;
@@ -3378,7 +3459,8 @@ function netMissionLine() {
   const k = NM.mine;
   if (k) { const m = NM.mk[k], r = NM.kinds[k]; return m ? `${MISSIONS[k].name} · ${missionLine(m) || 'in progress'}` : `${MISSIONS[k].name} with ${r ? r.name : '…'} · ${r && r.line ? r.line : 'joining'}`; }
   const running = Object.entries(NM.kinds).map(([kk, r]) => `${r.name}: ${MISSIONS[kk].name}`);
-  return running.length ? `Free play · ${running.join(' · ')} · join from the pause menu` : 'Free play · start a mission from the pause menu';
+  const ff = NET.opts.ff !== 'off' && NET.roster.some(r => r.kind === 'human' && r.seat !== NET.seat) ? ' · friendly fire on' : '';
+  return running.length ? `Free play${ff} · ${running.join(' · ')} · join from the pause menu` : `Free play${ff} · start a mission from the pause menu`;
 }
 function netObjectivePos() {
   const k = NM.mine; if (!k) return null;
@@ -3424,7 +3506,7 @@ function updateRockets(dt) {
     if (r.age < 1.1) { fireFX.spawn(r.pos.x, r.pos.y, r.pos.z, r.vel.x * 0.7, r.vel.y * 0.7, r.vel.z * 0.7, 0.08, 1.1, 2, 1, 0.8, 0.4, 1, 3, 0, 1); }
     if (r.age < 1.6 && Math.random() < 0.8) smokeFX.spawn(r.pos.x, r.pos.y, r.pos.z, rand(-1, 1), rand(-1, 1), rand(-1, 1), rand(1.4, 2.4), 0.9, 2.4, 0.72, 0.7, 0.67, 0.55, 0.6, -0.2, 0);
     let hit = null, boom = null;
-    if (!r.vis) for (const p of G.planes) { if (p === r.owner || p.gone || !p.alive || (r.owner && r.owner.team === p.team)) continue; if (segPointDist(_ro, r.pos, p.pos) < 5) { hit = p; boom = 'missile'; break; } }
+    if (!r.vis) for (const p of G.planes) { if (p === r.owner || p.gone || !p.alive || (r.owner && !canHurt(r.owner, p))) continue; if (segPointDist(_ro, r.pos, p.pos) < 5) { hit = p; boom = 'missile'; break; } }
     if (!boom && GW.ship && GW.ship.alive && insideShip(GW.ship, r.pos)) boom = 'ground';
     if (!boom) for (const u of allUnits()) { if (!u.alive || Math.abs(u.pos.x - r.pos.x) > 40 || Math.abs(u.pos.z - r.pos.z) > 40) continue; if (segPointDist(_ro, r.pos, _rk.set(u.pos.x, u.pos.y + u.r * 0.4, u.pos.z)) < u.r + 0.8) { boom = 'ground'; break; } }
     const gh = groundH(r.pos.x, r.pos.z), wl = waterLevelAt(r.pos.x, r.pos.z);
@@ -3628,7 +3710,7 @@ function groundRun(p, dt, gt) {
   const b = p.brain; b.gs = b.gs || 'approach'; b.gT = (b.gT || 0) - dt; b.rkCool = (b.rkCool || 0) - dt; b.bCool = (b.bCool || 0) - dt;
   p.firing = false; p.throttle = 0.9;
   _gt.copy(gt.pos); _gt.y += 2; _c.subVectors(_gt, p.pos); const dist = _c.length(), horiz = Math.hypot(_c.x, _c.z), agl = p.agl();
-  if (agl < 70 && b.gs !== 'pull') { b.gs = 'pull'; b.gT = 2.5; }
+  if (agl < 120 && b.gs !== 'pull') { b.gs = 'pull'; b.gT = 2.5; }
   if (b.gs === 'pull') { _dir.set(p.fwd.x, 0, p.fwd.z).normalize(); _dir.y = 0.9; steerTo(p, _dir.normalize(), p.inp, 1); p.throttle = 1; if (b.gT <= 0) { b.gs = 'extend'; b.gT = 7; } return; }
   if (b.gs === 'extend') { _dir.set(p.fwd.x, 0, p.fwd.z).normalize(); _dir.y = clamp((650 - agl) * 0.003, -0.2, 0.35); steerTo(p, _dir.normalize(), p.inp, 0.7); if (b.gT <= 0) b.gs = 'approach'; return; }
   if (b.gs === 'approach') {
@@ -3642,7 +3724,9 @@ function groundRun(p, dt, gt) {
   p.firing = conv > 0.995 && dist < 850;
   if (conv > 0.996 && dist < 1100 && b.rkCool <= 0 && p.rockets > 0) { fireRocket(p); b.rkCool = 0.4; }
   if (p.bombs > 0 && b.bCool <= 0) { const im = bombImpact(p); if (im && im.pos.distanceTo(_gt) < Math.max(16, gt.r * 2.2)) { dropBomb(p); b.bCool = 1.2; } }
-  if (dist < 420 || agl < 280) { if (p.bombs > 0 && b.bCool <= 0) { const im = bombImpact(p); if (im && im.pos.distanceTo(_gt) < 70) { dropBomb(p); b.bCool = 1.2; } } b.gs = 'pull'; b.gT = 2.8; }
+  // pull out in time: when close, when low, or when three seconds more of this dive would put it near the ground
+  _a.copy(p.pos).addScaledVector(p.vel, 3);
+  if (dist < 450 || agl < 330 || _a.y < Math.max(groundH(_a.x, _a.z), waterLevelAt(_a.x, _a.z)) + 140) { if (p.bombs > 0 && b.bCool <= 0) { const im = bombImpact(p); if (im && im.pos.distanceTo(_gt) < 70) { dropBomb(p); b.bCool = 1.2; } } b.gs = 'pull'; b.gT = 2.8; }
 }
 function formationFly(p, dt, pl) {
   const i = WING.list.indexOf(p), side = i % 2 ? 1 : -1;
@@ -3665,6 +3749,8 @@ function wingThink(p, dt) {
   for (const e of G.planes) { if (!e.alive || e.gone || e.team === p.team) continue; const d = e.pos.distanceTo(pl.pos); if (d < td) { td = d; threat = e; } }
   if (threat) { aiThink(p, dt, threat); return; }
   p.brain.gs = 'approach';
+  // you are flying on this wingman's wing (FORM): it holds a steady course for you
+  if (G.form === p) { _dir.set(p.fwd.x, 0, p.fwd.z).normalize(); _dir.y = clamp((Math.max(pl.pos.y, 500) - p.pos.y) * 0.002, -0.1, 0.1); steerTo(p, _dir.normalize(), p.inp, 0.6); p.throttle = 0.8; return; }
   formationFly(p, dt, pl);
 }
 
@@ -3796,7 +3882,7 @@ const CAMPAIGN = [
     brief: 'An armoured convoy is driving to a fuel depot. Bomb, rocket and strafe it. Send Mack in with U.' },
   { id: 'rails', title: 'Iron Rails', kind: 'train', tod: 'day', wingmen: 1, unlock: 'brute',
     brief: 'An ammunition train is running up the river valley to the harbour. Rockets (K, or RKT) and bombs set the wagons off one after another. Stop it before it reaches the depot.' },
-  { id: 'dusk', title: 'Dusk Raid', kind: 'intercept', tod: 'sunset', wingmen: 2, bwaves: 2,
+  { id: 'dusk', title: 'Dusk Raid', kind: 'intercept', tod: 'sunset', wingmen: 2, bwaves: 2, unlock: 'warden',
     brief: 'Bombers are coming for the town at sunset. Stop them before three get through.' },
   { id: 'heron', title: 'The Black Heron', kind: 'dogfight', tod: 'sunset', waves: [['veteran', 'veteran'], ['boss:heron', 'veteran']], unlock: 'lancer',
     brief: 'Viktor Kessel, the Black Heron, leads the second wave. He breaks hard when you get behind him. Stay with him.' },
@@ -3834,6 +3920,14 @@ function buildWaves(enemies, waves) {
 }
 let WAVES = buildWaves(settings.enemies, settings.waves);
 const hostile = (a, b) => a.team !== b.team;
+// in co-op free play (neither pilot in a mission) people may shoot each other for fun; the table can turn it off
+function inFreePlay(pl) {
+  if (pl.seat == null) return false;
+  if (pl.seat === NET.seat) return !NM.mine && !(G.mission && G.mission.local);
+  return !Object.values(NM.kinds).some(r => r.members.includes(pl.seat));
+}
+function freeFire(a, b) { return NET.on && NET.opts.mode === 'coop' && NET.opts.ff !== 'off' && a.role === 'player' && b.role === 'player' && a !== b && inFreePlay(a) && inFreePlay(b); }
+function canHurt(a, b) { return a !== b && (a.team !== b.team || freeFire(a, b)); }
 function enemies() { const me = G.player; return G.planes.filter(p => p.alive && !p.gone && p !== me && (me ? hostile(p, me) : p.role === 'raider')); }
 function raiders() { return G.planes.filter(p => p.role === 'raider' && p.alive && !p.gone); }
 function removePlane(p) { scene.remove(p.model.group); G.planes = G.planes.filter(x => x !== p); }
@@ -3888,7 +3982,7 @@ function spawnPlayer(mode) {
   NET.life = (NET.life || 0) + 1;
   const s = NET.on ? NET.seat : 0;
   const pl = new Plane(settings.plane, { player: true, id: NET.on ? `p${s}.${NET.life}` : 'me', team: myTeam(), seat: NET.on ? s : null, label: NET.on ? NET.name : '' });
-  G.player = pl; G.planes.push(pl);
+  G.player = pl; G.planes.push(pl); G.altLock = null; G.form = null; holdAlt = null;
   if (mode === 'sortie') {
     const gp = pl.spec.tri ? 0 : TAIL;
     pl.place(AF.x + (NET.on ? (s % 2 ? 9 : -9) : 0), 0, AF.z + AF.len * 0.5 - 50 - (NET.on ? s * 130 : 0), 0, gp, 0); pl.pos.y = AF.h + rideH(pl.spec, gp);
@@ -3979,7 +4073,7 @@ addEventListener('message', e => {
   else if (d.type === 'rematch') { NET.rm = d; rematchButton(); }
 });
 function normOpts(o = {}) {
-  return { mode: o.mode === 'versus' ? 'versus' : 'coop', difficulty: DIFF[o.difficulty] ? o.difficulty : 'normal', enemies: o.enemies ?? 'normal', waves: Number(o.waves) || 3, kills: Number(o.kills) || 5, wingmen: o.wingmen === 'on' ? 'on' : 'off', tod: TOD_PRESETS[o.tod] ? o.tod : 'day' };
+  return { mode: o.mode === 'versus' ? 'versus' : 'coop', difficulty: DIFF[o.difficulty] ? o.difficulty : 'normal', enemies: o.enemies ?? 'normal', waves: Number(o.waves) || 3, kills: Number(o.kills) || 5, wingmen: o.wingmen === 'on' ? 'on' : 'off', ff: o.ff === 'off' ? 'off' : 'on', tod: TOD_PRESETS[o.tod] ? o.tod : 'day' };
 }
 function netInit(d) {
   NET.on = true; NET.host = !!d.isHost; NET.opts = normOpts(d.options);
@@ -4269,6 +4363,7 @@ addEventListener('keydown', e => {
     else if (e.code === 'KeyB' && G.player && !G.player.onGround) dropPlayerBomb();
     else if (e.code === 'KeyX' || e.code === 'Enter') firePlayerMissile(); else if (e.code === 'KeyF') playerFlares(); else if (e.code === 'KeyM') cycleMap();
     else if (e.code === 'KeyK') firePlayerRockets(); else if (e.code === 'KeyJ') bailOut();
+    else if (e.code === 'KeyL') toggleAltLock(); else if (e.code === 'KeyO') toggleForm();
     else if (e.code === 'KeyT') wingCommand('attack'); else if (e.code === 'KeyY') wingCommand('cover'); else if (e.code === 'KeyU') wingCommand('ground');
     else if (e.code === 'Escape' || e.code === 'KeyP' || e.code === 'KeyH') pause(true);
     else if (/^Digit[0-9]$/.test(e.code) && G.player) { const d = +e.code.slice(5); G.player.throttle = d === 0 ? 1 : d / 10; }
@@ -4289,6 +4384,7 @@ addEventListener('mousemove', e => {
   if (G.state !== 'play' || settings.control !== 'mouse' || isTouch) return;
   const k = 0.0021;
   G.aimYaw -= e.movementX * k; G.aimPitch = clamp(G.aimPitch - e.movementY * k, -1.45, 1.45);
+  if (G.altLock != null && Math.abs(e.movementY) > 8) { G.altLock = null; msg('Altitude lock off', 'info', 1.5); $('tAlt').classList.remove('on'); }
 });
 addEventListener('wheel', e => { if (G.state === 'play' && G.player) G.player.throttle = clamp(G.player.throttle - Math.sign(e.deltaY) * 0.05, 0, 1); }, { passive: true });
 document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && G.state === 'play' && settings.control === 'mouse' && !isTouch) pause(true); });
@@ -4336,6 +4432,8 @@ $('tMsl').addEventListener('pointerdown', e => { e.preventDefault(); firePlayerM
 $('tFlr').addEventListener('pointerdown', e => { e.preventDefault(); playerFlares(); });
 $('tBomb').addEventListener('pointerdown', e => { e.preventDefault(); dropPlayerBomb(); });
 $('tRkt').addEventListener('pointerdown', e => { e.preventDefault(); firePlayerRockets(); });
+$('tAlt').addEventListener('pointerdown', e => { e.preventDefault(); toggleAltLock(); });
+$('tForm').addEventListener('pointerdown', e => { e.preventDefault(); toggleForm(); });
 $('tWing').addEventListener('pointerdown', e => { e.preventDefault(); cycleWing(); });
 $('tBail').addEventListener('pointerdown', e => { e.preventDefault(); if (G.player && G.player.alive && !G.bailWin) G.bailArm = Math.max(G.bailArm || 0, 0.01); bailOut(); });
 $('tMap').addEventListener('click', () => cycleMap());
@@ -4408,6 +4506,12 @@ function playerControl(dt) {
   p.boosting = wantBoost && p.throttle >= 0.99 && p.wep > 0.02 && p.engineOn;
   p.wep = p.spec.jet ? 1 : p.boosting ? Math.max(0, p.wep - dt / 18) : Math.min(1, p.wep + dt / (p.throttle < 0.9 ? 30 : 60));
   $('tThr').classList.toggle('boost', p.boosting);
+  // FORM: the aircraft flies itself onto a friend's wing until you take the stick
+  if (G.form) {
+    const L = G.form, grab = kx || ky || Math.abs(touch.sx) > 0.3 || Math.abs(touch.sy) > 0.3 || (settings.control === 'tilt' && touch.tilt && touch.tiltRef && Math.abs(touch.tilt.roll - touch.tiltRef.roll) > 12);
+    if (!L.alive || L.gone || p.onGround || grab) { G.form = null; $('tForm').classList.remove('on'); msg(grab ? 'You have control' : 'Formation off', 'info', 2); }
+    else { formFly(p, dt, L); if (kz) p.inp.yaw = clamp(p.inp.yaw + kz, -1, 1); return; }
+  }
   const mode = settings.control;
   const inv = settings.invert ? -1 : 1;
   const keyActive = kx !== 0 || ky !== 0;
@@ -4422,6 +4526,9 @@ function playerControl(dt) {
   }
   if ((mode === 'mouse' || mode === 'touch-aim') && !keyActive) {
     _dir.set(-Math.sin(G.aimYaw) * Math.cos(G.aimPitch), Math.sin(G.aimPitch), -Math.cos(G.aimYaw) * Math.cos(G.aimPitch));
+    // rudder turns the aim point too, so the new heading holds when you let go; ALT holds the aim level at that height
+    if (kz) G.aimYaw -= kz * 0.55 * dt;
+    if (G.altLock != null) { G.aimPitch = clamp((G.altLock - p.pos.y) * 0.003, -0.3, 0.3); _dir.set(-Math.sin(G.aimYaw) * Math.cos(G.aimPitch), Math.sin(G.aimPitch), -Math.cos(G.aimYaw) * Math.cos(G.aimPitch)); }
     steerTo(p, _dir, inp, 1); inp.yaw = clamp(inp.yaw + kz, -1, 1);
     return;
   }
@@ -4434,11 +4541,40 @@ function playerControl(dt) {
       if (!touch.tiltRef) touch.tiltRef = { ...touch.tilt };
       sx = clamp((touch.tilt.roll - touch.tiltRef.roll) / 28, -1, 1); sy = clamp((touch.tilt.pitch - touch.tiltRef.pitch) / 22, -1, 1);
       sx = dz(sx, 0.08); sy = dz(sy, 0.08);
-    } else { sx = touch.sx; sy = touch.sy; }
+    } else { sx = expo(touch.sx); sy = expo(touch.sy); }
   }
   sy *= inv;
   if (mode === 'stick-manual') { inp.roll = sx; inp.pitch = sy; inp.yaw = sz; }
   else assistStick(p, sx, sy, sz, inp);
+}
+function formLeaderFor(p) {
+  let best = null, bd = Infinity;
+  for (const e of G.planes) { if (e === p || !e.alive || e.gone || hostile(e, p) || e.onGround) continue; const d = e.pos.distanceTo(p.pos) * (e.role === 'player' ? 0.4 : 1); if (d < bd) { bd = d; best = e; } }
+  return best;
+}
+function toggleForm() {
+  const p = G.player; if (!p || !p.alive || p.onGround || G.state !== 'play') return;
+  if (G.form) { G.form = null; msg('Formation off · you have control', 'info', 2); }
+  else { const L = formLeaderFor(p); if (!L) { msg('No friendly aircraft in the air to form up on', 'warn', 2.5); return; } G.form = L; msg(`Forming up on ${L.label || 'your wingman'} · move the stick to take over`, 'good', 3.5); }
+  $('tForm').classList.toggle('on', !!G.form);
+}
+function formFly(p, dt, L) {
+  _d.set(L.fwd.x, 0, L.fwd.z).normalize();
+  _gt.copy(L.pos).addScaledVector(L.right, 32).addScaledVector(_d, -26); _gt.y += 4;
+  const ahead = _b.subVectors(p.pos, _gt).dot(_d);
+  _c.copy(_gt).addScaledVector(L.vel, 1.5).sub(p.pos); const dd = _c.length();
+  _dir.copy(_c).normalize(); if (dd < 80) _dir.lerp(L.fwd, 1 - dd / 80).normalize();
+  if (p.agl() < 80) _dir.y = Math.max(_dir.y, 0.3);
+  steerTo(p, _dir.normalize(), p.inp, 0.9);
+  p.throttle = clamp((L.throttle ?? 0.8) - ahead * 0.012 + (L.V - p.V) * 0.03 + (dd > 400 ? 0.5 : 0), 0.1, 1);
+  p.boosting = dd > 250 && ahead < 0 && p.wep > 0.1 && p.engineOn && p.throttle >= 0.99; // catch up
+  G.aimYaw = Math.atan2(-p.fwd.x, -p.fwd.z); G.aimPitch = Math.asin(clamp(p.fwd.y, -1, 1));
+}
+function toggleAltLock() {
+  const p = G.player; if (!p || !p.alive || p.onGround || G.state !== 'play') return;
+  if (G.altLock != null) { G.altLock = null; msg('Altitude lock off', 'info', 2); }
+  else { G.altLock = Math.round(p.pos.y / 10) * 10; msg(`Altitude locked at ${G.altLock} m · pull or push to release`, 'good', 3); }
+  $('tAlt').classList.toggle('on', G.altLock != null);
 }
 function autopilot(p, dt) {
   p.firing = false; p.brake = 0;
@@ -4707,20 +4843,24 @@ function drawHUD(rdt) {
   let lead = null, leadD = 1e9;
   for (const e of G.planes) {
     if (e === p || e.gone) continue;
-    const friend = !hostile(e, p);
+    const friend = !hostile(e, p), fair = friend && canHurt(p, e); // a friend you may shoot (free play): amber
     const d = e.pos.distanceTo(p.pos); const s = proj(e.pos);
-    const col = !e.alive ? 'rgba(200,190,170,0.6)' : friend ? '#97c46f' : e.ace ? '#ff6a4d' : '#e2553f';
+    const col = !e.alive ? 'rgba(200,190,170,0.6)' : fair ? '#eaa53c' : friend ? '#97c46f' : e.ace ? '#ff6a4d' : '#e2553f';
+    const dAlt = e.pos.y - p.pos.y, altTxt = Math.abs(dAlt) < 25 ? '= alt' : `${dAlt > 0 ? '▲' : '▼'}${Math.round(Math.abs(dAlt) / 10) * 10} m`;
     if (s.ok) {
       const sz = clamp(1800 / d, 9, 26); hx.strokeStyle = col; hx.lineWidth = 1.8; hx.beginPath();
       for (const [dx, dy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { hx.moveTo(s.x + dx * sz, s.y + dy * sz * 0.6); hx.lineTo(s.x + dx * sz, s.y + dy * sz); hx.lineTo(s.x + dx * sz * 0.6, s.y + dy * sz); } hx.stroke();
-      if (e.alive && e.label) txt(e.label, s.x, s.y - sz - 6, 11, col, 'center', COND, 600);
-      if (e.alive) txt(d < 1000 ? `${Math.round(d)} m` : `${(d / 1000).toFixed(1)} km`, s.x, s.y + sz + 14, 11, col, 'center');
-      if (e.alive && !friend && d < 1500 && p.fwd.dot(_b.subVectors(e.pos, p.pos).normalize()) > 0.75 && d < leadD) { lead = e; leadD = d; }
-    } else if (e.alive && !friend) {
+      if (e.alive && e.label) txt(friend ? `${e.label} · ${Math.round(e.pos.y)} m` : e.label, s.x, s.y - sz - 6, 11, col, 'center', COND, 600);
+      if (e.alive) txt(`${d < 1000 ? `${Math.round(d)} m` : `${(d / 1000).toFixed(1)} km`} ${altTxt}`, s.x, s.y + sz + 14, 11, col, 'center');
+      if (e.alive && (!friend || fair) && d < 1500 && p.fwd.dot(_b.subVectors(e.pos, p.pos).normalize()) > 0.75 && d < leadD) { lead = e; leadD = d; }
+    } else if (e.alive) {
+      // off screen: an arrow at the edge pointing at it (green for friends, with their name and height)
       _a.copy(e.pos).applyMatrix4(camera.matrixWorldInverse); let ax = _a.x, ay = -_a.y; if (Math.abs(ax) + Math.abs(ay) < 1e-3) ay = 1;
       const ang = Math.atan2(ay, ax), rx = HW / 2 - 46, ry = HH / 2 - 56; const x = HW / 2 + Math.cos(ang) * rx, y = HH / 2 + Math.sin(ang) * ry;
-      hx.save(); hx.translate(x, y); hx.rotate(ang); hx.fillStyle = col; hx.beginPath(); hx.moveTo(12, 0); hx.lineTo(-6, -8); hx.lineTo(-2, 0); hx.lineTo(-6, 8); hx.fill(); hx.restore();
-      txt(`${(d / 1000).toFixed(1)}`, x - Math.cos(ang) * 22, y - Math.sin(ang) * 22 + 4, 10, col, 'center');
+      hx.save(); hx.translate(x, y); hx.rotate(ang); hx.fillStyle = col; hx.beginPath(); if (friend) { hx.moveTo(10, 0); hx.lineTo(-5, -7); hx.lineTo(-5, 7); } else { hx.moveTo(12, 0); hx.lineTo(-6, -8); hx.lineTo(-2, 0); hx.lineTo(-6, 8); } hx.fill(); hx.restore();
+      const tx = x - Math.cos(ang) * 24, ty = y - Math.sin(ang) * 24 + 4;
+      if (friend) { txt(`${(e.label || 'Friend').slice(0, 10)} ${(d / 1000).toFixed(1)}`, tx, ty, 10, col, 'center'); txt(altTxt, tx, ty + 12, 10, col, 'center'); }
+      else txt(`${(d / 1000).toFixed(1)}`, tx, ty, 10, col, 'center');
     }
   }
   // ground targets and the battleship: red brackets with what they are
@@ -4795,6 +4935,7 @@ function drawHUD(rdt) {
   const bp = G.planes.find(e => e.boss && e.alive && !e.gone);
   if (bp) { const B = BOSSES[bp.boss], f = bossHealth(bp), w = 200, x0 = HW / 2 - w / 2, y0 = safeT + 30; hx.fillStyle = 'rgba(20,20,18,0.55)'; hx.fillRect(x0 - 2, y0 - 2, w + 4, 9); hx.fillStyle = bp.lastStand ? '#ff6a4d' : '#e2553f'; hx.fillRect(x0, y0, w * f, 5); txt(`${B.name.toUpperCase()} · ${B.call.toUpperCase()}`, HW / 2, y0 + 20, 11, '#ff8a6d', 'center', COND, 700); }
   // your wingmen's orders
+  if (G.altLock != null || G.form) txt(G.form ? `FORMATION ON ${(G.form.label || 'WINGMAN').toUpperCase()}${isTouch ? '' : ' · O'}` : `ALT LOCK ${G.altLock} M${isTouch ? '' : ' · L'}`, HW / 2, HH - (isTouch ? 184 : 144), 11, '#eaa53c', 'center', COND, 700);
   const wl = wingAlive(); if (wl.length) txt(`WINGMEN ${wl.length} · ${WING_CMDS[WING.cmd].toUpperCase()}${isTouch ? '' : ' · T Y U'}`, HW / 2, HH - (isTouch ? 168 : 128), 11, '#97c46f', 'center', COND, 600);
   // on phones the score sits under the button row
   const scoreX = HW - safeL, scoreY = isTouch ? safeT + 66 : safeT;
@@ -4856,6 +4997,8 @@ function touchExtras(p) {
   if (!isTouch) return;
   const rk = $('tRkt'), wg = $('tWing'), bl = $('tBail');
   rk.hidden = !(p.alive && p.rockets > 0); if (!rk.hidden) rk.textContent = `RKT ${p.rockets}`;
+  $('tAlt').hidden = !p.alive || p.onGround; $('tAlt').classList.toggle('on', G.altLock != null);
+  $('tForm').hidden = !p.alive || p.onGround || (!G.form && !formLeaderFor(p)); $('tForm').classList.toggle('on', !!G.form);
   const wl = wingAlive(); wg.hidden = !wl.length || !p.alive; if (!wg.hidden) wg.textContent = { cover: 'WING · COVER', attack: 'WING · ATTACK', ground: 'WING · GROUND' }[WING.cmd];
   const bail = canBail(p) && (G.bailWin || (p.alive && playerInTrouble(p))); bl.hidden = !bail; bl.classList.toggle('on', !!G.bailWin && (G.time * 3) % 1 < 0.6);
 }
@@ -4876,7 +5019,7 @@ function drawSectorMap(p, x, y, S) {
   const [ax, az] = toM(AF.x, AF.z - AF.len / 2); hx.fillStyle = '#f1e8d2'; hx.fillRect(ax - 1.5, az, 3, Math.max(4, AF.len * sc));
   for (const e of G.planes) {
     if (e === p || !e.alive || e.gone) continue; const [ex, ez] = toM(e.pos.x, e.pos.z);
-    hx.fillStyle = !hostile(e, p) ? '#97c46f' : e.ace ? '#ff6a4d' : '#e2553f'; hx.beginPath(); hx.arc(ex, ez, 3, 0, 6.283); hx.fill();
+    blip(ex, ez, Math.atan2(e.fwd.x, -e.fwd.z), !hostile(e, p) ? '#97c46f' : e.ace ? '#ff6a4d' : '#e2553f', 4.5);
     if (e === LOCK.target) { hx.strokeStyle = LOCK.locked ? '#ff4a3a' : '#eaa53c'; hx.lineWidth = 1.5; hx.strokeRect(ex - 5, ez - 5, 10, 10); }
   }
   hx.fillStyle = '#ffffff'; for (const m of MSL) { const [mx, mz] = toM(m.pos.x, m.pos.z); hx.fillRect(mx - 1, mz - 1, 2, 2); }
@@ -4886,6 +5029,8 @@ function drawSectorMap(p, x, y, S) {
   hx.restore();
   txt('N', x + S / 2, y + 12, 10, '#f1e8d2', 'center');
 }
+// an aircraft on a map: a small arrow pointing the way it is flying
+function blip(x, y, hdg, col, r) { hx.save(); hx.translate(x, y); hx.rotate(hdg); hx.fillStyle = col; hx.beginPath(); hx.moveTo(0, -r * 1.3); hx.lineTo(r, r); hx.lineTo(0, r * 0.45); hx.lineTo(-r, r); hx.closePath(); hx.fill(); hx.strokeStyle = 'rgba(10,10,8,0.7)'; hx.lineWidth = 0.8; hx.stroke(); hx.restore(); }
 function drawRadar(p, cx, cy, R) {
   const range = 6000, hdg = Math.atan2(p.fwd.x, -p.fwd.z);
   hx.save(); hx.beginPath(); hx.arc(cx, cy, R, 0, 6.283); hx.clip();
@@ -4896,7 +5041,7 @@ function drawRadar(p, cx, cy, R) {
   hx.globalAlpha = 1;
   hx.fillStyle = '#f1e8d2'; hx.fillRect((AF.x - p.pos.x) * sc - 1.5, (AF.z - AF.len / 2 - p.pos.z) * sc, 3, AF.len * sc);
   if (GW.active) { hx.fillStyle = '#e2553f'; for (const u of allUnits()) if (u.alive) { let ex = (u.pos.x - p.pos.x) * sc, ez = (u.pos.z - p.pos.z) * sc; const l = Math.hypot(ex, ez); if (l > R - 4) { ex *= (R - 4) / l; ez *= (R - 4) / l; } hx.fillRect(ex - 2, ez - 2, 4, 4); } const S = GW.ship; if (S && S.alive) { let ex = (S.pos.x - p.pos.x) * sc, ez = (S.pos.z - p.pos.z) * sc; const l = Math.hypot(ex, ez); if (l > R - 6) { ex *= (R - 6) / l; ez *= (R - 6) / l; } hx.save(); hx.translate(ex, ez); hx.rotate(-S.hdg); hx.fillRect(-2.5, -8, 5, 16); hx.restore(); } }
-  for (const e of G.planes) { if (e === p || !e.alive || e.gone) continue; let ex = (e.pos.x - p.pos.x) * sc, ez = (e.pos.z - p.pos.z) * sc; const l = Math.hypot(ex, ez); if (l > R - 4) { ex *= (R - 4) / l; ez *= (R - 4) / l; } hx.fillStyle = !hostile(e, p) ? '#97c46f' : e.ace ? '#ff6a4d' : '#e2553f'; hx.beginPath(); hx.arc(ex, ez, 3.5, 0, 6.283); hx.fill(); }
+  for (const e of G.planes) { if (e === p || !e.alive || e.gone) continue; let ex = (e.pos.x - p.pos.x) * sc, ez = (e.pos.z - p.pos.z) * sc; const l = Math.hypot(ex, ez); if (l > R - 4) { ex *= (R - 4) / l; ez *= (R - 4) / l; } blip(ex, ez, Math.atan2(e.fwd.x, -e.fwd.z), !hostile(e, p) ? '#97c46f' : e.ace ? '#ff6a4d' : '#e2553f', 4); }
   hx.restore();
   hx.strokeStyle = 'rgba(241,232,210,0.6)'; hx.lineWidth = 1.5; hx.beginPath(); hx.arc(cx, cy, R, 0, 6.283); hx.stroke();
   hx.fillStyle = '#eaa53c'; hx.beginPath(); hx.moveTo(cx, cy - 6); hx.lineTo(cx + 4.5, cy + 5); hx.lineTo(cx - 4.5, cy + 5); hx.fill();
@@ -4970,11 +5115,11 @@ function pause(on) {
 function fillSettings() {
   $('setControl').value = settings.control; $('setQuality').value = settings.quality; $('setVolume').value = settings.volume; $('setInvert').checked = settings.invert; $('setKill').checked = settings.killcam;
   const help = isTouch ? [
-    ['Steer (stick)', 'left thumb'], ['Throttle', 'slider'], ['Boost', 'drag into the red top of the slider'], ['Fire all guns', 'FIRE'], ['Missile', 'MSL (wait for the lock)'], ['Flares', 'FLARE'], ['Corner map', 'MAP'], ['Gear / flaps', 'GEAR · FLAP'], ['Camera', 'CAM'], ['Pause', 'II'], ['Drop a bomb', 'BOMB'], ['Rockets', 'RKT (fires a pair)'], ['Wingmen', 'WING cycles cover / attack / ground'], ['Bail out', 'BAIL (shows when you are hit)'], ['Rudder', 'hold ◀ RUD / RUD ▶ (turn on in settings)'],
+    ['Steer (stick)', 'left thumb'], ['Throttle', 'slider'], ['Boost', 'drag into the red top of the slider'], ['Fire all guns', 'FIRE'], ['Missile', 'MSL (wait for the lock)'], ['Flares', 'FLARE'], ['Corner map', 'MAP'], ['Gear / flaps', 'GEAR · FLAP'], ['Camera', 'CAM'], ['Pause', 'II'], ['Drop a bomb', 'BOMB'], ['Rockets', 'RKT (fires a pair)'], ['Wingmen', 'WING cycles cover / attack / ground'], ['Bail out', 'BAIL (shows when you are hit)'], ['Hold this height', 'ALT (push or pull to release)'], ['Fly on a friend\'s wing', 'FORM (move the stick to take over)'], ['Stick', 'part-way holds a bank angle, all the way rolls'], ['Rudder', 'hold ◀ RUD / RUD ▶ (turn on in settings)'],
     ['Stick, assisted', 'auto-levels, holds height'], ['Touch-drag aim', 'drag anywhere, plane follows'], ['Tilt', 'tilt to steer · tap the left side to re-centre'],
   ] : [
     ['Aim (mouse mode)', 'move mouse'], ['Fire', 'click · Space'], ['Missile', 'right click · X'], ['Flares', 'F'], ['Pitch', 'W / S'], ['Roll', 'A / D'], ['Rudder', 'Q / E'], ['Throttle', 'Shift / Z · wheel · 1–0'],
-    ['Boost', 'hold Shift at full throttle'], ['Drop a bomb', 'B in the air'], ['Rockets', 'K (a pair)'], ['Wingmen', 'T attack my target · Y cover me · U ground'], ['Bail out', 'J (twice if not hit)'], ['Corner map', 'M'], ['Gear', 'G'], ['Flaps', 'V'], ['Brakes', 'B'], ['Camera', 'C'], ['Pause', 'Esc · P'], ['Gamepad', 'RT fire · LB missile · RB flares · LT bomb · L3 rockets · R3 bail · D-pad ◀ attack ▶ cover · Back ground · Y map'],
+    ['Boost', 'hold Shift at full throttle'], ['Drop a bomb', 'B in the air'], ['Rockets', 'K (a pair)'], ['Wingmen', 'T attack my target · Y cover me · U ground'], ['Bail out', 'J (twice if not hit)'], ['Hold this height', 'L'], ['Fly on a friend\'s wing', 'O'], ['Tight turn', 'V for flaps (slows you down)'], ['Corner map', 'M'], ['Gear', 'G'], ['Flaps', 'V'], ['Brakes', 'B'], ['Camera', 'C'], ['Pause', 'Esc · P'], ['Gamepad', 'RT fire · LB missile · RB flares · LT bomb · L3 rockets · R3 bail · D-pad ◀ attack ▶ cover · Back ground · Y map'],
   ];
   $('helpGrid').innerHTML = help.map(([a, b]) => `<div><span>${a}</span><span>${b}</span></div>`).join('');
   $('pauseEyebrow').textContent = G.player ? `${SPECS[settings.plane].full} · ${fmtTime(G.time)} airborne · ${G.stats ? G.stats.kills : 0} kills` : 'Settings';
@@ -5272,6 +5417,8 @@ function simulate(dt) {
   while (rem > 1e-6) { const h = Math.min(STEP, rem); for (const p of G.planes) if (!p.gone && !p.remote) p.physics(h); rem -= h; }
   for (const p of G.planes) if (p.remote && !p.gone) remoteStep(p, dt);
   for (const p of G.planes) { if (!p.gone) p.weapons(dt); }
+  // gunners: the Warden's always, and the Brute's when you fly it (the computer's bombers aim theirs in bomberThink)
+  for (const p of G.planes) if (!p.remote && !p.gone && p.alive && (p.spec.gunner || (p.player && p.spec.turrets))) gunnerFire(p, dt);
   // mid-air collisions: each device only crashes the aircraft it flies
   const hit = new Set();
   for (let i = 0; i < G.planes.length; i++) for (let j = i + 1; j < G.planes.length; j++) { const a = G.planes[i], b = G.planes[j]; if (a.gone || b.gone) continue; if (a.pos.distanceToSquared(b.pos) < 49) { if (!a.remote) hit.add(a); if (!b.remote) hit.add(b); } }
@@ -5373,7 +5520,7 @@ window.__game = { get post() { return !!renderPipeline; }, get fx() { return { s
       resolve(canvas.toDataURL('image/png'));
     }));
   }, G, settings, startMission, SPECS, NET, netSend, finishNet, MSL, LOCK, launchMissile, dropFlares, DIFF, explosion, Sfx };
-window.__gw = GW; window.__gwDrop = p => { while (p.bombs > 0 && dropBomb(p)); }; window.__town = TOWN; window.__simNoPlayer = dt => { updateBullets(dt); updateGroundWar(dt); }; window.__kill = p => destroy(p, 'shot down', G.player, false); window.__net = NET; window.__netMenu = () => netMenu(); window.__nm = NM; window.__handleNet = handleNet; window.__netMissionStart = netMissionStart; window.__x = { waterU, skyU, CAMP, CAMPAIGN, WING, wingCommand, bailOut, firePlayerRockets, fireRocket, ROCKETS, CHUTES, endMission, applyTimeOfDay, TOD, BOSSES, bossHealth, rail: () => RAIL, applyMenuMode, spawnChute, canBail, simulate }; window.__blast = blastDamage; window.__damageUnit = damageUnit; window.__netObjective = netObjective;
+window.__gw = GW; window.__gwDrop = p => { while (p.bombs > 0 && dropBomb(p)); }; window.__town = TOWN; window.__simNoPlayer = dt => { updateBullets(dt); updateGroundWar(dt); }; window.__kill = p => destroy(p, 'shot down', G.player, false); window.__net = NET; window.__netMenu = () => netMenu(); window.__nm = NM; window.__handleNet = handleNet; window.__netMissionStart = netMissionStart; window.__keys = keys; window.__touch = touch; window.__x = { toggleAltLock, toggleForm, canHurt, freeFire, gunnerFire, waterU, skyU, CAMP, CAMPAIGN, WING, wingCommand, bailOut, firePlayerRockets, fireRocket, ROCKETS, CHUTES, endMission, applyTimeOfDay, TOD, BOSSES, bossHealth, rail: () => RAIL, applyMenuMode, spawnChute, canBail, simulate }; window.__blast = blastDamage; window.__damageUnit = damageUnit; window.__netObjective = netObjective;
 
 (async function boot() {
   resizeHUD();
