@@ -40,6 +40,8 @@ p{margin:0;line-height:1.4;max-width:64ch}
 .card[aria-checked="true"]{border-color:var(--yellow);background:rgba(255,204,26,.09)}
 .card b{font-family:var(--f-display);font-size:1.35rem;font-weight:800;font-style:italic;text-transform:uppercase;letter-spacing:.02em}
 .card small{color:var(--ink-dim);font-size:.85rem;line-height:1.3}
+.card .thumb{width:100%;aspect-ratio:16/9;object-fit:contain;margin:-6px 0 -2px;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at 50% 72%,rgba(244,241,232,.08),transparent 65%)}
+.card .thumb.ready{opacity:1}
 .stat{display:grid;grid-template-columns:4.6em 1fr;align-items:center;gap:8px;font-family:var(--f-data);font-size:.66rem;color:var(--ink-dim);text-transform:uppercase}
 .bar{height:5px;background:rgba(244,241,232,.12);position:relative}
 .bar i{position:absolute;inset:0 auto 0 0;background:var(--yellow)}
@@ -85,7 +87,7 @@ table.res i{display:inline-block;width:10px;height:10px;border-radius:2px;margin
 #tGas.on{background:rgba(111,210,122,.7)}
 #tBrake{width:86px;height:96px;right:calc(max(16px,env(safe-area-inset-right)) + 120px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 10px);border-color:rgba(239,72,54,.9);background:rgba(239,72,54,.28)}
 #tBrake.on{background:rgba(239,72,54,.7)}
-#tHand{width:72px;height:52px;right:calc(max(16px,env(safe-area-inset-right)) + 120px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 118px);font-size:.75rem}
+#tTurbo{width:72px;height:52px;right:calc(max(16px,env(safe-area-inset-right)) + 120px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 118px);font-size:.75rem}
 #tLeft{width:84px;height:84px;left:calc(max(16px,env(safe-area-inset-left)) + 14px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 14px);font-size:1.6rem}
 #tRight{width:84px;height:84px;left:calc(max(16px,env(safe-area-inset-left)) + 112px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 14px);font-size:1.6rem}
 .tbtn.sq{width:46px;height:46px;border-radius:10px;font-size:.72rem;top:calc(max(10px,env(safe-area-inset-top)) + 4px)}
@@ -93,8 +95,10 @@ table.res i{display:inline-block;width:10px;height:10px;border-radius:2px;margin
 #tCam{right:calc(max(16px,env(safe-area-inset-right)) + 64px)}
 #tMap{right:calc(max(16px,env(safe-area-inset-right)) + 116px)}
 #tReset{right:calc(max(16px,env(safe-area-inset-right)) + 168px)}
-/* short screens: DRIFT moves beside BRAKE, everything a size smaller; tiny = under 300px tall */
-#touch.compact #tHand{right:calc(max(16px,env(safe-area-inset-right)) + 212px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 10px);width:66px;height:52px}
+#tTurbo{border-color:rgba(255,138,42,.95);background:linear-gradient(to top,rgba(255,138,42,.55) var(--fill,100%),rgba(16,19,24,.42) var(--fill,100%))}
+#tTurbo.on{border-color:#8fd0ff}
+/* short screens: TURBO moves beside BRAKE, everything a size smaller; tiny = under 300px tall */
+#touch.compact #tTurbo{right:calc(max(16px,env(safe-area-inset-right)) + 212px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 10px);width:66px;height:52px}
 #touch.compact #tLeft,#touch.compact #tRight{width:72px;height:72px;bottom:calc(max(10px,env(safe-area-inset-bottom)) + 8px)}
 #touch.compact #tRight{left:calc(max(16px,env(safe-area-inset-left)) + 96px)}
 #touch.compact #steerPad{bottom:calc(max(10px,env(safe-area-inset-bottom)) + 14px)}
@@ -104,13 +108,28 @@ table.res i{display:inline-block;width:10px;height:10px;border-radius:2px;margin
 #touch.compact #tReset{right:calc(max(16px,env(safe-area-inset-right)) + 150px)}
 #touch.tiny #tGas{width:84px;height:104px;bottom:calc(max(10px,env(safe-area-inset-bottom)) + 6px)}
 #touch.tiny #tBrake{width:76px;height:76px;right:calc(max(16px,env(safe-area-inset-right)) + 106px);bottom:calc(max(10px,env(safe-area-inset-bottom)) + 6px)}
-#touch.tiny #tHand{right:calc(max(16px,env(safe-area-inset-right)) + 188px);bottom:calc(max(10px,env(safe-area-inset-bottom)) + 6px);width:60px;height:44px;font-size:.68rem}
+#touch.tiny #tTurbo{right:calc(max(16px,env(safe-area-inset-right)) + 188px);bottom:calc(max(10px,env(safe-area-inset-bottom)) + 6px);width:60px;height:44px;font-size:.68rem}
 #touch.tiny #tLeft,#touch.tiny #tRight{width:62px;height:62px;bottom:calc(max(10px,env(safe-area-inset-bottom)) + 6px);font-size:1.3rem}
 #touch.tiny #tRight{left:calc(max(16px,env(safe-area-inset-left)) + 84px)}
+/* tablets (iPad and friends): bigger thumbs-and-palms controls, set in from the edges */
+#touch.tablet #steerPad{width:260px;height:80px;border-radius:40px;left:calc(max(24px,env(safe-area-inset-left)) + 28px);bottom:calc(max(24px,env(safe-area-inset-bottom)) + 40px)}
+#touch.tablet #steerKnob{width:70px;height:70px;margin:-35px 0 0 -35px}
+#touch.tablet .tbtn{font-size:1.1rem;border-radius:18px}
+#touch.tablet #tGas{width:128px;height:176px;right:calc(max(24px,env(safe-area-inset-right)) + 16px);bottom:calc(max(24px,env(safe-area-inset-bottom)) + 18px)}
+#touch.tablet #tBrake{width:116px;height:128px;right:calc(max(24px,env(safe-area-inset-right)) + 160px);bottom:calc(max(24px,env(safe-area-inset-bottom)) + 18px)}
+#touch.tablet #tTurbo{width:116px;height:72px;right:calc(max(24px,env(safe-area-inset-right)) + 160px);bottom:calc(max(24px,env(safe-area-inset-bottom)) + 160px);font-size:1rem}
+#touch.tablet #tLeft,#touch.tablet #tRight{width:112px;height:112px;bottom:calc(max(24px,env(safe-area-inset-bottom)) + 24px);font-size:2rem}
+#touch.tablet #tLeft{left:calc(max(24px,env(safe-area-inset-left)) + 20px)}
+#touch.tablet #tRight{left:calc(max(24px,env(safe-area-inset-left)) + 150px)}
+#touch.tablet .tbtn.sq{width:58px;height:58px;font-size:.82rem;border-radius:12px;top:calc(max(14px,env(safe-area-inset-top)) + 6px)}
+#touch.tablet #tPause{right:calc(max(24px,env(safe-area-inset-right)) + 14px)}
+#touch.tablet #tCam{right:calc(max(24px,env(safe-area-inset-right)) + 80px)}
+#touch.tablet #tMap{right:calc(max(24px,env(safe-area-inset-right)) + 146px)}
+#touch.tablet #tReset{right:calc(max(24px,env(safe-area-inset-right)) + 212px)}
 #backRoad{position:fixed;left:50%;top:calc(max(10px,env(safe-area-inset-top)) + 52%);transform:translateX(-50%);z-index:7;font:800 1.05rem/1 system-ui,sans-serif;letter-spacing:.04em;color:#16181c;background:#ffcc1a;border:0;border-radius:26px;padding:14px 26px;box-shadow:0 4px 14px rgba(0,0,0,.4);cursor:pointer;touch-action:manipulation}
 #backRoad:active{transform:translateX(-50%) scale(.96)}
 #portrait{position:fixed;left:50%;top:calc(max(10px,env(safe-area-inset-top)) + 64px);transform:translateX(-50%);z-index:6;background:var(--panel);border:1px solid var(--line);padding:8px 12px;font-size:.9rem;color:var(--ink-dim);max-width:80vw;text-align:center}
-@media (max-height:500px){ .sheet{padding:12px 16px;gap:9px} h1{font-size:2.3rem} .lede,#ctrlHint,.card .stat,.card small{display:none} .card{padding:7px 10px} .card b{font-size:1.1rem} .settings{gap:6px 12px} }
+@media (max-height:500px){ .card .thumb{height:58px;width:auto;align-self:center;margin:-4px 0 -4px} .sheet{padding:12px 16px;gap:9px} h1{font-size:2.3rem} .lede,#ctrlHint,.card .stat,.card small{display:none} .card{padding:7px 10px} .card b{font-size:1.1rem} .settings{gap:6px 12px} }
 @media (max-width:560px){ .cards{grid-template-columns:1fr} }
 @media (prefers-reduced-motion:reduce){ #loadbar i{transition:none} }
 </style>
@@ -204,7 +223,7 @@ table.res i{display:inline-block;width:10px;height:10px;border-radius:2px;margin
   <button class="tbtn arrow" id="tRight" aria-label="Steer right">▶</button>
   <button class="tbtn" id="tGas">GAS</button>
   <button class="tbtn" id="tBrake">BRAKE</button>
-  <button class="tbtn" id="tHand">DRIFT</button>
+  <button class="tbtn" id="tTurbo">TURBO</button>
   <button class="tbtn sq" id="tReset">RESET</button>
   <button class="tbtn sq" id="tMap">MAP</button>
   <button class="tbtn sq" id="tCam">CAM</button>
@@ -1168,7 +1187,7 @@ const grilleMat = (() => { const c = document.createElement('canvas'); c.width =
 const RIMMATS = {}, CALMATS = {};
 function makeCarModel(key, colorIdx, num, ghost) {
   const s = CARS[key], B = BODY[s.style], G = carGeometry(key), g = new THREE.Group(); const parts = { wheels: [], steer: [] };
-  const body = paintMaterial(liveryTexture(COLORS[colorIdx % COLORS.length], num, s.style), s, ghost);
+  const livery = liveryTexture(COLORS[colorIdx % COLORS.length], num, s.style), body = paintMaterial(livery, s, ghost); parts.livery = livery;
   const add = (geo, mat, shadow = true) => { const m = new THREE.Mesh(geo, mat); m.castShadow = shadow && !ghost; m.receiveShadow = !ghost; g.add(m); return m; };
   if (ghost) { add(G.lower, body); add(G.glass, body); }
   else {
@@ -1258,6 +1277,47 @@ function makeCockpit(c) {
   const ck = { group: g, wheel, eye: e.clone(), gctx: gc.getContext('2d'), gtex, last: '' };
   drawGauges(ck, 900, 0, 1); return ck;
 }
+// turbo flames: a hot blue core inside an orange plume at each tailpipe
+let _flameMats = null;
+function makeFlames(c) {
+  const s = c.spec, B = BODY[s.style], g = new THREE.Group();
+  _flameMats = _flameMats || [0xff8a2a, 0x8fd0ff].map(color => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+  const outer = new THREE.ConeGeometry(0.075, 0.55, 10).rotateX(Math.PI / 2).translate(0, 0, 0.275), inner = new THREE.ConeGeometry(0.04, 0.3, 8).rotateX(Math.PI / 2).translate(0, 0, 0.15);
+  for (const [x, y] of B.exhaust) { const f = new THREE.Group(); f.position.set(x, y, s.len / 2 + 0.08); f.add(new THREE.Mesh(outer, _flameMats[0]), new THREE.Mesh(inner, _flameMats[1])); g.add(f); }
+  c.model.group.add(g); return g;
+}
+// --- car pictures for the menu: each car rendered in 3D, in your colour, on a clear background.
+// Drawn off screen into a float target, then tone-mapped (ACES) and encoded to sRGB here, so the
+// picture looks the same whatever the graphics setting and on WebGPU or WebGL2.
+const THUMB = { cache: new Map(), scene: null, cam: null, rt: null, busy: null };
+async function carThumb(key, col) {
+  const id = `${key}:${col}`; if (THUMB.cache.has(id)) return THUMB.cache.get(id);
+  const W = 512, H = 288;
+  if (!THUMB.scene) {
+    const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xdfe8f5, 0x4a4436, 1.5));
+    const key1 = new THREE.DirectionalLight(0xfff1dc, 2.8); key1.position.set(-3, 6, -5); const rim = new THREE.DirectionalLight(0xc6d8ff, 1.1); rim.position.set(5, 3, 4); sc.add(key1, rim);
+    THUMB.scene = sc; THUMB.cam = new THREE.PerspectiveCamera(24, W / H, 0.1, 60); THUMB.rt = new THREE.RenderTarget(W, H, { type: THREE.FloatType });
+  }
+  const s = CARS[key], sc = THUMB.scene, cam = THUMB.cam, m = makeCarModel(key, col, 7, false);
+  sc.environment = scene.environment; sc.environmentIntensity = 0.8; sc.add(m.group);
+  for (const p of m.parts.steer) p.rotation.y = 0.32;
+  cam.position.set(s.len * 1.32, 1.55, -s.len * 1.18); cam.lookAt(0, 0.5, 0.15); cam.updateMatrixWorld();
+  const prev = renderer.getRenderTarget(), cc = renderer.getClearColor(new THREE.Color()), ca = renderer.getClearAlpha();
+  let px = null;
+  try { renderer.setClearColor(0x000000, 0); renderer.setRenderTarget(THUMB.rt); renderer.render(sc, cam); } finally { renderer.setRenderTarget(prev); renderer.setClearColor(cc, ca); }
+  try { px = await renderer.readRenderTargetPixelsAsync(THUMB.rt, 0, 0, W, H); } catch (e) { px = null; }
+  sc.remove(m.group); m.parts.livery.dispose(); m.parts.body.material.dispose();
+  if (!px) return null;
+  const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d'), img = x.createImageData(W, H), d = img.data;
+  const flip = !renderer.backend.isWebGPUBackend; // WebGL reads rows bottom-up
+  const tone = v => { v *= 1.05; v = (v * (2.51 * v + 0.03)) / (v * (2.43 * v + 0.59) + 0.14); v = v < 0 ? 0 : v > 1 ? 1 : v; return (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055) * 255; };
+  for (let yy = 0; yy < H; yy++) for (let xx = 0; xx < W; xx++) { const si = ((flip ? H - 1 - yy : yy) * W + xx) * 4, di = (yy * W + xx) * 4; d[di] = tone(px[si]); d[di + 1] = tone(px[si + 1]); d[di + 2] = tone(px[si + 2]); d[di + 3] = clamp(px[si + 3], 0, 1) * 255; }
+  x.putImageData(img, 0, 0); const url = c.toDataURL('image/png'); THUMB.cache.set(id, url); return url;
+}
+async function refreshThumbs() {
+  if (!scene.environment) return; const col = settings.color, run = THUMB.busy = {};
+  for (const k of Object.keys(CARS)) { const url = await carThumb(k, col); if (THUMB.busy !== run) return; const im = document.querySelector(`img[data-thumb="${k}"]`); if (im && url) { im.src = url; im.classList.add('ready'); } }
+}
 let _blob = null;
 function blobMat() {
   if (_blob) return _blob;
@@ -1277,7 +1337,7 @@ class Car {
     this.model = makeCarModel(key, this.color, this.num, this.ghost); scene.add(this.model.group);
     this.x = 0; this.z = 0; this.y = 0; this.yaw = 0; this.vx = 0; this.vz = 0; this.r = 0;
     this.steer = 0; this.thr = 0; this.brk = 0; this.hand = 0; this.inSteer = 0; this.inThr = 0; this.inBrk = 0; this.inHand = 0;
-    this.gear = 1; this.rpm = 900; this.slipF = 0; this.slipR = 0; this.onRoad = true; this.ax = 0; this.ay = 0; this.drift = 0; this.steerVis = 0; this.vy = 0; this.air = false; this.airT = 0; this.airPitch = 0; this.airPR = 0; this.tumble = null; this.wipe = 0;
+    this.gear = 1; this.rpm = 900; this.slipF = 0; this.slipR = 0; this.onRoad = true; this.ax = 0; this.ay = 0; this.drift = 0; this.steerVis = 0; this.vy = 0; this.air = false; this.airT = 0; this.airPitch = 0; this.airPR = 0; this.tumble = null; this.wipe = 0; this.boost = 1; this.boosting = false; this.inBoost = 0;
     this.idx = 0; this.lap = 0; this.cp = 7; this.finished = false; this.finishT = null; this.lapStart = 0; this.lapTimes = []; this.best = null;
     this.pitch = 0; this.roll = 0; this.bounce = 0; this.wrongT = 0; this.offT = 0; this.wheelRot = 0; this.netSnap = null;
   }
@@ -1329,6 +1389,14 @@ class Car {
     // loose, and the slide then holds by itself. Steer into the turn for more angle, against it
     // to straighten up; it never lets the car spin round. Computer drivers keep it tidy.
     const beta = V > 3 ? Math.atan2(vs, Math.max(Math.abs(vf), 1)) : 0, absB = Math.abs(beta);
+    // a quick tap of the brake and back on the gas while steering flicks the car into a drift
+    // (human drivers; a long brake is just braking). The Space bar / pad A handbrake still works.
+    let flick = false;
+    if (this.player && !this.ai) {
+      if (this.inBrk > 0.5) { this.brkHold = (this.brkHold || 0) + dt; this.brkRel = 0; }
+      else { this.brkRel = (this.brkRel || 0) + dt; if (this.brkRel > 0.45) this.brkHold = 0; }
+      if (this.brkHold > 0.04 && this.brkHold < 0.9 && this.brkRel > 0 && this.brkRel < 0.45 && this.inThr > 0.5 && Math.abs(this.inSteer) > 0.4 && V > 12 && vf > 0 && !this.air && !(this.wipe > 0)) { flick = true; this.brkHold = 0; }
+    }
     if (this.ai || V < 6 || vf < 0) this.drift = 0;
     else if (this.hand && V > 8) this.drift = Math.min(1, (this.drift || 0) + dt * 8);
     else if (this.spin && absB > 0.12 && s.drive === 'rwd' && this.inSteer * Math.sign(beta) > 0.3) this.drift = Math.min(1, (this.drift || 0) + dt * 3);
@@ -1337,6 +1405,7 @@ class Car {
       const u0 = this.inSteer * Math.sign(beta || 1);
       this.drift = Math.max(0, this.drift - dt * (absB < 0.1 ? 3 : u0 < -0.3 ? 2.5 : this.brk > 0.5 ? 2 : u0 < 0.3 ? 0.45 : 0.1));
     }
+    if (flick) { this.drift = 1; this.r += Math.sign(this.inSteer) * 0.65; }
     if (this.wipe > 0) { this.drift = 0; Fyr *= 0.5; }
     const d = this.drift || 0;
     if (d > 0) {
@@ -1379,6 +1448,15 @@ class Car {
     let Fx = Fdrive - Fbrake + Fyf * Math.sin(delta) - Math.sign(vf) * Math.min(Math.abs(vf) * s.mass / dt * 0.5, drag + roll);
     let Fy = Fyf * Math.cos(delta) + Fyr;
     if (V < 0.6 && Math.abs(this.thr) < 0.05 && !reversing) { Fx = -vf * s.mass / dt * 0.5; Fy = -vs * s.mass / dt * 0.5; }
+    // turbo: human drivers only. Hold it for a burst of thrust (about half a g on top of the
+    // engine); a full tank lasts about 3 s and refills in about 9; it needs 15 % to light again.
+    if (this.player && !this.ai) {
+      const want = this.inBoost && RACE.phase === 'racing' && !(this.wipe > 0) && vf > -1;
+      if (!this.boosting && want && this.boost > 0.15) { this.boosting = true; Sfx.whoosh(); }
+      if (this.boosting && (!want || this.boost <= 0)) this.boosting = false;
+      this.boost = this.boosting ? Math.max(0, this.boost - dt / 3.2) : Math.min(1, this.boost + dt / 9);
+    } else this.boosting = false;
+    if (this.boosting && !this.air) Fx += s.mass * 5.2;
     if (this.air) { Fx = -Math.sign(vf) * drag; Fy = 0; Fyf = 0; Fyr = 0; this.spin = false; }
     // slopes (in the air gravity works on the vertical speed instead)
     const hx = surfaceH(this.x + 1.5, this.z, this.idx) - surfaceH(this.x - 1.5, this.z, this.idx), hz = surfaceH(this.x, this.z + 1.5, this.idx) - surfaceH(this.x, this.z - 1.5, this.idx);
@@ -1428,9 +1506,14 @@ class Car {
     } else {
       // on the ground the car rides the surface; if the surface falls away faster than gravity
       // can pull the car down (a crest or the lip of a jump) it takes off
-      const vyG = (gh - this.y) / dt, lip = this.onRoad ? 1.1 : 2.2;
-      if (this.vy - vyG > lip && this.vy > 0.6 && V > 8 && (this.vy - vyG) * dt - 4.9 * dt * dt > 0.03) { this.air = true; this.airT = 0; this.airPitch = Math.atan2(this.vy, Math.max(4, V)); this.airPR = 0; this.y += this.vy * dt; }
-      else { this.vy = lerp(this.vy, vyG, 0.5); this.y = gh; }
+      // the ground's own vertical speed under the car: its slope times the car's velocity (not the
+      // change of height between steps, which a shove from another car would turn into a launch)
+      const vyG = clamp((hx * this.vx + hz * this.vz) / 3, -20, 20);
+      // the car leaves the ground when the ground drops away faster than gravity can follow it:
+      // the lip of a jump does, a smooth crest doesn't (rough ground needs a sharper drop)
+      const ag = this.vyGp == null ? 0 : (vyG - this.vyGp) / dt; this.vyGp = vyG;
+      if (ag < -g * (this.onRoad ? 1.2 : 2.6) && this.vy > 0.6 && this.vy - vyG > 0.3 && V > 8) { this.air = true; this.airT = 0; this.vyGp = null; this.airPitch = Math.atan2(this.vy, Math.max(4, V)); this.airPR = 0; this.y += this.vy * dt; }
+      else { this.vy = vyG; this.y = gh; }
     }
     // tripping: sliding sideways off the road into rough ground digs the wheels in and rolls the car
     if (!this.air && !window.__roadEverywhere && V > 10 && lat > HALF_W + VERGE + 0.6 && Math.abs(vs) > (this.ai ? 17 : this.player && settings.assist ? 16 : 14)) {
@@ -1451,7 +1534,7 @@ class Car {
     const ahead = surfaceH(this.x + this.vx * 0.06, this.z + this.vz * 0.06, this.idx), vyG = (ahead - gh) / 0.06, hit = vyG - this.vy;
     const along = Math.hypot(this.vx, this.vz) * 0.06 || 1, gp = Math.atan2(ahead - gh, along) * Math.sign(this.vx * fx + this.vz * fz || 1);
     const miss = this.airPitch - gp;
-    this.y = gh; this.air = false; this.vy = vyG; this.pitch = this.airPitch;
+    this.y = gh; this.air = false; this.vy = vyG; this.vyGp = null; this.pitch = this.airPitch;
     if (window.__noCrash) return;
     if (hit > 13 || (Math.abs(miss) > 0.65 && hit > 2.5)) { startTumble(this, 'flip', (miss < 0 ? -1 : 1) * (2.5 + Math.abs(miss) * 3), 1.5 + hit * 0.12, `landing hit ${hit.toFixed(1)} miss ${miss.toFixed(2)}`); return; }
     if (hit > 6) { const k = 1 - Math.min(0.2, (hit - 6) * 0.025); this.vx *= k; this.vz *= k; this.r += (Math.random() - 0.5) * 0.6; if (this.player) { G.shake = Math.min(1, G.shake + 0.5); Sfx.thump(Math.min(1, hit / 12)); } }
@@ -1486,7 +1569,7 @@ class Car {
       // sliding on its side or roof scrubs speed off, and the body rolls along with its motion
       const sp = Math.hypot(this.vx, this.vz), dec = Math.min(sp, 1.1 * g * dt);
       if (sp > 1e-3) { this.vx -= this.vx / sp * dec; this.vz -= this.vz / sp * dec; }
-      _tv.set(this.vz, 0, -this.vx).divideScalar(1.5); T.w.lerp(_tv, Math.min(1, dt * 4)); T.w.multiplyScalar(1 - dt * 1.5);
+      if (T.t > 0.35) { _tv.set(this.vz, 0, -this.vx).divideScalar(1.5); T.w.lerp(_tv, Math.min(1, dt * 4)); T.w.multiplyScalar(1 - dt * 1.5); } // the first moment of the crash plays out
     }
     this.y = T.yc - 0.6;
     _tv.set(0, 0, -1).applyQuaternion(T.q); if (Math.hypot(_tv.x, _tv.z) > 0.3) this.yaw = Math.atan2(-_tv.x, -_tv.z);
@@ -1526,6 +1609,9 @@ class Car {
     m.rotation.set(this.pitch, this.yaw, this.roll, 'YXZ');
     for (const w of this.model.parts.wheels) w.rotation.x = -this.wheelRot;
     for (const p of this.model.parts.steer) p.rotation.y = this.steerVis ?? this.steer;
+    const lit = this.boosting || (this.remote && this.netSnap && this.netSnap.bo);
+    if (lit && !this.flames) this.flames = makeFlames(this);
+    if (this.flames) { this.flames.visible = !!lit; if (lit) for (const f of this.flames.children) f.scale.set(1, 1, 0.7 + Math.random() * 0.6); }
     if (this.model.parts.tail) this.model.parts.tail.emissiveIntensity = this.brk > 0.1 ? 3 : 0.6;
   }
   dispose() { scene.remove(this.model.group); }
@@ -1761,7 +1847,7 @@ function collide() {
   for (const c of cars) {
     if (c.remote) continue;
     const k0x = Math.floor(c.x / 20), k0z = Math.floor(c.z / 20);
-    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const l = TREES.bins.get((k0x + a) * 100003 + k0z + b); if (!l) continue; for (const t of l) { const dx = c.x - t.x, dz = c.z - t.z, d = Math.hypot(dx, dz), R = 1.3 + 0.4 * t.s; if (d < R && d > 1e-4) { const nx = dx / d, nz = dz / d; c.x += nx * (R - d); c.z += nz * (R - d); const vn = c.vx * nx + c.vz * nz; if (vn < 0) { const [fx, fz] = c.fwd(), headOn = -(fx * nx + fz * nz) > 0.75, side = nx * Math.cos(c.yaw) - nz * Math.sin(c.yaw); if (!c.tumble) { if (-vn > 22) startTumble(c, headOn ? 'flip' : 'roll', headOn ? -(3 + (-vn - 22) * 0.12) : Math.sign(side) * -4, 2 + (-vn - 22) * 0.1, 'tree'); else if (-vn > 14) wipeout(c, Math.sign(side) || 1); } c.vx -= 1.4 * vn * nx; c.vz -= 1.4 * vn * nz; c.vx *= 0.6; c.vz *= 0.6; if (c.player) { Sfx.thump(Math.min(1, -vn / 12)); G.shake = Math.min(1, G.shake + 0.6); } } } } }
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const l = TREES.bins.get((k0x + a) * 100003 + k0z + b); if (!l) continue; for (const t of l) { const dx = c.x - t.x, dz = c.z - t.z, d = Math.hypot(dx, dz), R = 1.3 + 0.4 * t.s; if (d < R && d > 1e-4) { const nx = dx / d, nz = dz / d; c.x += nx * (R - d); c.z += nz * (R - d); const vn = c.vx * nx + c.vz * nz; if (vn < 0) { const [fx, fz] = c.fwd(), headOn = -(fx * nx + fz * nz) > 0.75, side = nx * Math.cos(c.yaw) - nz * Math.sin(c.yaw); if (!c.tumble) { if (-vn > 22) startTumble(c, headOn ? 'flip' : 'roll', headOn ? -(4.5 + (-vn - 22) * 0.15) : Math.sign(side) * -4, (headOn ? 3.2 : 2) + (-vn - 22) * 0.1, 'tree'); else if (-vn > 14) wipeout(c, Math.sign(side) || 1); } c.vx -= 1.4 * vn * nx; c.vz -= 1.4 * vn * nz; c.vx *= 0.6; c.vz *= 0.6; if (c.player) { Sfx.thump(Math.min(1, -vn / 12)); G.shake = Math.min(1, G.shake + 0.6); } } } } }
   }
 }
 function emitFX(c, dt) {
@@ -1838,7 +1924,7 @@ function handleNet(d) {
   else if (d.k === 'pick') { if (Number.isInteger(d.seat) && Number.isInteger(d.color) && d.color >= 0 && d.color < COLORS.length && d.seat !== NET.seat) { const fresh = !(d.seat in NET.picks); NET.picks[d.seat] = d.color; if (fresh) netPick(); } }
   else if (d.k === 'fin') { NET.fins[d.id] = d.t; if (NET.firstFin == null) NET.firstFin = 0; const c = RACE.cars.find(x => x.id === d.id); if (c && !c.finished) { c.finished = true; c.finishT = d.t; } }
 }
-function snap(c) { return { id: c.id, k: c.key, col: c.color, n: c.num, lb: c.label, st: c.seat, x: +c.x.toFixed(2), z: +c.z.toFixed(2), y: +c.y.toFixed(2), yaw: +c.yaw.toFixed(3), vx: +c.vx.toFixed(2), vz: +c.vz.toFixed(2), r: +c.r.toFixed(3), st2: +c.steer.toFixed(2), b: c.brk > 0.1 ? 1 : 0, lap: c.lap, i: c.idx, fin: c.finished ? 1 : 0, ft: c.finishT, best: c.best, rpm: c.rpm | 0, ...(c.tumble ? { tq: c.tumble.q.toArray().map(v => +v.toFixed(3)) } : {}), ...(c.air ? { a: 1, ap: +c.airPitch.toFixed(3) } : {}) }; }
+function snap(c) { return { id: c.id, k: c.key, col: c.color, n: c.num, lb: c.label, st: c.seat, x: +c.x.toFixed(2), z: +c.z.toFixed(2), y: +c.y.toFixed(2), yaw: +c.yaw.toFixed(3), vx: +c.vx.toFixed(2), vz: +c.vz.toFixed(2), r: +c.r.toFixed(3), st2: +c.steer.toFixed(2), b: c.brk > 0.1 ? 1 : 0, lap: c.lap, i: c.idx, fin: c.finished ? 1 : 0, ft: c.finishT, best: c.best, rpm: c.rpm | 0, ...(c.tumble ? { tq: c.tumble.q.toArray().map(v => +v.toFixed(3)) } : {}), ...(c.air ? { a: 1, ap: +c.airPitch.toFixed(3) } : {}), ...(c.boosting ? { bo: 1 } : {}) }; }
 function snapIn(s) {
   if (!s || !s.id || !CARS[s.k]) return; if (RACE.player && s.id === RACE.player.id) return;
   let c = RACE.cars.find(x => x.id === s.id);
@@ -1867,7 +1953,7 @@ function netRace(dt) {
 //  Input
 // =====================================================================
 const keys = new Set(); let padPrev = [];
-const touch = { steer: 0, id: null, ox: 0, gas: false, brake: false, hand: false, left: false, right: false, tilt: null, tiltRef: null };
+const touch = { steer: 0, id: null, ox: 0, gas: false, brake: false, turbo: false, left: false, right: false, tilt: null, tiltRef: null };
 addEventListener('keydown', e => {
   if (G.state === 'race' && ['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   keys.add(e.code); if (e.repeat) return;
@@ -1877,7 +1963,9 @@ addEventListener('keydown', e => {
   } else if (G.state === 'paused' && (e.code === 'Escape' || e.code === 'KeyP')) pause(false);
 });
 addEventListener('keyup', e => keys.delete(e.code));
-addEventListener('blur', () => { keys.clear(); touch.gas = touch.brake = touch.hand = false; if (G.state === 'race' && !NET.on) pause(true); });
+addEventListener('pointerdown', () => Sfx.init(), { passive: true }); addEventListener('keydown', () => Sfx.init());
+addEventListener('gesturestart', e => e.preventDefault()); // no pinch-zoom of the page on iPad
+addEventListener('blur', () => { keys.clear(); touch.gas = touch.brake = touch.turbo = false; if (G.state === 'race' && !NET.on) pause(true); });
 document.addEventListener('visibilitychange', () => { if (document.hidden && G.state === 'race' && !NET.on) pause(true); });
 // cameras, in the order C / CAM / Y steps through them (the numbers are what settings remember)
 const CAMS = [[0, 'Chase'], [2, 'Far chase'], [3, 'In car'], [1, 'Bonnet'], [4, 'Bumper']];
@@ -1886,10 +1974,10 @@ function cycleCam() { const i = CAMS.findIndex(([m]) => m === G.cam.mode); setCa
 function toggleMap() { settings.map = settings.map === 'on' ? 'off' : 'on'; saveSettings(); $('setMap').value = settings.map; }
 const steerZone = $('steerZone'), steerKnob = $('steerKnob');
 steerZone.addEventListener('pointerdown', e => { e.preventDefault(); if (settings.control !== 'slide' || touch.id !== null) return; touch.id = e.pointerId; touch.ox = e.clientX; steerZone.setPointerCapture(e.pointerId); });
-steerZone.addEventListener('pointermove', e => { if (e.pointerId !== touch.id) return; const dx = clamp((e.clientX - touch.ox) / 70, -1, 1); touch.steer = dx; steerKnob.style.transform = `translateX(${dx * 64}px)`; });
+steerZone.addEventListener('pointermove', e => { if (e.pointerId !== touch.id) return; const dx = clamp((e.clientX - touch.ox) / (TABLET ? 96 : 70), -1, 1); touch.steer = dx; steerKnob.style.transform = `translateX(${dx * (TABLET ? 95 : 64)}px)`; });
 for (const ev of ['pointerup', 'pointercancel']) steerZone.addEventListener(ev, e => { if (e.pointerId === touch.id) { touch.id = null; touch.steer = 0; steerKnob.style.transform = ''; } });
 const hold = (id, key) => { const el = $(id); el.addEventListener('pointerdown', e => { e.preventDefault(); touch[key] = true; el.classList.add('on'); try { el.setPointerCapture(e.pointerId); } catch (err) { } }); for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(ev, () => { touch[key] = false; el.classList.remove('on'); }); };
-hold('tGas', 'gas'); hold('tBrake', 'brake'); hold('tHand', 'hand'); hold('tLeft', 'left'); hold('tRight', 'right');
+hold('tGas', 'gas'); hold('tBrake', 'brake'); hold('tTurbo', 'turbo'); hold('tLeft', 'left'); hold('tRight', 'right');
 $('backRoad').addEventListener('click', () => { if (RACE.player && G.state === 'race') resetCar(RACE.player); $('backRoad').hidden = true; });
 $('tCam').addEventListener('click', cycleCam); $('tMap').addEventListener('click', toggleMap); $('tReset').addEventListener('click', () => RACE.player && resetCar(RACE.player)); $('tPause').addEventListener('click', () => pause(true));
 $('portrait').addEventListener('click', () => { $('portrait').hidden = true; G.portraitDismissed = true; });
@@ -1903,32 +1991,32 @@ function applyControlMode() {
 function pollPad() { const pads = navigator.getGamepads ? navigator.getGamepads() : []; for (const gp of pads) if (gp && gp.connected) return gp; return null; }
 function playerInput(c, dt) {
   if (AUTOPILOT || window.__autodrive || RACE.phase === 'done' && c.finished) { if (!c.ai) c.ai = { skill: 0.9, line: 1, mood: 1 }; aiDrive(c, dt); return; }
-  let steer = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
-  let gas = keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0, brake = keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0, hand = keys.has('Space');
+  let steer = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0), fromKeys = true;
+  let gas = keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0, brake = keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0, hand = keys.has('Space'), turbo = keys.has('ShiftLeft') || keys.has('ShiftRight');
   const gp = pollPad();
   if (gp) {
-    const b = gp.buttons; const ax0 = gp.axes[0] || 0; if (Math.abs(ax0) > 0.08) steer = ax0;
-    if (b[7] && b[7].value > 0.05) gas = Math.max(gas, b[7].value); if (b[6] && b[6].value > 0.05) brake = Math.max(brake, b[6].value); if (b[0] && b[0].pressed) hand = true;
+    const b = gp.buttons; const ax0 = gp.axes[0] || 0; if (Math.abs(ax0) > 0.08) { steer = ax0; fromKeys = false; }
+    if (b[7] && b[7].value > 0.05) gas = Math.max(gas, b[7].value); if (b[6] && b[6].value > 0.05) brake = Math.max(brake, b[6].value); if (b[0] && b[0].pressed) hand = true; if (b[5] && b[5].pressed) turbo = true;
     const edge = i => b[i] && b[i].pressed && !padPrev[i]; if (edge(3)) cycleCam(); if (edge(2)) resetCar(c); if (edge(9)) pause(true);
     padPrev = b.map(x => x.pressed);
   }
   if (isTouch) {
-    if (settings.control === 'slide' && touch.id !== null) steer = touch.steer;
-    else if (settings.control === 'tilt' && touch.tilt != null) { if (touch.tiltRef == null) touch.tiltRef = touch.tilt; steer = clamp((touch.tilt - touch.tiltRef) / 25, -1, 1); }
-    if (touch.left || touch.right) steer = (touch.right ? 1 : 0) - (touch.left ? 1 : 0);
-    if (touch.gas) gas = 1; if (touch.brake) brake = 1; if (touch.hand) hand = true;
+    if (settings.control === 'slide' && touch.id !== null) { steer = touch.steer; fromKeys = false; }
+    else if (settings.control === 'tilt' && touch.tilt != null) { if (touch.tiltRef == null) touch.tiltRef = touch.tilt; steer = clamp((touch.tilt - touch.tiltRef) / 25, -1, 1); fromKeys = false; }
+    if (touch.left || touch.right) { steer = (touch.right ? 1 : 0) - (touch.left ? 1 : 0); fromKeys = false; }
+    if (touch.gas) gas = 1; if (touch.brake) brake = 1; if (touch.turbo) turbo = true;
   }
   if (settings.autogas && !brake && RACE.phase === 'racing') gas = Math.max(gas, 1);
   steer = -steer; // inputs read right-positive; the car model turns left for positive steer
   // keyboard steering eases in so taps are gentle; the assist keeps slides in check
-  if (!isTouch && !gp) steer = c.inSteerKey = lerp(c.inSteerKey || 0, steer, Math.min(1, dt * (steer ? 5 : 9)));
+  if (fromKeys) steer = c.inSteerKey = lerp(c.inSteerKey || 0, steer, Math.min(1, dt * (steer ? 5 : 9))); else c.inSteerKey = steer;
   if (settings.assist && !(c.drift > 0.2)) { // a drift the driver started holds itself; the assist leaves it be
     const [fx, fz] = c.fwd(); const vs = c.vx * Math.cos(c.yaw) - c.vz * Math.sin(c.yaw); const vf = c.vx * fx + c.vz * fz;
     const slide = vf > 5 ? vs / vf : 0, over = Math.max(0, Math.abs(slide) - 0.08); steer = clamp(steer - Math.sign(slide) * over * 2.2, -1, 1); // counter-steer real slides only
     if (c.slipR > 0.2 && gas) gas *= 0.6; // traction control
   }
   if (RACE.phase === 'countdown') { brake = 1; }
-  c.inSteer = steer; c.inThr = gas; c.inBrk = brake; c.inHand = hand ? 1 : 0;
+  c.inSteer = steer; c.inThr = gas; c.inBrk = brake; c.inHand = hand ? 1 : 0; c.inBoost = turbo ? 1 : 0;
 }
 
 // =====================================================================
@@ -1956,7 +2044,7 @@ const Sfx = {
     if (!this.ok) return; const t = this.ctx.currentTime; const live = G.state === 'race' && c;
     const f = c ? c.rpm / 60 * 2 : 30;
     this.o1.frequency.setTargetAtTime(Math.max(20, f), t, 0.03); this.o2.frequency.setTargetAtTime(Math.max(10, f * 0.5), t, 0.03);
-    this.eLP.frequency.setTargetAtTime(500 + (c ? c.thr : 0) * 1600 + (c ? c.rpm : 0) * 0.15, t, 0.05);
+    this.eLP.frequency.setTargetAtTime(500 + (c ? c.thr : 0) * 1600 + (c ? c.rpm : 0) * 0.15 + (c && c.boosting ? 1400 : 0), t, 0.05);
     this.eng.gain.setTargetAtTime(live ? 0.07 + c.thr * 0.08 : 0, t, 0.08);
     const slip = c ? Math.max(c.slipR, c.slipF * 0.9) : 0;
     this.sq.gain.setTargetAtTime(live && c.onRoad && !SURF.dirt && c.speed > 5 ? clamp((slip - 0.12) * 1.1, 0, 0.22) : 0, t, 0.05);
@@ -1965,6 +2053,7 @@ const Sfx = {
   },
   burst(freq, q, dur, vol, type = 'bandpass') { const c = this.ctx, t = c.currentTime, s = c.createBufferSource(); s.buffer = this.noise; const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(vol, 0.0002), t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); s.connect(f); f.connect(g); g.connect(this.master); s.start(t, Math.random(), dur + 0.05); },
   crash(v) { if (this.ok) { this.burst(110, 0.7, 0.55, 1.1 * v, 'lowpass'); this.burst(700, 1.6, 0.45, 0.55 * v); this.burst(2600, 3, 0.3, 0.3 * v); this.burst(5200, 6, 0.5, 0.12 * v); } },
+  whoosh() { if (this.ok) { this.burst(500, 0.6, 0.7, 0.45, 'bandpass'); this.burst(1800, 0.8, 0.5, 0.18); } },
   thump(v) { if (this.ok) { this.burst(180, 0.7, 0.35, 0.8 * v, 'lowpass'); this.burst(1600, 1, 0.12, 0.3 * v); } },
   beep(f, dur) { if (!this.ok) return; const c = this.ctx, t = c.currentTime, o = c.createOscillator(), g = c.createGain(); o.type = 'square'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.08, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(g); g.connect(this.master); o.start(t); o.stop(t + dur + 0.05); },
 };
@@ -2012,7 +2101,10 @@ function updateCamera(dt) {
     _ct.set(c.x - sy * 6, c.y + 1.1, c.z - cy * 6); camera.up.set(0, 1, 0); camera.lookAt(_ct);
   }
   if (G.shake > 0) { camera.position.x += (Math.random() - 0.5) * G.shake * 0.25; camera.position.y += (Math.random() - 0.5) * G.shake * 0.25; G.shake = Math.max(0, G.shake - dt * 3); }
-  const fov = (inCar ? (isTouch ? 74 : 68) : (isTouch ? 72 : 66)) + clamp((V - 20) / 50, 0, 1) * (inCar ? 5 : 8);
+  G.cam.kick = lerp(G.cam.kick || 0, c.boosting ? 1 : 0, Math.min(1, dt * 4));
+  let fov = (inCar ? (isTouch ? 74 : 68) : (isTouch ? 72 : 66)) + clamp((V - 20) / 50, 0, 1) * (inCar ? 5 : 8) + G.cam.kick * 7;
+  // held upright (an iPad in portrait), keep a sensible view across: open the vertical angle up
+  if (camera.aspect < 1) fov = Math.min(96, 2 * Math.atan(Math.tan(fov * Math.PI / 360) / Math.max(0.55, camera.aspect) * 0.92) * 180 / Math.PI);
   if (Math.abs(camera.fov - fov) > 0.05) { camera.fov = lerp(camera.fov, fov, Math.min(1, dt * 3)); camera.updateProjectionMatrix(); smokeFX.uScale.value = pointScale(); }
 }
 
@@ -2021,7 +2113,8 @@ function updateCamera(dt) {
 // =====================================================================
 const hud = $('hud'), hx = hud.getContext('2d');
 let HW = 0, HH = 0, HDPR = 1;
-function resizeHUD() { HDPR = Math.min(devicePixelRatio || 1, 2); HW = innerWidth; HH = innerHeight; hud.width = HW * HDPR; hud.height = HH * HDPR; $('touch').classList.toggle('compact', HH < 430); $('touch').classList.toggle('tiny', HH < 300); }
+function resizeHUD() { HDPR = Math.min(devicePixelRatio || 1, 2); HW = innerWidth; HH = innerHeight; hud.width = HW * HDPR; hud.height = HH * HDPR; $('touch').classList.toggle('compact', HH < 430); $('touch').classList.toggle('tiny', HH < 300); TABLET = isTouch && Math.min(HW, HH) >= 680; $('touch').classList.toggle('tablet', TABLET); }
+let TABLET = false; // an iPad or another big touch screen: larger controls, no 'turn sideways' hint
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace', COND = '"Saira Condensed", "Arial Narrow", sans-serif';
 function txt(s, x, y, size = 13, col = '#f4f1e8', align = 'left', font = MONO, weight = 700, italic = false) { hx.font = `${italic ? 'italic ' : ''}${weight} ${size}px ${font}`; hx.textAlign = align; hx.fillStyle = 'rgba(8,10,12,0.65)'; hx.fillText(s, x + 1.5, y + 1.5); hx.fillStyle = col; hx.fillText(s, x, y); }
 function drawHUD(dt) {
@@ -2049,7 +2142,7 @@ function drawHUD(dt) {
   // standings column (desktop)
   if (!isTouch && RACE.mode !== 'trial') RACE.order.slice(0, 8).forEach((o, k) => { const y = sT + 140 + k * 18; hx.fillStyle = COLORS[o.color % COLORS.length]; hx.fillRect(sL, y - 10, 4, 12); txt(`${k + 1} ${o.label.slice(0, 12)}`, sL + 10, y, 12, o === c ? '#ffcc1a' : '#f4f1e8', 'left', MONO, 600); });
   // speedometer: bottom right on desktop; bottom centre between the thumbs on a phone
-  const R = isTouch ? (tiny ? 34 : HH < 430 ? 42 : 52) : 70, cx = isTouch ? HW / 2 : HW - sL - R - 6, cy = HH - R - (isTouch ? (tiny ? 4 : 8) : 22);
+  const R = isTouch ? (tiny ? 34 : HH < 430 ? 42 : TABLET ? 66 : 52) : 70, cx = isTouch ? HW / 2 : HW - sL - R - 6, cy = HH - R - (isTouch ? (tiny ? 4 : 8) : 22);
   const mph = Math.round(c.speed * MPH), rpmF = clamp(c.rpm / 7600, 0, 1);
   hx.lineWidth = isTouch ? 5 : 7; hx.lineCap = 'round';
   hx.strokeStyle = 'rgba(244,241,232,0.14)'; hx.beginPath(); hx.arc(cx, cy, R, Math.PI * 0.75, Math.PI * 2.25); hx.stroke();
@@ -2057,10 +2150,16 @@ function drawHUD(dt) {
   txt(String(mph), cx, cy + R * 0.18, R * 0.62, '#f4f1e8', 'center', COND, 800, true);
   txt('MPH', cx, cy + R * 0.5, tiny ? 9 : 11, '#b9bdc4', 'center');
   txt(RACE.phase === 'countdown' ? 'N' : c.inBrk > 0.3 && c.speed < 2 ? 'R' : String(c.gear), cx, cy - R * 0.42, tiny ? 12 : 16, '#ffcc1a', 'center', COND, 800);
+  { // turbo meter: an arc inside the rev ring, orange when ready, blue while it burns
+    const ready = c.boost > 0.15; hx.lineWidth = isTouch ? 3 : 4; hx.strokeStyle = 'rgba(244,241,232,0.12)'; hx.beginPath(); hx.arc(cx, cy, R - (isTouch ? 8 : 11), Math.PI * 0.8, Math.PI * 2.2); hx.stroke();
+    hx.strokeStyle = c.boosting ? '#8fd0ff' : ready ? '#ff8a2a' : 'rgba(255,138,42,0.45)'; hx.beginPath(); hx.arc(cx, cy, R - (isTouch ? 8 : 11), Math.PI * 0.8, Math.PI * 0.8 + Math.PI * 1.4 * c.boost); hx.stroke();
+    if (!isTouch) txt(c.boosting ? 'TURBO!' : 'TURBO · SHIFT', cx, cy + R + 14, 11, c.boosting ? '#8fd0ff' : '#b9bdc4', 'center', COND, 700);
+    if (isTouch && G.frame % 4 === 0) { const b = $('tTurbo'); b.style.setProperty('--fill', `${Math.round(c.boost * 100)}%`); b.style.opacity = ready || c.boosting ? '1' : '0.55'; }
+  }
   // minimap: top right on desktop; top centre on a phone, clear of the buttons in the corners
-  if (settings.map === 'on') { const S = isTouch ? Math.round(clamp(HH * 0.34, 64, 110)) : 170; drawMinimap(c, isTouch ? HW / 2 - S / 2 : HW - sL - 170, isTouch ? sT : sT, S); }
+  if (settings.map === 'on') { const S = isTouch ? Math.round(clamp(HH * 0.34, 64, TABLET ? 150 : 110)) : 170; drawMinimap(c, isTouch ? HW / 2 - S / 2 : HW - sL - 170, isTouch ? sT : sT, S); }
   // countdown, messages, warnings
-  const huge = Math.min(110, HH * 0.32), mid = isTouch ? Math.round(clamp(HH * 0.34, 64, 110)) + sT + 22 * k : HH * 0.22, warnY = isTouch ? mid + 34 * k : HH * 0.36;
+  const huge = Math.min(110, HH * 0.32), mid = isTouch ? Math.round(clamp(HH * 0.34, 64, TABLET ? 150 : 110)) + sT + 22 * k : HH * 0.22, warnY = isTouch ? mid + 34 * k : HH * 0.36;
   if (RACE.phase === 'countdown') { const n2 = Math.ceil(RACE.count); if (n2 <= 3) txt(n2 > 0 ? String(n2) : '', HW / 2, Math.max(HH * 0.4, mid + huge * 0.6), huge, '#ffcc1a', 'center', COND, 800, true); else txt('GET READY', HW / 2, Math.max(HH * 0.4, mid + 30 * k), Math.round(48 * k), '#f4f1e8', 'center', COND, 800, true); }
   let y = mid; for (const m of G.msgs) { const go = m.text === 'GO!', fs = go ? Math.min(90, HH * 0.28) : Math.round(22 * k); hx.globalAlpha = clamp(m.t / 0.5, 0, 1); txt(m.text, HW / 2, y + (go ? fs * 0.5 : 0), fs, m.kind === 'good' ? '#6fd27a' : m.kind === 'warn' ? '#ffcc1a' : '#f4f1e8', 'center', COND, 800, true); y += go ? fs : fs + 8; }
   hx.globalAlpha = 1;
@@ -2088,19 +2187,19 @@ function pause(on) {
 }
 function fillSettings() {
   $('setControl').value = settings.control; $('setPhone').value = settings.phone; $('setQuality').value = settings.quality; $('setCam').value = String(settings.cam || 0); $('setMap').value = settings.map; $('setVolume').value = settings.volume; $('setAssist').checked = !!settings.assist; $('setAutoGas').checked = !!settings.autogas;
-  const help = isTouch ? [['Steer', settings.control === 'slide' ? 'slide left thumb' : settings.control === 'tilt' ? 'tilt the phone' : '◀ ▶'], ['Gas / brake', 'GAS · BRAKE (hold BRAKE to reverse)'], ['Drift', 'DRIFT (handbrake)'], ['Reset car', 'RESET'], ['Camera / map', 'CAM · MAP'], ['Pause', 'II']]
-    : [['Steer', 'A / D · ← →'], ['Gas', 'W · ↑'], ['Brake / reverse', 'S · ↓'], ['Handbrake', 'Space'], ['Reset car', 'R'], ['Camera', 'C · chase, far, in car, bonnet, bumper'], ['Map', 'M'], ['Pause', 'Esc · P'], ['Gamepad', 'stick · RT gas · LT brake · A drift']];
+  const help = isTouch ? [['Steer', settings.control === 'slide' ? 'slide left thumb' : settings.control === 'tilt' ? 'tilt the phone' : '◀ ▶'], ['Gas / brake', 'GAS · BRAKE (hold BRAKE to reverse)'], ['Drift', 'tap BRAKE, then GAS while steering'], ['Turbo', 'hold TURBO (refills by itself)'], ['Reset car', 'RESET'], ['Camera / map', 'CAM · MAP'], ['Pause', 'II']]
+    : [['Steer', 'A / D · ← →'], ['Gas', 'W · ↑'], ['Brake / reverse', 'S · ↓'], ['Drift', 'tap S, then W while steering · or Space'], ['Turbo', 'Shift (hold)'], ['Reset car', 'R'], ['Camera', 'C · chase, far, in car, bonnet, bumper'], ['Map', 'M'], ['Pause', 'Esc · P'], ['Gamepad', 'stick · RT gas · LT brake · RB turbo · A handbrake']];
   $('helpGrid').innerHTML = help.map(([a, b]) => `<div><span>${a}</span><span>${b}</span></div>`).join('');
   $('pauseTitle').textContent = NET.on ? 'Race menu' : 'Paused'; $('pauseEyebrow').textContent = NET.on ? 'Online · the race keeps going while this is open' : RACE.player ? `${TRACKS[curTrack].name} · ${fmtT(RACE.t)}` : 'Settings';
   $('btnResume').textContent = RACE.player ? 'Resume' : 'Back'; $('btnRestart').hidden = NET.on || !RACE.player; $('btnQuit').textContent = NET.on ? 'Leave table' : 'Back to menu'; $('btnQuit').hidden = !RACE.player && !NET.on;
 }
 function buildMenus() {
-  $('carCards').innerHTML = Object.entries(CARS).map(([k, c]) => `<button class="card" role="radio" data-car="${k}"><b>${c.name}</b><small>${c.blurb}</small>${['Power', 'Grip', 'Handling'].map((l, i) => `<div class="stat">${l}<div class="bar"><i style="width:${c.stats[i]}%"></i></div></div>`).join('')}</button>`).join('');
+  $('carCards').innerHTML = Object.entries(CARS).map(([k, c]) => `<button class="card" role="radio" data-car="${k}"><img class="thumb" alt="" data-thumb="${k}"><b>${c.name}</b><small>${c.blurb}</small>${['Power', 'Grip', 'Handling'].map((l, i) => `<div class="stat">${l}<div class="bar"><i style="width:${c.stats[i]}%"></i></div></div>`).join('')}</button>`).join('');
   $('trackCards').innerHTML = Object.entries(TRACKS).map(([k, t]) => `<button class="card" role="radio" data-track="${k}"><b>${t.name}</b><small>${t.blurb}</small></button>`).join('');
   $('swatches').innerHTML = COLORS.map((c, i) => `<button class="sw" role="radio" aria-label="Colour ${i + 1}" data-col="${i}" style="background:${c}"></button>`).join('');
   $('carCards').addEventListener('click', e => { const b = e.target.closest('[data-car]'); if (b) { settings.car = b.dataset.car; saveSettings(); syncMenu(); } });
   $('trackCards').addEventListener('click', e => { const b = e.target.closest('[data-track]'); if (b) { settings.track = b.dataset.track; saveSettings(); syncMenu(); buildCircuit(settings.track).then(() => { if (G.state === 'menu') showScreen('menu'); }); } });
-  $('swatches').addEventListener('click', e => { const b = e.target.closest('[data-col]'); if (b) { settings.color = +b.dataset.col; saveSettings(); syncMenu(); netPick(); } });
+  $('swatches').addEventListener('click', e => { const b = e.target.closest('[data-col]'); if (b) { settings.color = +b.dataset.col; saveSettings(); syncMenu(); netPick(); refreshThumbs(); } });
   syncMenu();
 }
 function syncMenu() {
@@ -2111,8 +2210,8 @@ function syncMenu() {
   showcase();
 }
 function updateHint() {
-  $('ctrlHint').innerHTML = isTouch ? 'Phone: slide your left thumb to steer, hold <kbd>GAS</kbd> and <kbd>BRAKE</kbd> on the right, <kbd>DRIFT</kbd> for the handbrake. Driving assist and auto accelerate are in the settings.'
-    : '<kbd>W A S D</kbd> or the arrow keys to drive, <kbd>Space</kbd> handbrake, <kbd>R</kbd> reset, <kbd>C</kbd> camera, <kbd>M</kbd> map, <kbd>Esc</kbd> pause. Gamepads work too.';
+  $('ctrlHint').innerHTML = isTouch ? 'Touch: slide your left thumb to steer, hold <kbd>GAS</kbd> and <kbd>BRAKE</kbd> on the right and <kbd>TURBO</kbd> for a burst of speed. To drift, tap <kbd>BRAKE</kbd> then <kbd>GAS</kbd> while you steer. Driving assist and auto accelerate are in the settings.'
+    : '<kbd>W A S D</kbd> or the arrow keys to drive, <kbd>Shift</kbd> turbo, tap <kbd>S</kbd> then <kbd>W</kbd> while steering to drift (or <kbd>Space</kbd>), <kbd>R</kbd> reset, <kbd>C</kbd> camera, <kbd>M</kbd> map, <kbd>Esc</kbd> pause. Gamepads work too.';
 }
 // a car parked on the grid behind the menu
 let showcaseCar = null;
@@ -2212,7 +2311,7 @@ function frame(now) {
     simulate(dt);
     for (const c of RACE.cars) { if (!c.ghost) { c.visuals(dt); emitFX(c, dt); } }
     updateCamera(dt);
-    if (isTouch && !G.portraitDismissed) $('portrait').hidden = innerHeight <= innerWidth;
+    if (isTouch && !G.portraitDismissed) $('portrait').hidden = innerHeight <= innerWidth || TABLET;
   } else if (G.state === 'menu' || G.state === 'paused-menu' || (G.state === 'results' && !RACE.player)) {
     if (T.N) { const t = now / 1000 * 0.12, f = frameAt(T.N - 4); camera.position.set(f.x + Math.cos(t) * 14, f.h + 3.2, f.z + Math.sin(t) * 14); camera.lookAt(f.x, f.h + 0.8, f.z); }
   }
@@ -2232,14 +2331,14 @@ function frame(now) {
 }
 // QA hooks: run the race headless, or hold a frame still for a capture
 window.__sim = (seconds, dt = 1 / 60) => { const n = Math.round(seconds / dt); for (let i = 0; i < n && (G.state === 'race' || G.state === 'paused'); i++) simulate(dt); const p = RACE.player; return p && { state: G.state, phase: RACE.phase, lap: p.lap, pos: RACE.order.indexOf(p) + 1, of: RACE.order.length, mph: Math.round(p.speed * MPH), best: p.best, t: +RACE.t.toFixed(1), onRoad: p.onRoad, finished: p.finished }; };
-window.__game = { scene, ZENITH, HORIZON, RACE, G, T, settings, startRace, playerInput, keys, updateCamera, TREES, collide, SURF, NET, TRACKS, CARS, camera, buildCircuit, set hud(v) { hud.hidden = !v; }, renderNow() { for (const c of RACE.cars) c.visuals(0.5); sky.position.copy(camera.position); if (postFX) postFX.pipeline.render(); else renderer.render(scene, camera); return canvas.toDataURL('image/png'); }, get post() { return !!postFX; }, frameAt };
+window.__game = { scene, ZENITH, HORIZON, RACE, G, T, settings, startRace, playerInput, keys, updateCamera, TREES, collide, SURF, surfaceH, NET, TRACKS, CARS, camera, buildCircuit, set hud(v) { hud.hidden = !v; }, renderNow() { for (const c of RACE.cars) c.visuals(0.5); sky.position.copy(camera.position); if (postFX) postFX.pipeline.render(); else renderer.render(scene, camera); return canvas.toDataURL('image/png'); }, get post() { return !!postFX; }, frameAt };
 
 (async function boot() {
   resizeHUD();
   buildMenus(); updateHint();
   try { await buildCircuit(settings.track); } catch (e) { console.error(e); progress('Could not build the circuit: ' + e.message, 1); return; }
   await setupPost(); onResize();
-  G.state = 'menu'; showScreen('menu'); showcase();
+  G.state = 'menu'; showScreen('menu'); showcase(); refreshThumbs();
   if (EMBED) post({ type: 'ready' });
   requestAnimationFrame(t => { last = t; frame(t); });
   if (AUTOPILOT) { console.log('[QA] autopilot race'); settings.laps = 1; startRace('race'); }
