@@ -2097,7 +2097,7 @@ function msg(text, kind = 'info', dur = 3.6) { G.msgs.push({ text, kind, t: dur,
 //  Aircraft simulation
 // =====================================================================
 const _vl = new V3(), _vd = new V3(), _ld = new V3(), _F = new V3(), _ax = new V3(), _hf = new V3(), _tmp = new V3(), _tmp2 = new V3();
-const _dq = new Q4(), _E = new THREE.Euler();
+const _dq = new Q4(), _E = new THREE.Euler(), _FX = new V3(1, 0, 0);
 const TAIL = 0.192;
 // height of the aircraft's origin above the ground on its wheels, at a given pitch
 function rideH(s, pitch) { return s.tri ? s.ride : 1.95 * Math.cos(pitch) - 0.6 * Math.sin(pitch); }
@@ -2156,7 +2156,7 @@ class Plane {
     CL += this.flapT * (this.player ? 0.8 : 0.38) * (stall > 0.3 ? 0.5 : 1);
     // flaps down in the air: combat flaps, a much tighter turn that bleeds speed fast (they blow back above 290 mph)
     const flapK = this.onGround ? 0 : this.flapT * clamp((130 - V) / 20, 0, 1);
-    const lk = (this.liftK || 1) * (1 + (this.player ? 0.6 : 0.15) * flapK); CL *= lk; this.lkEff = lk; // more lift for the same angle of attack: a tighter turn
+    const lk = (this.liftK || 1) * (1 + (this.player ? 0.6 : 0) * flapK); // computer pilots get no combat flaps CL *= lk; this.lkEff = lk; // more lift for the same angle of attack: a tighter turn
     if (!this.stall && stall > 0.05) this.dropSign = Math.abs(this.w.z) > 0.15 ? -Math.sign(this.w.z) : (Math.random() < 0.5 ? -1 : 1);
     this.stall = stall;
     const wingF = 0.5 * (fL + fR); CL *= wingF;
@@ -2195,6 +2195,15 @@ class Plane {
     this.w.x += pA * dt; this.w.y += yA * dt; this.w.z += rA * dt;
     const wl = this.w.length();
     if (wl > 1e-7) { _ax.copy(this.w).multiplyScalar(1 / wl); _dq.setFromAxisAngle(_ax, wl * dt); this.q.multiply(_dq).normalize(); }
+    // your flaps down and the stick back: the aircraft comes round at up to 60° a second (it bleeds speed doing it);
+    // the extra turn swings the nose and the flight path together, so it never stalls or pulls more g
+    if (this.player && flapK > 0 && this.alive && !this.onGround) {
+      const want = 0.99 * clamp(this.ctrl.pitch / 0.6, 0, 1) * flapK, extra = Math.max(0, want - this.w.x);
+      if (extra > 0) {
+        _dq.setFromAxisAngle(_FX, extra * dt); this.q.multiply(_dq).normalize();
+        this.vel.applyAxisAngle(this.right, extra * dt).multiplyScalar(Math.exp(-0.1 * extra * dt));
+      }
+    }
     this.pos.addScaledVector(this.vel, dt);
     // fuel, engine
     if (this.engineOn && this.fuel > 0) this.fuel = Math.max(0, this.fuel - (0.04 + 0.26 * thr) * (s.fuelK || 1) * (s.jet && this.boosting ? 3 : 1) * dt);
@@ -5508,7 +5517,7 @@ function fillSettings() {
     ['Stick, assisted', 'auto-levels, holds height'], ['Touch-drag aim', 'drag anywhere, plane follows'], ['Tilt', 'tilt to steer · tap the left side to re-centre'],
   ] : [
     ['Aim (mouse mode)', 'move mouse'], ['Fire', 'click · Space'], ['Missile', 'right click · X'], ['Flares', 'F'], ['Pitch', 'W / S'], ['Roll', 'A / D'], ['Rudder', 'Q / E'], ['Throttle', 'Shift / Z · wheel · 1–0'],
-    ['Boost', 'hold Shift at full throttle'], ['Drop a bomb', 'B in the air'], ['Rockets', 'K (a pair)'], ['Wingmen', 'T attack my target · Y cover me · U ground'], ['Bail out', 'J (twice if not hit)'], ['Hold this height', 'L'], ['Fly on a friend\'s wing', 'O'], ['Tight turn', 'V for flaps (slows you down)'], ['Corner map', 'M'], ['Big map, waypoints', 'N'], ['Fly the route', 'I'], ['Gear', 'G'], ['Flaps', 'V'], ['Brakes', 'B'], ['Camera', 'C'], ['Pause', 'Esc · P'], ['Gamepad', 'RT fire · LB missile · RB flares · LT bomb · L3 rockets · R3 bail · D-pad ◀ attack ▶ cover · Back ground · Y map'],
+    ['Boost', 'hold Shift at full throttle'], ['Drop a bomb', 'B in the air'], ['Rockets', 'K (a pair)'], ['Wingmen', 'T attack my target · Y cover me · U ground'], ['Bail out', 'J (twice if not hit)'], ['Hold this height', 'L'], ['Fly on a friend\'s wing', 'O'], ['Tight turn', 'V for flaps, then pull: about 60° a second'], ['Corner map', 'M'], ['Big map, waypoints', 'N'], ['Fly the route', 'I'], ['Gear', 'G'], ['Flaps', 'V'], ['Brakes', 'B'], ['Camera', 'C'], ['Pause', 'Esc · P'], ['Gamepad', 'RT fire · LB missile · RB flares · LT bomb · L3 rockets · R3 bail · D-pad ◀ attack ▶ cover · Back ground · Y map'],
   ];
   $('helpGrid').innerHTML = help.map(([a, b]) => `<div><span>${a}</span><span>${b}</span></div>`).join('');
   $('pauseEyebrow').textContent = G.player ? `${SPECS[settings.plane].full} · ${fmtTime(G.time)} airborne · ${G.stats ? G.stats.kills : 0} kills` : 'Settings';
