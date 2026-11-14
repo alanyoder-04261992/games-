@@ -2097,7 +2097,7 @@ function msg(text, kind = 'info', dur = 3.6) { G.msgs.push({ text, kind, t: dur,
 //  Aircraft simulation
 // =====================================================================
 const _vl = new V3(), _vd = new V3(), _ld = new V3(), _F = new V3(), _ax = new V3(), _hf = new V3(), _tmp = new V3(), _tmp2 = new V3();
-const _dq = new Q4(), _E = new THREE.Euler(), _FX = new V3(1, 0, 0);
+const _dq = new Q4(), _E = new THREE.Euler(), _FX = new V3(1, 0, 0), _UPV = new V3(0, 1, 0);
 const TAIL = 0.192;
 // height of the aircraft's origin above the ground on its wheels, at a given pitch
 function rideH(s, pitch) { return s.tri ? s.ride : 1.95 * Math.cos(pitch) - 0.6 * Math.sin(pitch); }
@@ -2156,7 +2156,7 @@ class Plane {
     CL += this.flapT * (this.player ? 0.8 : 0.38) * (stall > 0.3 ? 0.5 : 1);
     // flaps down in the air: combat flaps, a much tighter turn that bleeds speed fast (they blow back above 290 mph)
     const flapK = this.onGround ? 0 : this.flapT * clamp((130 - V) / 20, 0, 1);
-    const lk = (this.liftK || 1) * (1 + (this.player ? 0.6 : 0) * flapK); // computer pilots get no combat flaps CL *= lk; this.lkEff = lk; // more lift for the same angle of attack: a tighter turn
+    const lk = (this.liftK || 1) * (1 + (this.player ? 0.6 : 0) * flapK); CL *= lk; this.lkEff = lk; // more lift for the same angle of attack: a tighter turn (computer pilots get no combat flaps)
     if (!this.stall && stall > 0.05) this.dropSign = Math.abs(this.w.z) > 0.15 ? -Math.sign(this.w.z) : (Math.random() < 0.5 ? -1 : 1);
     this.stall = stall;
     const wingF = 0.5 * (fL + fR); CL *= wingF;
@@ -2197,11 +2197,18 @@ class Plane {
     if (wl > 1e-7) { _ax.copy(this.w).multiplyScalar(1 / wl); _dq.setFromAxisAngle(_ax, wl * dt); this.q.multiply(_dq).normalize(); }
     // your flaps down and the stick back: the aircraft comes round at up to 60° a second (it bleeds speed doing it);
     // the extra turn swings the nose and the flight path together, so it never stalls or pulls more g
-    if (this.player && flapK > 0 && this.alive && !this.onGround) {
-      const want = 0.99 * clamp(this.ctrl.pitch / 0.6, 0, 1) * flapK, extra = Math.max(0, want - this.w.x);
+    // (at any speed, jets included: it reads how hard you are pulling, not how far the g-limited elevator has moved)
+    const flapTurn = this.onGround ? 0 : this.flapT;
+    if (this.player && flapTurn > 0 && this.alive && !this.onGround) {
+      const pull = (this.pullWant || 0) > 0.06 ? Math.max(this.ctrl.pitch, this.pullWant) : Math.max(0, this.ctrl.pitch);
+      // a level turn the way you are banked: the extra swings the aircraft round the vertical, topping the turn up to 60°/s
+      const bank = this.bank(), sb = Math.sin(Math.min(Math.abs(bank), 1.57)), natural = Math.max(0, this.w.x) * sb;
+      const vs = this.stallSpeed(); // it fades out near the stall, so you can't turn yourself out of the sky
+      const want = 1.047 * clamp(pull / 0.6, 0, 1) * flapTurn * smooth(0.15, 0.9, Math.abs(bank)) * smooth(vs * 0.95, vs * 1.2, V), extra = Math.max(0, want - natural);
       if (extra > 0) {
-        _dq.setFromAxisAngle(_FX, extra * dt); this.q.multiply(_dq).normalize();
-        this.vel.applyAxisAngle(this.right, extra * dt).multiplyScalar(Math.exp(-0.1 * extra * dt));
+        const ang = -Math.sign(bank) * extra * dt;
+        _dq.setFromAxisAngle(_UPV, ang); this.q.premultiply(_dq).normalize();
+        this.vel.applyAxisAngle(_UPV, ang).multiplyScalar(Math.exp(-0.06 * extra * dt));
       }
     }
     this.pos.addScaledVector(this.vel, dt);
@@ -2764,6 +2771,7 @@ function steerTo(p, dirW, out, maxPull = 1) {
   const pullSmall = clamp(ff * (1 - bw) + pitchErr * 4, -1, 1);
   let pitch = lerp(pullSmall, pullBig, bw) - p.w.x * 0.25;
   const caps = pitchCaps(p);
+  p.pullWant = pitch; // how hard the pilot (or the aim) asks to pull, before the g limit
   pitch = clamp(pitch, Math.max(-1, caps.lo), Math.min(maxPull, caps.hi));
   out.pitch = pitch;
   out.yaw = clamp(yawErr * 2.5 * (1 - bw) + p.beta * 3, -1, 1);
@@ -2794,6 +2802,7 @@ function assistStick(p, sx, sy, sz, out) {
     else if (Math.abs(holdGamma) < 0.26 && Math.abs(bank) < 1.4) { if (holdAlt == null) holdAlt = p.pos.y + p.vel.y * 2; tg = clamp((holdAlt - p.pos.y) * 0.003, -0.1, 0.1); } // a gentle climb or dive levels off
     out.pitch = ff + (tg - gamma) * 3.0 - p.w.x * 0.3 * (Math.abs(bank) < 1.4 ? 1 : 0);
   }
+  p.pullWant = Math.abs(sy) > 0.06 ? sy : 0;
   const caps = pitchCaps(p); out.pitch = clamp(out.pitch, Math.max(-1, caps.lo), Math.min(1, caps.hi));
   out.yaw = clamp(sz + p.beta * 3, -1, 1);
 }
@@ -4802,7 +4811,7 @@ function playerControl(dt) {
     } else { sx = expo(touch.sx); sy = expo(touch.sy); }
   }
   sy *= inv;
-  if (mode === 'stick-manual') { inp.roll = sx; inp.pitch = sy; inp.yaw = sz; }
+  if (mode === 'stick-manual') { inp.roll = sx; inp.pitch = sy; inp.yaw = sz; p.pullWant = sy; }
   else assistStick(p, sx, sy, sz, inp);
 }
 function formLeaderFor(p) {
