@@ -32,6 +32,7 @@ export function mount(ctx) {
   let table;
   try {
     table = new Table3D(stage, { quality: ctx.prefs.get('eg-quality') || 'high' });
+    table.autoZoom = ctx.prefs.get('eg-autozoom') !== 'off';
   } catch (err) {
     loading.replaceChildren(h('p', 'This device could not start 3D graphics (WebGPU or WebGL). Try another browser.'));
     console.error(err);
@@ -114,30 +115,37 @@ export function mount(ctx) {
       presentedSeq = null;
       table.setActive(r.seat);
       table.lookToward(table.pawns[r.seat].position, 0.35);
-      sound.shuffle();
-      step = 'dice';
-      await table.rollDice(r.seat, r.dice, speed);
-      step = 'hop';
-      sound.card();
-      flash(`${name(r.seat)} rolled ${r.dice.join(' + ')}${r.dice.length > 1 ? ` = ${r.dice[0] + r.dice[1]}` : ''}`, 'roll', 900 * speed);
-      const steps = r.dice.reduce((a, b) => a + b, 0);
-      const pays = new Map(r.paydays.map((p) => [p.pos, p.amount]));
-      const cashShown = { v: prev.players[r.seat].cash };
-      await table.hop(r.seat, r.track, r.from, steps, speed, (pos) => {
-        sound.pop();
-        table.lookToward(table.pawns[r.seat].position, 0.45);
-        if (pays.has(pos)) {
-          const amt = pays.get(pos);
-          cashShown.v += amt;
-          sound.chip();
-          if (amt > 0) table.burst(table.pawns[r.seat].position.clone().setY(1.2), { count: 18, power: 0.7 });
-          flash(`${r.track === 'free' ? 'Freedom ' : ''}Payday ${amt >= 0 ? '+' : ''}${money(amt)}`, amt >= 0 ? 'good' : 'bad', 1300 * speed);
-          table.setCash(r.seat, cashShown.v, true);
-        }
-      });
-      const kind = (r.track === 'free' ? RING : GRIND)[r.to];
-      if (!['pay', 'fpay'].includes(kind)) flash(SPACE_INFO[kind].label, kind, 1100 * speed);
-      await sleep(250 * speed);
+      // zoom in on my own pawn as the dice fly, follow it round the board, ease back out once it
+      // lands (a setting: "Zoom in on your moves")
+      if (r.seat === me()) table.followPawn(r.seat);
+      try {
+        sound.shuffle();
+        step = 'dice';
+        await table.rollDice(r.seat, r.dice, speed);
+        step = 'hop';
+        sound.card();
+        flash(`${name(r.seat)} rolled ${r.dice.join(' + ')}${r.dice.length > 1 ? ` = ${r.dice[0] + r.dice[1]}` : ''}`, 'roll', 900 * speed);
+        const steps = r.dice.reduce((a, b) => a + b, 0);
+        const pays = new Map(r.paydays.map((p) => [p.pos, p.amount]));
+        const cashShown = { v: prev.players[r.seat].cash };
+        await table.hop(r.seat, r.track, r.from, steps, speed, (pos) => {
+          sound.pop();
+          table.lookToward(table.pawns[r.seat].position, 0.45);
+          if (pays.has(pos)) {
+            const amt = pays.get(pos);
+            cashShown.v += amt;
+            sound.chip();
+            if (amt > 0) table.burst(table.pawns[r.seat].position.clone().setY(1.2), { count: 18, power: 0.7 });
+            flash(`${r.track === 'free' ? 'Freedom ' : ''}Payday ${amt >= 0 ? '+' : ''}${money(amt)}`, amt >= 0 ? 'good' : 'bad', 1300 * speed);
+            table.setCash(r.seat, cashShown.v, true);
+          }
+        });
+        const kind = (r.track === 'free' ? RING : GRIND)[r.to];
+        if (!['pay', 'fpay'].includes(kind)) flash(SPACE_INFO[kind].label, kind, 1100 * speed);
+        await sleep(450 * speed);
+      } finally {
+        table.endFollow();
+      }
     }
     view = v;
     // 2) breaking free
@@ -902,6 +910,15 @@ export function mount(ctx) {
         set: (v) => {
           ctx.prefs.set('eg-quality', v ? 'high' : 'low');
           table.setQuality(v ? 'high' : 'low');
+        },
+      },
+      {
+        label: 'Zoom in on your moves',
+        value: ctx.prefs.get('eg-autozoom') !== 'off',
+        set: (v) => {
+          ctx.prefs.set('eg-autozoom', v ? 'on' : 'off');
+          table.autoZoom = v;
+          if (!v) table.endFollow();
         },
       },
     ],
