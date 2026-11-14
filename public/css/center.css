@@ -478,3 +478,28 @@ body.gc-reloading { opacity: 0.6; transition: opacity 0.2s; }
   position: sticky; bottom: -24px; z-index: 1; margin: 4px -24px -24px; padding: 14px 24px calc(18px + var(--safe-bottom));
   background: linear-gradient(180deg, rgba(15, 28, 49, 0), #0f1c31 26%);
 }
+
+/* ---- pass and play (several people on one device) ---- */
+.gc-local { display: flex; flex-direction: column; gap: 8px; }
+.gc-local:empty { display: none; }
+.gc-local-title { font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.gc-local-row { display: flex; align-items: center; gap: 10px; }
+.gc-local-row .gc-avatar, .gc-local-row > :first-child { flex: none; }
+.gc-local-you { font-weight: 700; }
+.gc-local-you small { color: var(--muted); font-weight: 500; }
+.gc-local-name { flex: 1; min-width: 0; }
+.gc-add-local { margin-top: 12px; }
+.gc-pass {
+  position: absolute; inset: 0; z-index: 60; display: grid; place-items: center; padding: 20px;
+  background: radial-gradient(800px 500px at 50% 30%, #1b3256, #0b1424 70%);
+}
+.gc-pass-card { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; max-width: 360px; }
+.gc-pass-card h2 { font-family: var(--display); font-size: 34px; margin: 6px 0 0; }
+.gc-pass-card p { color: var(--muted); margin: 0 0 8px; line-height: 1.45; }
+.gc-pass { overflow-y: auto; }
+@media (max-height: 520px) {
+  .gc-pass-card { gap: 6px; }
+  .gc-pass-card .avatar.lg { --size: 52px; }
+  .gc-pass-card h2 { font-size: 26px; margin: 0; }
+  .gc-pass-card p { margin-bottom: 4px; font-size: 14px; }
+}

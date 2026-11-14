@@ -40,6 +40,10 @@ export default {
   seatLabels: ['Red', 'Blue'],   // optional
   teams: [[0, 2], [1, 3]],       // optional, for partnership games
   joinOrder: [1],                // optional: which seat the first friend gets
+  sameDevice: 'open',            // optional: pass and play, several people on one device.
+                                 //   'open' when nothing is hidden, 'private' when players have
+                                 //   hidden hands (a "Pass to Sam" cover between people).
+                                 //   Leave it out for real-time games where everyone acts at once.
   players: '1–2 players',
   tile: '<svg …>…</svg>',        // tile art, 200×140 viewBox works well
   accent: '#5b8cff',

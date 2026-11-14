@@ -55,6 +55,7 @@ export function onlineGuide({ onHost, onJoin } = {}) {
         tip('robot', 'Nobody gets stuck waiting', 'If someone’s phone drops off, a computer player covers their seat after a few seconds. When they come back, they get their seat back.'),
         tip('refresh', 'Lost connection? Just reopen', 'Refreshing or reopening the page puts you right back at your seat. The home page also shows a ', h('b', 'Rejoin table'), ' button.'),
         tip('seats', 'Late arrivals', 'Someone can join after the game starts. The host opens ', h('b', 'Settings → Players'), ' and seats them in place of a computer player.'),
+        tip('seats', 'Share a device', 'Two people on one phone? In the lobby tap ', h('b', 'Add a player on this device'), '. They get their own seat, and in card and dice games a “Pass to …” screen hides your hand between turns. Everyone in one room can also pick ', h('b', 'This device (pass and play)'), ' after tapping Multiplayer.'),
         tip('play', 'Rematch with the same players', 'When a game ends, tap ', h('b', 'Rematch'), '. Same players, same seats, same table code — nobody rejoins. The host’s tap starts it; everyone else’s tells the host they’re in.'),
       ),
     ),
