@@ -227,6 +227,13 @@ settings: () => [{ label: '3D board', value: want3d, set: (v) => (ctx.prefs.set(
   `--use-vulkan=swiftshader` to the flags above. Software rendering runs at a few frames a
   second, so give animations time before taking screenshots.
 
+## Rule book
+
+Every game needs `rules.html`: an illustrated rule book players open from the **?** button,
+the Options page and the play pop-up. Write it to [RULEBOOK.md](RULEBOOK.md) before the game
+is merged, and keep it in step with the game: each time you bump `version`, re-read the rule
+book against the code, fix what changed, and set its `data-checked` to the new version.
+
 ## 4. Register it
 
 Add one line to `public/games/index.js`:

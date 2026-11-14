@@ -86,6 +86,27 @@ In this order (skip a section only when it truly doesn't apply):
   with the game id, e.g. `rook-grad1`.
 - Aim for 8 to 15 pictures in a rule book.
 
+## Keeping it up to date
+
+A rule book is only useful while it's right. The hero header records the game version it was
+last checked against:
+
+```html
+<header class="rb-hero" data-checked="1.8">
+```
+
+`tests/rulebook.test.mjs` fails when `data-checked` differs from the `version` in the game's
+`index.js`. So whenever you change a game and bump its version (see CLAUDE.md):
+
+1. Read the whole rule book next to the code you changed.
+2. Fix every rule, number, table option, control, screen description and picture that is now
+   wrong, and add sections for anything new.
+3. Set `data-checked` to the new version.
+
+Never change `data-checked` without re-reading the book. A change that truly leaves the rules
+and controls untouched (a faster renderer, say) still needs that read-through; then only the
+number changes.
+
 ## Checking it
 
 Open the game in a browser, tap **?** and read the whole book on a phone-sized screen

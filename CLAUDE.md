@@ -51,7 +51,15 @@ Games plug in as folders under `public/games/` — read `docs/ADDING_A_GAME.md` 
   (nothing hidden) or `'private'` (hidden hands: a "Pass to …" cover between people) in the
   manifest of any turn-based game. Leave it off for real-time games. A game's UI always draws
   `msg.seat`, which can change between turns on a shared device.
-- Every game has an illustrated rule book, `rules.html`, written to `docs/RULEBOOK.md` (inline-SVG
-  pictures, every rule matching the engine). Update it whenever a game's rules or controls change;
-  `tests/rulebook.test.mjs` checks the basics.
+## Rule books (every game, kept up to date)
+
+- **A new game ships with its rule book**: `public/games/<id>/rules.html`, an illustrated
+  how-to-play guide written to `docs/RULEBOOK.md` (sections, inline-SVG pictures, every rule and
+  number matching the engine). No rule book, no merge: `tests/rulebook.test.mjs` fails without it.
+- **Changing a game means checking its rule book.** Whenever you change a game (rules, scoring,
+  options, controls, pieces, screens) and bump its `version`, re-read its whole `rules.html`
+  against the code: fix every rule, number, option, control and picture that changed, add new
+  features, then set `data-checked` on its `<header class="rb-hero">` to the new version.
+  The test fails while `data-checked` doesn't match the manifest's `version`, so a stale rule
+  book can't slip through. Don't just bump the number: actually re-read it.
 - Run `npm test` before pushing. Rules engines need bot-vs-bot tests that play full games.
