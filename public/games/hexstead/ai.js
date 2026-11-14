@@ -3,6 +3,10 @@
 // often their numbers roll and which resources they add, pick a building goal, trade toward
 // it, and point the bandit at whoever is ahead.
 import { board, PIPS } from './geometry.js';
+
+// How often a number pays, in 36ths. With fast harvest a 2–6 also pays whenever either die shows
+// it (11 more chances in 36), so low numbers become the best tiles on the island.
+const pipsOf = (v, n) => (PIPS[n] || 0) + (v.fastHarvest && n >= 2 && n <= 6 ? 11 : 0);
 import { RES, COST, TERRAIN, canPay, total, canHomestead, canRoad, ratio } from './engine.js';
 
 const G = (v) => board(v.size || 'base');
@@ -25,7 +29,7 @@ function production(v, p) {
     if (b?.o !== p) return;
     for (const hi of G(v).VERTS[vi].hexes) {
       const r = TERRAIN[v.hexes[hi].t].res;
-      if (r && hi !== v.bandit) prod[r] += (PIPS[v.hexes[hi].n] || 0) * (b.k === 'town' ? 2 : 1);
+      if (r && hi !== v.bandit) prod[r] += pipsOf(v, v.hexes[hi].n) * (b.k === 'town' ? 2 : 1);
     }
   });
   return prod;
@@ -37,7 +41,7 @@ function cornerValue(v, p, vi, prod, lvl) {
   for (const hi of G(v).VERTS[vi].hexes) {
     const r = TERRAIN[v.hexes[hi].t].res;
     if (!r) continue;
-    const pips = PIPS[v.hexes[hi].n] || 0;
+    const pips = pipsOf(v, v.hexes[hi].n);
     let w = RES_WEIGHT[r];
     if ((prod?.[r] || 0) === 0) w *= 1.35; // new resource
     else if (prod[r] > 8) w *= 0.8;
@@ -224,7 +228,7 @@ function banditMove(v, p, legal, lvl) {
   let bestScore = -Infinity;
   for (const m of legal) {
     const hx = v.hexes[m.hex];
-    const pips = PIPS[hx.n] || 0;
+    const pips = pipsOf(v, hx.n);
     let score = 0;
     for (const vi of G(v).HEXES[m.hex].verts) {
       const b = v.verts[vi];

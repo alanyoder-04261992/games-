@@ -172,3 +172,72 @@ test('hexstead: barn raising lets the others build in order, then the next turn 
   assert.equal(s.phase, 'roll');
   assert.equal(s.current, (cur + 1) % 6);
 });
+
+test('hexstead: fast harvest pays each die and the total, once each; a 7 pays only the dice', () => {
+  const on = { fastHarvest: true }, off = { fastHarvest: false };
+  assert.deepEqual(E.harvestNumbers(on, [2, 4]), [2, 4, 6]);
+  assert.deepEqual(E.harvestNumbers(on, [3, 3]), [3, 6]);
+  assert.deepEqual(E.harvestNumbers(on, [3, 4]), [3, 4]);
+  assert.deepEqual(E.harvestNumbers(on, [1, 6]), [6]);
+  assert.deepEqual(E.harvestNumbers(off, [2, 4]), [6]);
+  assert.deepEqual(E.harvestNumbers(off, [3, 4]), []);
+});
+
+test('hexstead: fast harvest pays exactly the tiles showing a die number on top of the total', () => {
+  // a game just past setup, then the same roll with and without fast harvest
+  let base = E.setup({ seed: 11, options: { fast: 'harvest' } });
+  while (base.phase !== 'roll') {
+    const seat = E.actors(base)[0];
+    base = E.apply(base, seat, chooseAction(E.view(base, seat), E.legal(base, seat), 'normal'));
+  }
+  let checked = 0;
+  for (let rng = 1; rng < 400 && checked < 25; rng++) {
+    const a = structuredClone(base);
+    a.rng = rng;
+    const fast = E.apply(a, a.current, { type: 'roll' });
+    const [d1, d2] = fast.dice;
+    if (d1 + d2 === 7) continue;
+    const b = structuredClone(base);
+    b.rng = rng;
+    b.fastHarvest = false;
+    const slow = E.apply(b, b.current, { type: 'roll' });
+    // what the dice's own numbers (not the total) should add, with a full bank
+    const extra = fast.players.map(() => Object.fromEntries(E.RES.map((r) => [r, 0])));
+    const faces = new Set([d1, d2].filter((n) => n >= 2 && n !== d1 + d2));
+    base.hexes.forEach((h, i) => {
+      if (!faces.has(h.n) || i === base.bandit) return;
+      for (const v of HEXES[i].verts) {
+        const bld = base.verts[v];
+        if (bld) extra[bld.o][E.TERRAIN[h.t].res] += bld.k === 'town' ? 2 : 1;
+      }
+    });
+    fast.players.forEach((pl, q) => {
+      for (const r of E.RES) assert.equal(pl.res[r] - slow.players[q].res[r], extra[q][r], `roll ${d1}+${d2}: seat ${q} ${r}`);
+    });
+    checked++;
+  }
+  assert.ok(checked >= 20, `checked ${checked} rolls`);
+});
+
+test('hexstead: fast play games finish, and building between turns works for 3 and 4 players', () => {
+  for (const fast of ['raise', 'harvest', 'both']) {
+    for (let seed = 60; seed < 66; seed++) {
+      const players = seed % 2 ? 3 : 4;
+      const s = play(seed, ['normal', 'hard', 'easy', 'normal'], { fast, players });
+      assert.ok(s.winner != null, `${fast} seed ${seed} has a winner`);
+      assert.ok(!s.botErrors, `${fast} seed ${seed}: ${s.botErrors} bot moves were rejected`);
+      for (const r of E.RES) assert.equal(s.bank[r] + s.players.reduce((n, p) => n + p.res[r], 0), E.SUPPLY[s.size].bank, `${r} conserved`);
+      assert.equal(s.raising, fast !== 'harvest');
+      assert.equal(s.fastHarvest, fast !== 'raise');
+    }
+  }
+  // a 4-player table with "build between turns" really gets a raise phase
+  let s = E.setup({ seed: 7, options: { fast: 'raise', players: 4 } });
+  let raised = false;
+  for (let i = 0; i < 4000 && !E.isOver(s) && !raised; i++) {
+    const seat = E.actors(s)[0];
+    s = E.apply(s, seat, chooseAction(E.view(s, seat), E.legal(s, seat), 'normal'));
+    if (s.phase === 'raise') raised = true;
+  }
+  assert.ok(raised, 'someone built between turns');
+});
