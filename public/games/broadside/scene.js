@@ -1031,8 +1031,8 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
         return pivot;
       });
       gull.add(body);
-      gull.scale.setScalar(1.1);
-      gull.userData = { wings, r: 7 + r() * 9, h: 6 + r() * 3.5, speed: (0.12 + r() * 0.08) * (r() < 0.5 ? 1 : -1), a: r() * 6.28, cx: (r() - 0.5) * 8, cz: (r() - 0.5) * 12, flap: r() * 6 };
+      gull.scale.setScalar(0.85);
+      gull.userData = { wings, r: 7 + r() * 9, h: 3.2 + r() * 2, speed: (0.12 + r() * 0.08) * (r() < 0.5 ? 1 : -1), a: r() * 6.28, cx: (r() - 0.5) * 8, cz: (r() - 0.5) * 12, flap: r() * 6 };
       gulls.push(gull);
       scene.add(gull);
     }
@@ -1310,23 +1310,28 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
 
   // ---------- placement ghost ----------
   const ghost = new THREE.Group();
-  const ghostOk = new THREE.MeshBasicMaterial({ color: '#7dffb0', transparent: true, opacity: 0.42, depthWrite: false });
+  const ghostOk = new THREE.MeshBasicMaterial({ color: '#2fe37a', transparent: true, opacity: 0.42, depthWrite: false });
   const ghostBad = new THREE.MeshBasicMaterial({ color: '#ff6b6b', transparent: true, opacity: 0.42, depthWrite: false });
-  share(ghostOk, ghostBad);
+  // a ship waiting to be placed (tapped once, tap again to drop it in): solid green, squares pulsing
+  const ghostShip = new THREE.MeshStandardMaterial({ color: '#0b8a3a', emissive: '#06451d', emissiveIntensity: 0.5, roughness: 0.5, metalness: 0.1, transparent: true, opacity: 0.92 });
+  share(ghostOk, ghostBad, ghostShip);
+  let ghostPulse = false;
   let ghostKey = null;
   function setGhost(g) {
     // the ghost is rebuilt as the pointer crosses squares; skip it when nothing would change
-    const key = g ? `${N}:${g.id}:${g.x}:${g.y}:${g.dir}:${g.ok}` : null;
+    const key = g ? `${N}:${g.id}:${g.x}:${g.y}:${g.dir}:${g.ok}:${!!g.preview}` : null;
     if (key === ghostKey) return;
     ghostKey = key;
     disposeTree(ghost);
     ghost.clear();
+    ghostPulse = !!g?.preview;
+    ghostOk.opacity = 0.42;
     if (!g) return;
     const obj = buildShip(g.id, '#ffffff');
     obj.traverse((m) => {
       if (!m.isMesh) return;
       if (!SHARED.has(m.material)) m.material.dispose(); // its own flag material, never drawn
-      m.material = g.ok ? ghostOk : ghostBad;
+      m.material = g.ok ? (g.preview ? ghostShip : ghostOk) : ghostBad;
       m.castShadow = false;
     });
     const cells = [];
@@ -1655,6 +1660,7 @@ function buildScene(container, renderer, { onCell, onHover, quality = 'high' } =
       }
     }
     if (ghost.children.length) ghost.children[0].position.y = 0.1 + Math.sin(t * 4) * 0.03;
+    if (ghostPulse) ghostOk.opacity = 0.4 + Math.sin(t * 5) * 0.18;
     reticle.rotation.y = t * 0.8;
     const rs = 1 + Math.sin(t * 6) * 0.06;
     reticle.scale.set(rs, 1, rs);
