@@ -1,6 +1,6 @@
 // Offline support. Network first (so updates show up right away), falling back to the
 // cached copy when offline. Bump VERSION to clear old caches.
-const VERSION = 'gc-v5';
+const VERSION = 'gc-v6';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
@@ -12,6 +12,7 @@ self.addEventListener('fetch', (e) => {
   const sameOrigin = url.origin === self.location.origin;
   const fonts = url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';
   if (!sameOrigin && !fonts) return;
+  if (sameOrigin && url.pathname.includes('/api/')) return; // play stats and the owner's insights are never cached
   e.respondWith(
     fetch(req)
       .then((res) => {
