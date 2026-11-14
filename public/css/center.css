@@ -503,3 +503,16 @@ body.gc-reloading { opacity: 0.6; transition: opacity 0.2s; }
   .gc-pass-card h2 { font-size: 26px; margin: 0; }
   .gc-pass-card p { margin-bottom: 4px; font-size: 14px; }
 }
+
+/* ---- pop-ups on phones: clear of the notch and home bar, close button always in reach ---- */
+.gc-modal-wrap {
+  padding: calc(12px + var(--safe-top)) calc(12px + env(safe-area-inset-right, 0px)) calc(12px + var(--safe-bottom)) calc(12px + env(safe-area-inset-left, 0px));
+}
+.gc-modal { max-height: calc(100vh - 24px - var(--safe-top) - var(--safe-bottom)); max-height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom)); overscroll-behavior: contain; }
+/* the × stays at the top corner while the pop-up scrolls */
+.gc-modal > .gc-x {
+  position: sticky; top: 0; display: block; z-index: 3; margin: -12px -12px -32px auto; /* takes no room: content keeps its full width */
+  width: 44px; height: 44px; font-size: 26px; background: #22385a; color: var(--text);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.gc-play-head { padding-right: 0; }
