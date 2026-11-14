@@ -1516,8 +1516,13 @@ class Car {
       else { this.vy = vyG; this.y = gh; }
     }
     // tripping: sliding sideways off the road into rough ground digs the wheels in and rolls the car
-    if (!this.air && !window.__roadEverywhere && V > 10 && lat > HALF_W + VERGE + 0.6 && Math.abs(vs) > (this.ai ? 17 : this.player && settings.assist ? 16 : 14)) {
-      startTumble(this, 'roll', Math.sign(vs) * (3.2 + (Math.abs(vs) - 14) * 0.25), 2.2 + Math.random(), 'trip'); return;
+    // only a really violent slide does it: well over 45 mph sideways, the car broadside (past
+    // about 50°), and already a moment into the rough; an ordinary slide onto the grass just slides
+    const rough = !this.air && !window.__roadEverywhere && lat > HALF_W + VERGE + 0.6;
+    this.roughT = rough ? (this.roughT || 0) + dt : 0;
+    const tripAt = this.ai ? 26 : this.player && settings.assist ? 25 : 22;
+    if (rough && this.roughT > 0.3 && Math.abs(vs) > tripAt && Math.atan2(Math.abs(vs), Math.abs(vf)) > 0.9) {
+      startTumble(this, 'roll', Math.sign(vs) * (3.2 + (Math.abs(vs) - tripAt) * 0.25), 2.2 + Math.random(), 'trip'); return;
     }
     this.slipF = Math.abs(af); this.slipR = Math.abs(ar) + (this.spin ? 0.2 : 0);
     // gearbox for the sound and the rev counter
