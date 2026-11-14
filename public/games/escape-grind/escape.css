@@ -107,7 +107,7 @@
   width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; cursor: pointer;
   background: var(--glass); border: 1px solid var(--edge); color: #f3ead6; backdrop-filter: blur(8px);
 }
-.eg-tool:hover { background: var(--glass-2); }
+@media (hover: hover) { .eg-tool:hover { background: var(--glass-2); } }
 .eg-tool svg { width: 22px; height: 22px; }
 
 /* event ticker */
@@ -166,7 +166,7 @@
   transition: transform 0.12s, background 0.2s, box-shadow 0.2s, border-color 0.2s; outline: none;
 }
 .eg-btn small { font-weight: 550; font-size: 11.5px; color: #cbbd9e; }
-.eg-btn:hover { background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.07)); }
+@media (hover: hover) { .eg-btn:hover { background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.07)); } }
 .eg-btn:active { transform: translateY(1px) scale(0.98); }
 .eg-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .eg-btn.primary {
@@ -258,16 +258,9 @@
 /* phones */
 @media (max-width: 900px) {
   .eg-strip { display: grid; grid-template-columns: 1fr 1fr; left: 8px; right: 8px; transform: none; max-width: none; gap: 6px; top: 8px; }
-  .eg-chip { width: auto; padding: 6px 8px; gap: 6px; }
-  .eg-chip .avatar { display: none; }
-  .eg-chip-top small { display: none; }
+  .eg-chip { width: auto; }
   .eg-tools { top: auto; bottom: auto; top: 130px; transform: none; right: 8px; }
-  .eg-tool { width: 40px; height: 40px; }
-  .eg-ticker { display: none; }
   .eg-econ { top: 128px; left: 8px; width: 150px; padding: 8px 10px; }
-  .eg-econ .eg-econ-grid, .eg-econ .eg-econ-stocks { display: none; }
-  .eg-econ .eg-spark { height: 30px; }
-  .eg-econ-phase { font-size: 16px; }
   .eg-lesson { top: 130px; }
   .eg-stock { grid-template-columns: 1fr auto; grid-template-areas: 'name price' 'pos pos' 'btns btns'; }
   .eg-bar { padding: 10px; border-radius: 16px; }
@@ -277,6 +270,43 @@
   .eg-btn.sq { flex: 0 0 46px; width: 46px; }
   .eg-cols { grid-template-columns: 1fr; }
   .eg-banner { left: 50%; top: 66%; }
+}
+/* phones only: squeeze the money strip and side panels */
+@media (max-width: 699px) {
+  .eg-chip { padding: 6px 8px; gap: 6px; }
+  .eg-chip .avatar { display: none; }
+  .eg-chip-top small { display: none; }
+  .eg-tool { width: 40px; height: 40px; }
+  .eg-ticker { display: none; }
+  .eg-econ .eg-econ-grid, .eg-econ .eg-econ-stocks { display: none; }
+  .eg-econ .eg-spark { height: 30px; }
+  .eg-econ-phase { font-size: 16px; }
+}
+/* tablets held upright (iPad portrait, 700-900px wide): the phone layout with room to breathe —
+   names, jobs and avatars on the money strip, the event log and economy panel back, bigger text,
+   and an action bar that doesn't stretch edge to edge */
+@media (min-width: 700px) and (max-width: 900px) {
+  .eg-strip { left: 12px; right: 12px; top: 10px; gap: 8px; }
+  .eg-chip-top strong { font-size: 15px; }
+  .eg-chip-money { font-size: 14px; }
+  .eg-tools { top: 150px; right: 12px; }
+  .eg-econ { top: 150px; left: 12px; width: 200px; }
+  .eg-lesson { top: 150px; }
+  .eg-ticker { width: min(340px, calc(100% - 100px)); bottom: calc(150px + var(--safe-bottom)); }
+  .eg-bar { width: min(680px, calc(100% - 32px)); bottom: calc(16px + var(--safe-bottom)); padding: 14px 16px; }
+  .eg-prompt strong { font-size: 21px; }
+  .eg-prompt span { font-size: 15px; }
+  .eg-btn { min-height: 52px; font-size: 16px; }
+  .eg-btn.sq { flex: 0 0 52px; width: 52px; }
+  .eg-cols { grid-template-columns: 1fr 1fr; }
+  .eg-sheet-card { width: min(720px, 100%); }
+  .eg-banner { top: 60%; }
+}
+/* touch screens (iPad, phones): every tap target at least 44px, Apple's minimum */
+@media (pointer: coarse) {
+  .eg-btn.sm { min-height: 44px; }
+  .eg-close { width: 44px; height: 44px; }
+  .eg-tab { min-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .eg-chip, .eg-banner, .eg-btn, .eg-sheet-card { transition: none; }

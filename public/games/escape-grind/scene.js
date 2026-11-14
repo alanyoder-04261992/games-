@@ -802,7 +802,13 @@ export class Table3D {
   }
   #defaultDistance() {
     const asp = this.camera.aspect || 1.6;
-    return asp >= 1.3 ? 29 : asp >= 0.9 ? 34 : 42;
+    if (asp >= 1.3) return 29;
+    if (asp >= 0.9) return 34;
+    // Tall screens: back off just far enough for the board to fill the width. A phone needs the
+    // full 42; a tablet held upright (iPad portrait) is much wider, and at 42 its board would sit
+    // small in the middle with empty table below.
+    const hfov = 2 * Math.atan(Math.tan((this.camera.fov * Math.PI) / 360) * asp);
+    return Math.max(30, Math.min(42, 10.9 / Math.tan(hfov / 2)));
   }
   // gently look toward a point (the moving pawn) unless the person is steering the camera
   lookToward(vec, amount = 0.45) {
