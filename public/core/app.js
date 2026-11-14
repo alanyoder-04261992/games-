@@ -112,7 +112,7 @@ function topbar({ back = null, title = null } = {}) {
     'header.gc-top',
     back
       ? h('button.gc-back', { onclick: back, 'aria-label': 'Back' }, h('span', { html: ICON.back }), 'Game Center')
-      : h('a.gc-brand', { href: '#/' }, h('span.gc-logo', { html: LOGO }), h('span', 'Game Center')),
+      : ownerDoor(h('a.gc-brand', { href: '#/' }, h('span.gc-logo', { html: LOGO }), h('span', 'Game Center'))),
     title ? h('div.gc-title', title) : h('div'),
     h(
       'button.gc-profile',
@@ -121,6 +121,43 @@ function topbar({ back = null, title = null } = {}) {
       h('span', p.name || 'Set your name'),
     ),
   );
+}
+
+// The owner's hidden way into play insights (#/insights): press and hold the Game Center
+// logo for about a second. A normal tap still goes home. Nothing on screen hints at it.
+function ownerDoor(brand) {
+  let timer = null;
+  let opened = false;
+  let start = null;
+  const open = () => {
+    if (opened) return;
+    opened = true;
+    clearTimeout(timer);
+    navigator.vibrate?.(30);
+    go('#/insights');
+  };
+  const hold = (x, y) => {
+    opened = false;
+    start = { x, y };
+    clearTimeout(timer);
+    timer = setTimeout(open, 900);
+  };
+  const cancel = () => clearTimeout(timer);
+  // touch: a phone's own long-press handling can cancel pointer events, so use touch events
+  brand.addEventListener('touchstart', (e) => e.touches.length === 1 && hold(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+  brand.addEventListener('touchmove', (e) => start && Math.hypot(e.touches[0].clientX - start.x, e.touches[0].clientY - start.y) > 12 && cancel(), { passive: true });
+  brand.addEventListener('touchend', (e) => (cancel(), opened && e.cancelable && e.preventDefault()));
+  brand.addEventListener('touchcancel', cancel);
+  brand.addEventListener('mousedown', (e) => e.button === 0 && hold(e.clientX, e.clientY));
+  brand.addEventListener('mouseup', cancel);
+  brand.addEventListener('mouseleave', cancel);
+  brand.addEventListener('click', (e) => opened && (e.preventDefault(), (opened = false)));
+  // Android shows its link menu on a long press: count that as the long press instead
+  brand.addEventListener('contextmenu', (e) => (e.preventDefault(), open()));
+  brand.style.webkitTouchCallout = 'none'; // no link preview on iPhone
+  brand.style.userSelect = 'none';
+  brand.draggable = false;
+  return brand;
 }
 
 function editProfile(after) {
