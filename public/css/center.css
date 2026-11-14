@@ -516,3 +516,85 @@ body.gc-reloading { opacity: 0.6; transition: opacity 0.2s; }
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
 }
 .gc-play-head { padding-right: 0; }
+
+/* =====================================================================
+   Rule books (public/games/<id>/rules.html, see docs/RULEBOOK.md)
+   ===================================================================== */
+.gc-modal.rulebook { width: min(860px, 100%); height: 100%; padding: 0; display: flex; flex-direction: column; }
+.gc-modal.rulebook > .gc-x { margin: 10px 10px -54px auto; }
+.rb-wrap { display: flex; flex-direction: column; min-height: 100%; }
+.rb-bar {
+  position: sticky; top: 0; z-index: 2; padding: 14px 64px 10px 20px;
+  background: linear-gradient(180deg, #172a46 80%, rgba(23, 42, 70, 0.92)); border-bottom: 1px solid var(--line);
+  display: grid; grid-template-columns: 56px 1fr; gap: 4px 12px; align-items: center;
+}
+.rb-bar-art { width: 56px; height: 40px; border-radius: 9px; overflow: hidden; border: 1px solid var(--line); }
+.rb-bar-art svg { width: 100%; height: 100%; display: block; }
+.rb-bar-title { display: flex; flex-direction: column; }
+.rb-bar-title strong { font-family: var(--display); font-size: 20px; line-height: 1.1; }
+.rb-bar-title small { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; }
+.rb-toc { grid-column: 1 / -1; display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 2px; scrollbar-width: none; }
+.rb-toc::-webkit-scrollbar { display: none; }
+.rb-toc-btn { flex: none; font: 600 13px var(--font); color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+.rb-toc-btn:hover { background: var(--panel-2); }
+.rb-doc { padding: 6px 22px 10px; font-size: 16px; }
+.rb-doc h2 { scroll-margin-top: 120px; font-family: var(--display); font-size: 26px; color: var(--text); margin: 34px 0 12px; padding-top: 4px; border-top: 1px solid var(--line); }
+.rb-doc h2:first-of-type { border-top: 0; }
+.rb-doc h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gold); margin: 22px 0 8px; }
+.rb-doc p { margin: 0 0 12px; }
+.rb-doc li { margin: 4px 0; }
+.rb-doc b, .rb-doc strong { color: var(--text); }
+.rb-end { padding: 6px 22px calc(22px + var(--safe-bottom)); margin-top: auto; }
+
+/* opening: title, one-line pitch, quick facts */
+.rb-hero { margin: 18px 0 8px; padding: 18px; border-radius: 18px; background: radial-gradient(500px 220px at 85% 0%, rgba(240, 195, 90, 0.16), transparent 70%), var(--panel); border: 1px solid var(--line); }
+.rb-hero h1 { font-family: var(--display); font-size: 34px; margin: 0 0 6px; color: var(--text); }
+.rb-lede { font-size: 18px; color: var(--text); margin: 0 0 12px !important; }
+.rb-facts { list-style: none; padding: 0 !important; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.rb-facts li { margin: 0; padding: 6px 12px; border-radius: 999px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--line); font-size: 14px; }
+.rb-facts li b { color: var(--gold); margin-right: 6px; }
+
+/* numbered steps */
+.rb-steps { list-style: none; counter-reset: rb; padding: 0 !important; margin: 10px 0 16px; display: grid; gap: 10px; }
+.rb-steps > li { counter-increment: rb; position: relative; margin: 0; padding: 12px 14px 12px 54px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); }
+.rb-steps > li::before { content: counter(rb); position: absolute; left: 12px; top: 11px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: var(--gold-ink); background: linear-gradient(180deg, var(--gold), var(--gold-2)); }
+
+/* illustrations: inline SVG drawn for each game */
+.rb-fig { margin: 14px 0 18px; padding: 14px; border-radius: 16px; background: #0d1a2e; border: 1px solid var(--line); text-align: center; }
+.rb-fig svg { display: block; width: 100%; height: auto; max-height: 420px; margin: 0 auto; }
+.rb-fig figcaption { margin-top: 10px; font-size: 14px; color: var(--muted); line-height: 1.45; text-align: left; }
+.rb-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 14px 0 18px; }
+.rb-figs .rb-fig { margin: 0; }
+
+/* call-outs */
+.rb-tip, .rb-note, .rb-warn { margin: 12px 0 16px; padding: 12px 14px 12px 46px; border-radius: 14px; position: relative; line-height: 1.5; }
+.rb-tip { background: rgba(60, 207, 142, 0.1); border: 1px solid rgba(60, 207, 142, 0.35); }
+.rb-note { background: rgba(91, 140, 255, 0.1); border: 1px solid rgba(91, 140, 255, 0.35); }
+.rb-warn { background: rgba(240, 195, 90, 0.1); border: 1px solid rgba(240, 195, 90, 0.4); }
+.rb-tip::before, .rb-note::before, .rb-warn::before { position: absolute; left: 14px; top: 11px; font-size: 18px; }
+.rb-tip::before { content: '💡'; }
+.rb-note::before { content: 'ℹ️'; }
+.rb-warn::before { content: '⚠️'; }
+
+/* tables: scoring, quick reference */
+.rb-doc table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 15px; }
+.rb-doc th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.rb-doc td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.rb-table-wrap { overflow-x: auto; }
+.rb-ref { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.rb-ref > div { padding: 12px 14px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); }
+.rb-ref > div h3 { margin-top: 0; }
+.rb-glossary dt { font-weight: 800; color: var(--text); margin-top: 10px; }
+.rb-glossary dd { margin: 2px 0 0 0; color: #c6d1e0; }
+.rb-key { display: inline-block; min-width: 1.6em; padding: 1px 7px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.25); background: rgba(255, 255, 255, 0.08); font: 600 13px var(--font); text-align: center; }
+
+.gc-rulebook-link { display: inline-flex; align-items: center; gap: 6px; padding-left: 0; color: var(--gold); }
+.gc-rulebook-link span { width: 18px; height: 18px; display: inline-flex; }
+.gc-play-rules { display: block; font-size: 13px; margin-top: 2px; padding: 0; }
+@media (max-width: 560px) {
+  .gc-modal.rulebook { border-radius: 16px; }
+  .rb-doc { padding: 4px 14px 8px; font-size: 15px; }
+  .rb-bar { padding: 12px 56px 8px 14px; }
+  .rb-hero h1 { font-size: 28px; }
+  .rb-fig { padding: 10px; }
+}
