@@ -6,7 +6,7 @@ export function mount(ctx) {
   const frame = document.createElement('iframe');
   frame.className = 'df-frame';
   frame.title = 'Coastal Dogfight';
-  frame.allow = 'fullscreen; gamepad; autoplay';
+  frame.allow = 'fullscreen; gamepad; autoplay; accelerometer; gyroscope; magnetometer'; // the motion sensors are for tilt steering
   frame.setAttribute('allowfullscreen', '');
   frame.src = new URL('./play.html?embed=1', import.meta.url).href;
   frame.dataset.ownRematch = '1'; // the game's results screen has the Rematch button (fed below)

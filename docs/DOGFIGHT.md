@@ -30,21 +30,60 @@ Rendering uses ACES tone mapping. The aircraft have metallic and glossy material
 
 The **High** graphics setting adds bloom, which makes the sun, tracers, fires and explosions glow. It also turns on 4× multisampling, finer terrain and textures, and more trees. Phones default to Medium.
 
+## Campaign (single player)
+
+The menu has two tabs: **Campaign** and **Free flight & missions**. The campaign is single player. In the Game Center it shows when nobody else is sitting at your table; with friends there, everyone uses Free flight. It is ten missions in a row:
+
+| # | Mission | What | Time | Unlocks |
+|---|---|---|---|---|
+| 1 | First Patrol | Dogfight, two rookies | Day | Swift |
+| 2 | Two's Company | Dogfight, two wingmen with you | Day | Ranger |
+| 3 | The Coast Road | Ground attack | Day | Thunder |
+| 4 | Iron Rails | Train busting | Day | Brute |
+| 5 | Dusk Raid | Bomber intercept, two formations | Sunset | |
+| 6 | The Black Heron | Dogfight with a named ace | Sunset | Lancer |
+| 7 | Ship in the Dark | Naval strike under searchlights | Night | |
+| 8 | Night Train | Train busting with searchlights | Night | Talon |
+| 9 | Searchlights | Bomber intercept, three formations | Night | Striker |
+| 10 | The Last Duel | Dogfight, ending with the Red Wasp | Day | |
+
+- **Unlocking.** Each mission opens when the one before is finished.
+- **Stars.** A mission earns up to three: one for finishing it, one for not losing an aircraft (being shot down or bailing out), one for an A grade. The best result is kept in this browser (`localStorage` key `dogfight.campaign`).
+- **Medals** for the star total: Bronze wings (8), Silver wings (16), Gold wings (24), Ace of the coast (30).
+- **Aircraft.** The Kestrel and Falke are open from the start. Missions unlock the rest *for the campaign*; Free flight always has every aircraft.
+- **Debrief.** It shows the stars, any unlock or new medal, and a **Next mission** button.
+
+## Named aces
+
+The last wave of a single-player dogfight brings a named ace instead of an ordinary one: Viktor Kessel, *the Black Heron* (black, yellow trim); Ilse Brandt, *the Red Wasp* (red); or with jets, Arkady Volk, *the Grey Ghost* (grey). Each flies a painted aircraft with nose art and a checkered spinner, has a health bar at the top of the HUD, and takes about 1.8 times the damage of a normal aircraft.
+
+- **Hard to stay behind.** An ace notices you on its tail quickly and scissors, reversing its turn every second or so.
+- **Last stand.** Badly hit, it stops dodging, goes to full power and fires every missile it has.
+- **Reward.** Shooting one down is worth +1000.
+
 ## Single player options
 
 The game's menu has:
 
-- **Mission** (single player; online tables fly the dogfight):
+- **Time of day**: Day, Sunset or Night. At sunset the sun sits low over the sea. At night there are stars and a moon; the town's windows, the runway lights and the lighthouse are lit; tracers glow brighter; and **searchlights** sweep the sky round the targets (the battleship carries two). A searchlight that catches you locks on until you turn hard out of it, and while you are lit the flak is far more accurate. In the dark, unlit, it is far less accurate. Online, it is a table option.
+- **Wingmen**: none, one or two (Mack and Dutch). They cover you by default. **T** sends them after your target (the locked one, or the nearest ahead). **Y** brings them back to cover you; they form up on your wings and go after anything that comes near you. **U** sends them in on the ground target: they dive with guns, rockets and bombs, pull out and come round again. On a phone or iPad, **WING** steps through the orders that make sense at that moment.
+- **Rockets**: every fighter carries rockets: six on most fighters, ten on the Thunder, twelve on the jets, nineteen on the Striker, none on the bomber. **K**, **RKT** or **L3** fires a pair. They burn for a second, then fall like shells, and burst on aircraft, vehicles, wagons, the battleship or the ground (about 14 m blast). Land to rearm.
+- **Bailing out**: when you are shot down and the wreck is still falling, the HUD flashes **BAIL OUT**. Press **J**, **BAIL** or **R3** to jump. The same key works from a damaged aircraft at any time (twice from a healthy one). You fall clear, open the parachute a few hundred metres up and float down; a car or a boat picks you up and you are back in the air in a fresh aircraft, −100 points, and the mission goes on. If the wreck hits first, the mission is over. Half the time you are thrown clear when your aircraft explodes. Computer pilots often bail out too.
+- **Mission**. The pause menu can **switch mission mid-flight**: the old fight is cleared and the new one starts round you. Online in co-op, missions are shared (see Multiplayer).
   - *Dogfight*: waves of enemy fighters come in off the sea; shoot them all down, then land.
   - *Naval strike*: a 190 m battleship steams up and down the coast about 5 km out. Its ten light AA mounts throw up flak bursts timed to where you will be and streams of tracer when you come close, its turrets turn to follow you, and its main battery shells the coast now and then. Bomb it (two to four direct hits, more for near misses) until it rolls over and sinks, then land. Fighters scramble to defend it.
   - *Ground attack*: a convoy of tanks and trucks drives up a track to a fuel depot (four fuel tanks and two supply sheds) guarded by three flak guns. Bomb and strafe them: trucks fall to guns, tanks need cannon or bombs, and fuel tanks go up in a fireball. Flak guns are optional targets. Fighters scramble to defend it.
+  - *Train busting*: an ammunition train (locomotive, tender, two flak wagons, six ammunition wagons) runs up the river valley on the north bank to a depot by the harbour, about 10 km. An ammunition wagon that blows up can set off the cars next to it, so the train goes up car by car. Destroy every ammunition wagon before it reaches the depot; knocking out the locomotive stops the train.
   - *Bomber intercept*: formations of twin-engine bombers with fighter cover fly for the harbour town. Their top and tail gunners shoot back. If three bombers get through and drop on the town, the mission fails. The *Waves* option sets how many formations come (one to three).
-  - **Bombs**: every aircraft carries bombs on attack missions (two to four on fighters, eight on the attack jet, ten in the bomber). Drop with **B** in the air (B is still the brake on the ground), **BOMB** on touch, or **LT** on a gamepad. A bomb sight on the HUD shows where a bomb released now would land and how long it would fall. Land on the airfield to rearm.
+  - **Bombs**: every aircraft carries bombs, in every mission (two to four on fighters, eight on the attack jet, ten in the bomber). Drop with **B** in the air (B is still the brake on the ground), **BOMB** on touch, or **LT** on a gamepad. A bomb sight on the HUD shows where a bomb released now would land and how long it would fall. Land on the airfield to rearm.
   - Targets show as red brackets on screen and squares on the radar; a gold marker (or an arrow at the edge of the screen) points to the objective.
+- **Your aircraft turns tighter than the computer's.** You get about 30% more lift for the same angle (a tighter turn that bleeds less speed) and a quicker roll; raiders get less by difficulty (Easy 0.8, Normal 0.88, Hard 0.97, Ace 1.04) and notice you on their tail later, so you can work round behind them.
+- **Kill replay**: when you shoot one down, the fight freezes (you, the others and the rounds in flight) while the camera circles the aircraft going down in slow motion.
 - **Enemies per wave**: Standard (2, then 3, then more), or a fixed 1, 2, 3, 4, 6, 8 or 12.
 - **Waves**: 1, 2, 3, 5 or 8. Skill rises through the sortie, and the last wave brings an ace.
 - **Difficulty**, **Missile lock** (auto or manual) and **Corner map** are in the same menu and in the pause menu.
 - **Phone mode**: Auto turns the touch controls on for phones. On forces them, which is useful on a tablet or a touch laptop. Off hides them in favour of the keyboard and mouse. The same switch is in the pause menu.
+- **Tilt** (pause menu → Controls → Tilt phone): on iPhone and iPad the first tap asks for motion access. Tap the left half of the screen to re-centre on however you are holding the phone. Until the sensor answers, the stick keeps working.
 - **Rudder buttons** (touch, off by default): two hold buttons above the stick, ◀ RUD and RUD ▶, that yaw the nose for fine aiming and for steering on the runway. Keyboard and gamepad already have rudder (Q / E, right stick).
 
 ## Multiplayer
@@ -53,18 +92,30 @@ In the Game Center, choose **Multiplayer** on its tile or options page. Friends 
 
 | Option | Choices |
 |---|---|
-| Mode | **Co-op vs raiders**: everyone against the waves. **Free-for-all**: every pilot for themselves. |
-| Raiders per wave | Standard, or 1–12 |
-| Waves | 1, 2, 3, 5 or 8 |
+| Mode | **Co-op**: free play and shared missions. **Free-for-all**: every pilot for themselves. |
+| Raiders per wave (dogfight missions) | Standard, or 1–12 |
+| Waves (dogfight missions; bomber formations up to 3) | 1, 2, 3, 5 or 8 |
 | Kills to win (free-for-all) | 3, 5 or 10 |
 | Computer wingmen (co-op) | Off, or fill the empty seats with computer pilots |
 
-Computer pilots always fly the empty seats in a free-for-all. Their skill follows the table's computer player setting: Rookie, Veteran or Ace. A pilot who is shot down is back in the air after 6 seconds. In co-op the round ends when the host lands after the last wave; in a free-for-all it ends when someone reaches the kill target. The host can also end the round from the pause menu. The debrief shows the scoreboard, and the host starts a new round for everyone.
+Computer pilots always fly the empty seats in a free-for-all. Their skill follows the table's computer player setting: Rookie, Veteran or Ace. A pilot who is shot down is back in the air after 6 seconds. In co-op the round runs until the host ends it from the pause menu; in a free-for-all it ends when someone reaches the kill target (the host can end it early the same way). The debrief shows the scoreboard, and the host starts a new round for everyone.
+
+### Co-op missions
+
+A co-op round starts in **free play**: no raiders. The menu shows a *Free play* card first, then the four missions. Picking a mission there starts it as you launch, or joins it if someone is already flying it. While flying, the pause menu's *Mission* list does the same and shows who is flying what (`· join Ana`, `· you are in it`). Choosing *Free play* there leaves your mission.
+
+- **Starting.** The pilot who starts a mission owns it. Their device runs it: it spawns the mission's raiders and bombers, sails the battleship, drives the convoy and decides when the mission is won or lost.
+- **The banner.** Everyone else gets *"Ana started Naval strike — Join mission ✕"* across the top for 30 seconds. *Join mission* joins it, even partway through. ✕ (or ignoring it) leaves you in free play. Each kind of mission runs once at a time, so different pilots can fly different missions together. If two pilots start the same kind at the same moment, the lower seat keeps it and the other joins.
+- **Everyone sees the targets.** The owner sends the mission's state twice a second (`mstate`: the battleship's position, heading and hull; each convoy vehicle's place on its track and health; the HUD line; the objective marker). Other devices build the same battleship and depot (the depot is laid out the same way on every device) and follow it. Mission raiders are ordinary aircraft from the owner's device.
+- **Flak shoots at you on your own device.** Each device's copy of the flak guns aims at the aircraft that device flies, so everyone near a target gets shot at, with no network lag on the bursts.
+- **Damage goes to the owner.** Bullets and bombs that hit a target on your copy are added up and sent to the owner four times a second (`mhit`). The owner applies them and sends back points to whoever destroyed something (`mpts`). Bombs you drop are also sent (`bomb`) so the others see them fall; only your device works out their damage.
+- **Ending.** When the owner's device sees the mission won or lost it sends `mend`. Every member gets +500 for a win, and everyone returns to free play. The convoy's wrecks stay and a sunk battleship finishes going down. If the owner picks free play or another mission, theirs is called off for everyone in it. If the owner leaves the table, the others' copies end after 9 seconds of silence.
+- **Debrief.** It shows how many missions the squadron completed, with your score and the ground targets you destroyed.
 
 ### How the network works
 
 - **Each device flies its own aircraft.** It sends the aircraft's position, attitude, throttle, gear, firing and damage state 15 times a second over the room's real-time channel (`{ t: 'rt' }` in `core/room.js`). Other devices draw it with dead reckoning plus smoothing.
-- **The host flies the raiders and the computer pilots.** It also runs the wave timer and holds the scoreboard, sending both every half second.
+- **The host flies the computer pilots and holds the scoreboard,** sending it every half second. Each mission's raiders are flown by the device of the pilot who started it.
 - **Hits are decided by the shooter.** Every device draws everyone's tracers, but only rounds fired by your own device count. A hit on an aircraft another device flies becomes a `hit` message to that device, which applies the damage through the normal damage model.
 - **Shoot-downs are announced by the victim's device.** It sends a `down` event naming the aircraft that last hit it, so everyone gets the same kill credit and messages.
 - **The bridge to the Game Center.** `ui.js` shows `play.html?embed=1` in a frame and passes messages through `postMessage`. Ending a round is a normal Game Center action (`{ type: 'finish', results }`), so the table, rematches and saving behave like the other games.
@@ -115,6 +166,11 @@ Computer pilots always fly the empty seats in a free-for-all. Their skill follow
 | Gear / flaps | **GEAR**, **FLAP** |
 | Camera / pause | **CAM**, **II** |
 | Rudder (optional) | hold **◀ RUD** or **RUD ▶**; turn on *Rudder buttons* in the menu or pause menu |
+| Bomb / rockets | **BOMB**, **RKT** (they appear while you carry them) |
+| Wingmen | **WING** (cover → attack → ground) |
+| Bail out | **BAIL** (appears when you are badly hit or going down) |
+
+**iPad.** iPadOS Safari reports itself as a Mac, so the game also counts a Mac with a touch screen as an iPad and turns the touch controls on (even with a keyboard attached; switch *Phone mode* off to use the keyboard and trackpad instead). On a tablet the HUD is drawn about 20% larger, and the stick and buttons are bigger and spread out for thumbs. Pinch and double-tap zoom are blocked over the game. *Add to Home Screen* opens it full screen.
 
 The control style is set in the pause menu:
 
@@ -136,10 +192,13 @@ Landscape works best, and the menu has a Full screen button on Android.
 | Gear / flaps / brakes | G / V / B |
 | Camera | C |
 | Pause and settings | Esc or P |
+| Rockets (a pair) | K |
+| Wingmen | T attack my target · Y cover me · U hit the ground target |
+| Bail out | J (twice from an aircraft that isn't damaged) |
 
 ### Gamepad
 
-Left stick pitches and rolls, the right stick's X axis is rudder and its Y axis is throttle, RT fires, LT brakes, A is gear, B is camera, X is flaps, and Start pauses.
+Left stick pitches and rolls, the right stick's X axis is rudder and its Y axis is throttle, RT fires, LT brakes (and drops bombs in the air), A is gear, B is camera, X is flaps, LB fires a missile, RB drops flares, Y switches the map, L3 fires rockets, R3 bails out, D-pad left and right send your wingmen after your target or back to cover you, Back sends them at the ground target, and Start pauses.
 
 ## Flight model
 

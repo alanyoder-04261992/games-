@@ -31,6 +31,7 @@ function sanitizeResults(r = {}) {
     reason: String(r.reason || 'ended').slice(0, 20),
     waves: Number(r.waves) || 0,
     W: Number(r.W) || 0,
+    missions: Number(r.missions) || 0,
     board: board.map((b) => ({
       seat: Number(b.seat),
       name: String(b.name || 'Pilot').slice(0, 20),
@@ -53,18 +54,18 @@ const tile = `<svg viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg" role
 
 export default {
   id: 'dogfight',
-  version: '2.2', // shown on the home tile; bump it whenever you improve the game
+  version: '2.5', // shown on the home tile; bump it whenever you improve the game
   name: 'Coastal Dogfight',
   tagline: '1940s fighters over a 20 km coastline. Fly together against raiders, or shoot each other down.',
   description:
-    'A real-time 3D flight game with four 1940s fighters and two modern jets. Take off from the airfield behind the cliffs, then team up against waves of raiders coming in off the sea, or fight a free-for-all where the first pilot to the kill target wins. Works with a mouse, a keyboard, a gamepad or the touch controls on a phone.',
+    'A real-time 3D flight game with four 1940s fighters and two modern jets. Take off from the airfield behind the cliffs, then fly co-op missions together (dogfights, a naval strike, a ground attack, a bomber intercept), or fight a free-for-all where the first pilot to the kill target wins. Works with a mouse, a keyboard, a gamepad or the touch controls on a phone.',
   seats: 4,
   seatLabels: ['Pilot 1', 'Pilot 2', 'Pilot 3', 'Pilot 4'],
   players: '1–4 pilots',
   tile,
   accent: '#eaa53c',
   options: [
-    { key: 'mode', label: 'Mode', type: 'select', default: 'coop', choices: [{ value: 'coop', label: 'Co-op vs raiders' }, { value: 'versus', label: 'Free-for-all' }] },
+    { key: 'mode', label: 'Mode', type: 'select', default: 'coop', choices: [{ value: 'coop', label: 'Co-op · free play and missions' }, { value: 'versus', label: 'Free-for-all' }] },
     {
       key: 'difficulty',
       label: 'Difficulty',
@@ -74,12 +75,13 @@ export default {
     },
     {
       key: 'enemies',
-      label: 'Raiders per wave',
+      label: 'Raiders per wave (dogfight missions)',
       type: 'select',
       default: 'normal',
       choices: [{ value: 'normal', label: 'Standard' }, { value: 1, label: '1' }, { value: 2, label: '2' }, { value: 3, label: '3' }, { value: 4, label: '4' }, { value: 6, label: '6' }, { value: 8, label: '8' }, { value: 12, label: '12' }],
     },
-    { key: 'waves', label: 'Waves', type: 'select', default: 3, choices: [{ value: 1, label: '1' }, { value: 2, label: '2' }, { value: 3, label: '3' }, { value: 5, label: '5' }, { value: 8, label: '8' }] },
+    { key: 'waves', label: 'Waves (dogfight and bomber missions)', type: 'select', default: 3, choices: [{ value: 1, label: '1' }, { value: 2, label: '2' }, { value: 3, label: '3' }, { value: 5, label: '5' }, { value: 8, label: '8' }] },
+    { key: 'tod', label: 'Time of day', type: 'select', default: 'day', choices: [{ value: 'day', label: 'Day' }, { value: 'sunset', label: 'Sunset' }, { value: 'night', label: 'Night' }] },
     { key: 'kills', label: 'Kills to win (free-for-all)', type: 'select', default: 5, choices: [{ value: 3, label: '3' }, { value: 5, label: '5' }, { value: 10, label: '10' }] },
     { key: 'wingmen', label: 'Computer wingmen (co-op)', type: 'select', default: 'off', choices: [{ value: 'off', label: 'Off' }, { value: 'on', label: 'Fill empty seats' }] },
   ],
