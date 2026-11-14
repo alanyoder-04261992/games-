@@ -450,9 +450,8 @@ function playSheet(game, mode) {
           },
           'Continue',
         ),
-        hasSave
-          ? h('button.btn.ghost.big', { onclick: () => (sheet.close(), resumeHost(game, save)) }, 'Resume saved game')
-          : h('button.btn.text', { onclick: () => sheet.close() }, 'Cancel'),
+        hasSave ? h('button.btn.ghost.big', { onclick: () => (sheet.close(), resumeHost(game, save)) }, 'Resume saved game') : null,
+        h('button.btn.text.gc-cancel', { onclick: () => sheet.close() }, 'Cancel'),
       ),
     ),
     { cls: 'play' },
