@@ -511,7 +511,7 @@ function buildBoat(rand) {
 // ---------------------------------------------------------------------
 // the scene
 // ---------------------------------------------------------------------
-export function createScene(container, { onPick, onHover } = {}) {
+export function createScene(container, { onPick, onHover, onArm } = {}) {
   // the island being shown; bigger islands (5–8 players) swap these in setBoard()
   let { HEXES, VERTS, EDGES, HARBOR_SLOTS } = islandGeometry('base');
   let scale = 1; // island size relative to the standard island
@@ -871,6 +871,7 @@ export function createScene(container, { onPick, onHover } = {}) {
   function setTargets(t) {
     markers.clear();
     hovered = null;
+    disarm();
     clearGhost();
     targets = t && t.ids?.length ? t : null;
     if (!targets) return;
@@ -929,7 +930,7 @@ export function createScene(container, { onPick, onHover } = {}) {
   // ---------- picking ----------
   const ray = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
-  function hitAt(ev) {
+  function hitAt(ev, slop = 0) {
     if (!targets) return null;
     const rect = el.getBoundingClientRect();
     ndc.set(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1);
@@ -939,35 +940,89 @@ export function createScene(container, { onPick, onHover } = {}) {
     if (targets.kind === 'hex') {
       const t = ray.intersectObjects(tiles, false)[0];
       if (t && targets.ids.includes(t.object.userData.id)) return { id: t.object.userData.id };
+      return null;
     }
-    return null;
+    // A fingertip covers far more than a corner or an edge does: take the nearest glowing spot
+    // within `slop` screen pixels of the touch.
+    if (!slop) return null;
+    let best = null, bestD = slop;
+    for (const m of markers.children) {
+      if (!m.userData.vis) continue;
+      V2.copy(m.position).project(camera);
+      const d = Math.hypot(((V2.x + 1) / 2) * rect.width - (ev.clientX - rect.left), ((1 - V2.y) / 2) * rect.height - (ev.clientY - rect.top));
+      if (d < bestD) (bestD = d), (best = m.userData);
+    }
+    return best;
   }
-  let down = null;
-  const onDown = (ev) => (down = { x: ev.clientX, y: ev.clientY, t: performance.now() });
-  const onUp = (ev) => {
-    if (!down) return;
-    const moved = Math.hypot(ev.clientX - down.x, ev.clientY - down.y);
-    const quick = performance.now() - down.t < 700;
-    down = null;
-    if (moved > 8 || !quick) return;
-    const h = hitAt(ev);
-    if (h) onPick?.(targets.kind, h.id);
-    else onPick?.(null, null);
-  };
-  const onMove = (ev) => {
-    if (ev.pointerType === 'touch') return;
-    const h = hitAt(ev);
-    const id = h ? h.id : null;
-    if (id === hovered) return;
+  const V2 = new THREE.Vector3();
+
+  // Show a spot as chosen: the marker lights up and a see-through piece stands on it.
+  function highlight(id) {
     hovered = id;
     for (const m of markers.children) if (m.material === markerMat || m.material === markerHot) m.material = m.userData.id === id ? markerHot : markerMat;
-    el.style.cursor = id != null ? 'pointer' : '';
     if (id != null) showGhost(id);
     else clearGhost();
+  }
+  // On a touch screen the first tap only chooses a spot; a second tap on it places the piece,
+  // so a slip of the finger never builds in the wrong place.
+  let armed = null;
+  function disarm() {
+    if (armed == null) return;
+    armed = null;
+    onArm?.(null, null);
+  }
+
+  // Taps, not drags: one finger that barely moved. A second finger (pinch or two-finger pan)
+  // cancels the tap, so lifting a finger after zooming never picks a spot by accident.
+  const active = new Map();
+  let down = null;
+  const onDown = (ev) => {
+    active.set(ev.pointerId, ev.pointerType);
+    if (active.size > 1) down = null;
+    else down = { x: ev.clientX, y: ev.clientY, t: performance.now(), id: ev.pointerId };
+  };
+  const onCancel = (ev) => {
+    active.delete(ev.pointerId);
+    down = null;
+  };
+  const onUp = (ev) => {
+    const multi = active.size > 1;
+    active.delete(ev.pointerId);
+    if (!down || down.id !== ev.pointerId || multi) {
+      down = null;
+      return;
+    }
+    const touch = ev.pointerType !== 'mouse';
+    const moved = Math.hypot(ev.clientX - down.x, ev.clientY - down.y);
+    const quick = performance.now() - down.t < (touch ? 900 : 700);
+    down = null;
+    if (moved > (touch ? 16 : 8) || !quick) return;
+    const h = hitAt(ev, touch ? 34 : 12);
+    if (!h) {
+      if (touch) (disarm(), highlight(null));
+      return onPick?.(null, null);
+    }
+    if (touch && ev.pointerType === 'touch' && armed !== h.id) {
+      armed = h.id;
+      highlight(h.id);
+      onArm?.(targets.kind, h.id);
+      return;
+    }
+    disarm();
+    onPick?.(targets.kind, h.id);
+  };
+  const onMove = (ev) => {
+    if (ev.pointerType !== 'mouse') return;
+    const h = hitAt(ev, 12);
+    const id = h ? h.id : null;
+    if (id === hovered) return;
+    highlight(id);
+    el.style.cursor = id != null ? 'pointer' : '';
     onHover?.(targets?.kind, id);
   };
   el.addEventListener('pointerdown', onDown);
   el.addEventListener('pointerup', onUp);
+  el.addEventListener('pointercancel', onCancel);
   el.addEventListener('pointermove', onMove);
 
   // ---------- dice ----------
@@ -1133,11 +1188,17 @@ export function createScene(container, { onPick, onHover } = {}) {
       });
     } else camera.position.copy(pos);
   }
+  // Turning a tablet between portrait and landscape reframes the island for the new shape.
+  let lastAspect = 0;
   const ro = new ResizeObserver(() => {
     const w = container.clientWidth, h = container.clientHeight;
-    camera.aspect = w / Math.max(1, h);
+    const aspect = w / Math.max(1, h);
+    camera.aspect = aspect;
     camera.updateProjectionMatrix();
+    renderer?.setPixelRatio(pixelRatio());
     renderer?.setSize(w, h, false);
+    if (lastAspect && !intro && aspect >= 1 !== lastAspect >= 1) fitCamera(false);
+    lastAspect = aspect;
   });
   ro.observe(container);
   fitCamera(true);
@@ -1145,11 +1206,32 @@ export function createScene(container, { onPick, onHover } = {}) {
   // ---------- loop ----------
   let raf = 0;
   const timer = new THREE.Timer();
+  // frame-time check: over each run of 90 frames, if they average slower than ~33 fps while we
+  // draw above 1×, step the sharpness down a notch (it never goes back up during the game)
+  const perf = { t0: 0, n: 0, last: 0 };
+  function checkSpeed(now) {
+    if (intro || now - perf.last > 250) {
+      // the intro fly-in, or a pause (tab switch, shader compile): start counting again
+      perf.t0 = now;
+      perf.n = 0;
+    } else if (++perf.n >= 90) {
+      const ms = (now - perf.t0) / perf.n;
+      perf.t0 = now;
+      perf.n = 0;
+      if (ms > 30 && highQuality && pixelRatio() > 1.01) {
+        speedScale = Math.max(0.5, speedScale - 0.15);
+        applyQuality();
+      }
+    }
+    perf.last = now;
+  }
+
   function frame() {
     if (destroyed) return;
     raf = requestAnimationFrame(frame);
     if (document.hidden) return;
     const now = performance.now();
+    checkSpeed(now);
     const t = timer.update(now).getElapsed();
     normals.offset.set(t * 0.012, t * 0.007);
     foam.material.opacity = 0.35 + Math.sin(t * 1.3) * 0.15;
@@ -1187,11 +1269,22 @@ export function createScene(container, { onPick, onHover } = {}) {
     renderer.render(scene, camera);
   }
 
+  // How sharp to draw. Retina screens get up to 2× — but within a budget of pixels, so a
+  // 12.9" iPad (2732×2048 at 2×) draws about as many as a laptop does, and lower still if frames
+  // turn out slow on this device (see the frame-time check in frame()).
+  const MAX_PIXELS = 3.6e6;
+  let speedScale = 1;
+  function pixelRatio() {
+    if (!highQuality) return 1;
+    const w = container.clientWidth || 1, h = container.clientHeight || 1;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    return Math.max(1, Math.min(dpr, Math.sqrt(MAX_PIXELS / (w * h))) * speedScale);
+  }
   function applyQuality() {
     if (!renderer) return;
     // materials pick up the shadow switch by themselves (it is part of their cache key)
     renderer.shadowMap.enabled = highQuality;
-    renderer.setPixelRatio(highQuality ? Math.min(window.devicePixelRatio || 1, 2) : 1);
+    renderer.setPixelRatio(pixelRatio());
     renderer.setSize(container.clientWidth, container.clientHeight, false);
   }
 
@@ -1266,6 +1359,7 @@ export function createScene(container, { onPick, onHover } = {}) {
       ro.disconnect();
       el.removeEventListener('pointerdown', onDown);
       el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointercancel', onCancel);
       el.removeEventListener('pointermove', onMove);
       controls.dispose();
       timer.dispose();

@@ -29,7 +29,9 @@ export function mount(ctx) {
   );
   root.append(stage3d, players, banner, toolbar, logBox, dock, sheetHost);
   ctx.el.append(root);
-  if (ctx.prefs.get('hx.log') ?? window.innerWidth > 900) root.classList.add('log-open');
+  // touch tablets (an iPad in landscape is ~1180 wide) keep the island clear: the log starts closed
+  const coarse = window.matchMedia?.('(pointer: coarse)').matches;
+  if (ctx.prefs.get('hx.log') ?? window.innerWidth > (coarse ? 1400 : 900)) root.classList.add('log-open');
 
   let scene = null;
   let view = null;
@@ -38,6 +40,7 @@ export function mount(ctx) {
   let sheet = null;
   let lastLog = 0;
   let pending = false;
+  let armed = null; // a spot chosen with one tap, waiting for the second (touch screens)
   let quality = ctx.prefs.get('hx.quality') ?? 'high';
   const autoDecline = () => ctx.prefs.get('hx.autoDecline') ?? false;
 
@@ -50,7 +53,14 @@ export function mount(ctx) {
     .then(({ createScene }) => {
       if (gone) return;
       try {
-        scene = createScene(stage3d, { onPick: pick });
+        scene = createScene(stage3d, {
+          onPick: pick,
+          // a first tap on a touch screen picks the spot; say how to confirm it
+          onArm: (kind) => {
+            armed = kind;
+            if (view) drawBanner();
+          },
+        });
         if (quality === 'low') scene.setQuality(false);
         if (view) {
           scene.setBoard(view);
@@ -323,7 +333,8 @@ export function mount(ctx) {
         sub = `${view.players[view.winner].points} points`;
         break;
     }
-    banner.replaceChildren(h('div.hx-banner-in', h('strong', title), sub ? h('small', dice, sub) : null));
+    if (armed && myTurn()) sub = armed === 'hex' ? 'Tap the same tile again to send the bandit there.' : 'Tap it again to build there — or tap another glowing spot.';
+    banner.replaceChildren(h('div.hx-banner-in' + (armed && myTurn() ? '.armed' : ''), h('strong', title), sub ? h('small', armed && myTurn() ? null : dice, sub) : null));
   }
 
   // ---------------------------------------------------------------------
