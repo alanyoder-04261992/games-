@@ -4,8 +4,9 @@ A private dashboard showing who plays the Game Center: each player (by the name 
 a random id for their device), what they play, how often, how long, alone, pass and play or
 online, who they play with, and a feed of recent activity.
 
-**Open it at** `https://<your-site>/#/insights` (it is linked from nowhere) and enter your
-owner key. The key is remembered on that device; **Forget key** removes it.
+**Open it** by pressing and holding the **Game Center logo** (top left of the home page) for
+about a second, or go to `https://<your-site>/#/insights`. Nothing on screen points to it.
+Enter your owner key. The key is remembered on that device; **Forget key** removes it.
 
 ## One-time setup: your owner key
 
