@@ -52,6 +52,15 @@ p{margin:0;line-height:1.4;max-width:62ch}
 .pcard small{color:var(--ink-dim);font-size:.9rem}
 .missions .pcard b{font-size:1.15rem}
 .tabs{display:flex;gap:8px;flex-wrap:wrap}
+.mapbox{display:flex;flex-direction:column;align-items:center;gap:8px;max-width:100%;max-height:100%}
+.mapbox .hint{margin:0;text-align:center;max-width:90vw}
+.mapbox .actions{justify-content:center;flex-wrap:wrap}
+.mapbox.side{flex-direction:row;gap:14px}
+.mapbox.side .side-tools{display:flex;flex-direction:column;gap:8px;max-width:240px}
+.mapbox.side .actions{flex-direction:column;align-items:stretch}
+.mapbox.side .actions button{flex:0 0 auto;padding:.5em .9em}
+.mapbox.side .hint{font-size:.85rem}
+#bmCanvas{touch-action:none;border:1px solid var(--line);box-shadow:0 6px 24px rgba(0,0,0,.4);cursor:crosshair}
 .tabs[hidden]{display:none}
 .tabs button{flex:1 1 200px}
 .tabs button[aria-selected="true"]{border-color:var(--amber);background:rgba(234,165,60,.16)}
@@ -130,6 +139,9 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
 html:not(.tablet) #touch #tWing{height:34px;bottom:auto;left:calc(max(16px,env(safe-area-inset-left)) + 124px);top:calc(max(10px,env(safe-area-inset-top)) + 92px)}
 html:not(.tablet) #touch #tAlt{left:calc(max(16px,env(safe-area-inset-left)) + 124px);top:calc(max(10px,env(safe-area-inset-top)) + 132px)}
 html:not(.tablet) #touch #tForm{left:calc(max(16px,env(safe-area-inset-left)) + 188px);top:calc(max(10px,env(safe-area-inset-top)) + 132px)}
+html:not(.tablet) #touch #tRoute{left:calc(max(16px,env(safe-area-inset-left)) + 252px);top:calc(max(10px,env(safe-area-inset-top)) + 132px);width:64px}
+#tRoute{border-color:rgba(95,211,232,.9)}
+.tablet #touch #tRoute{right:calc(max(20px,env(safe-area-inset-right)) + 420px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 248px);width:80px}
 .tablet #touch .tbtn.pill{width:66px;height:48px;font-size:.76rem}
 .tablet #touch #tAlt{right:calc(max(20px,env(safe-area-inset-right)) + 36px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 340px)}
 .tablet #touch #tForm{right:calc(max(20px,env(safe-area-inset-right)) + 342px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 248px)}
@@ -163,7 +175,7 @@ html:not(.tablet) #touch #tForm{left:calc(max(16px,env(safe-area-inset-left)) + 
 .tablet .sheet{width:min(900px,100%);font-size:17px}
 #tThr i{position:absolute;left:0;right:0;bottom:0;background:rgba(234,165,60,.72)}
 #tThr span{position:absolute;left:0;right:0;top:6px;text-align:center;font-family:var(--f-data);font-size:.65rem;letter-spacing:.06em;color:var(--ink)}
-#missionBanner{position:fixed;left:50%;top:calc(max(8px,env(safe-area-inset-top)) + 30px);transform:translateX(-50%);z-index:12;display:flex;align-items:center;gap:10px;background:var(--panel);border:2px solid var(--amber);padding:6px 8px 6px 14px;max-width:calc(100vw - 32px);box-shadow:0 4px 18px rgba(0,0,0,.35)}
+#missionBanner{position:fixed;left:50%;top:calc(max(8px,env(safe-area-inset-top)) + 50px);transform:translateX(-50%);z-index:12;display:flex;align-items:center;gap:10px;background:var(--panel);border:2px solid var(--amber);padding:6px 8px 6px 14px;max-width:calc(100vw - 32px);box-shadow:0 4px 18px rgba(0,0,0,.35)}
 #missionBanner[hidden]{display:none}
 #missionBanner span{font-weight:600;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 #missionBanner button{padding:.4em .9em;white-space:nowrap}
@@ -307,6 +319,14 @@ html:not(.tablet) #touch #tForm{left:calc(max(16px,env(safe-area-inset-left)) + 
   </div>
 </div>
 
+<div id="bigmap" class="screen" hidden>
+  <div class="mapbox">
+    <canvas id="bmCanvas" aria-label="Map of the whole world: tap to add or remove waypoints"></canvas>
+    <div class="side-tools"><p class="hint" id="bmInfo"></p>
+    <div class="actions"><button class="primary" id="bmFly">Fly route</button><button id="bmClear">Clear route</button><button id="bmCorner">Corner map</button><button id="bmClose">Close map</button></div></div>
+  </div>
+</div>
+
 <div id="touch" hidden>
   <div id="stickZone"></div>
   <div id="stickBase"><div id="stickKnob"></div></div>
@@ -320,6 +340,7 @@ html:not(.tablet) #touch #tForm{left:calc(max(16px,env(safe-area-inset-left)) + 
   <button class="tbtn" id="tBail" hidden>BAIL</button>
   <button class="tbtn pill" id="tAlt">ALT</button>
   <button class="tbtn pill" id="tForm" hidden>FORM</button>
+  <button class="tbtn pill" id="tRoute" hidden>ROUTE</button>
   <button class="tbtn sq" id="tMap">MAP</button>
   <button class="tbtn sq" id="tGear">GEAR</button>
   <button class="tbtn sq" id="tFlaps">FLAP</button>
@@ -385,9 +406,9 @@ const settings = Object.assign({ control: touchDevice ? 'stick-assist' : 'mouse'
 let isTouch = settings.phone === 'on' || (settings.phone !== 'off' && touchDevice);
 if (isTouch && settings.control === 'mouse') settings.control = 'stick-assist';
 const QUALITY = {
-  low: { pr: 1, grid: 200, trees: 2000, clouds: 45, shadows: false, aa: false, tex: 1024, bloom: false, detail: false },
-  medium: { pr: 1.5, grid: 280, trees: 5000, clouds: 75, shadows: false, aa: false, tex: 1024, bloom: false, detail: false },
-  high: { pr: 2, grid: 420, trees: 12000, clouds: 120, shadows: true, aa: true, tex: 2048, bloom: true, detail: true },
+  low: { pr: 1, grid: 200, trees: 2000, clouds: 45, shadows: false, aa: false, tex: 1024, bloom: false, detail: false, ogrid: 170, otex: 1024, otrees: 900 },
+  medium: { pr: 1.5, grid: 280, trees: 5000, clouds: 75, shadows: false, aa: false, tex: 1024, bloom: false, detail: false, ogrid: 220, otex: 1024, otrees: 2200 },
+  high: { pr: 2, grid: 420, trees: 12000, clouds: 120, shadows: true, aa: true, tex: 2048, bloom: true, detail: true, ogrid: 300, otex: 2048, otrees: 5000 },
 };
 const BOOTQ = QUALITY[settings.quality] || QUALITY.medium;
 
@@ -476,7 +497,12 @@ sky.renderOrder = -10; sky.frustumCulled = false; scene.add(sky);
 // =====================================================================
 //  Geography
 // =====================================================================
-const HALF = 15000, SIZE = HALF * 2, COMBAT = 10000;
+// The detailed core (the coast, the airfield, the town, the missions) is HALF either way of the centre; around it the world
+// goes on to OUT with its own, coarser terrain: arctic in the north, desert in the south, high mountains in the west and
+// islands out at sea in the east. COMBAT is how far you may fly; the computer's fighters stay within AI_BOUND.
+const HALF = 15000, SIZE = HALF * 2, OUT = 34000, OSIZE = OUT * 2, COMBAT = 27000, AI_BOUND = 15000;
+// how far into each climate a place is (0 in the temperate core)
+const tArc = z => smooth(-12500, -21000, z), tDes = z => smooth(12500, 21000, z), tAlp = x => smooth(-15000, -25000, x);
 function coastX(z) { return 1500 + 2400 * fbm(z * 0.00016 + 3.1, 7.7, 3) + 600 * Math.sin(z * 0.00035 + 1.0); }
 function cliffAt(z) { return smooth(0.0, 0.25, fbm(z * 0.0005 + 50.0, 2.0, 2)); }
 function riverZ(x) { return -2200 + 600 * Math.sin(x * 0.00055 + 0.5) + 350 * fbm(x * 0.0006, 1.3, 2); }
@@ -484,6 +510,17 @@ let RIVX = 1500; for (let i = 0; i < 5; i++) RIVX = coastX(riverZ(RIVX));
 function riverW(x) { return clamp(70 - Math.max(0, RIVX - x) * 0.004, 40, 70); }
 function riverBed(x) { return Math.max(0, RIVX - x) * 0.0055 - 0.5; }
 const LAKE = { x: -5600, z: 5600, r: 650, level: 118 };
+// islands out at sea, east of the coast (tropical in the south, rocky in the north)
+const ISLANDS = (() => {
+  const r = mulberry32(404), out = []; let tries = 0;
+  while (out.length < 16 && tries++ < 600) {
+    const z = -30000 + r() * 60000, x = coastX(z) + 8000 + r() * 19000, rad = 500 + r() * 2100;
+    if (x + rad > OUT - 4000 || (Math.abs(z) < 9000 && x < coastX(z) + 13000)) continue;
+    if (out.some(o => Math.hypot(o.x - x, o.z - z) < o.rad + rad + 1500)) continue;
+    out.push({ x, z, rad, peak: 25 + r() * rad * 0.14, seed: r() * 100 });
+  }
+  return out;
+})();
 const AF = { x: 0, z: 3200, h: 26, len: 1500, wid: 40 };
 AF.x = coastX(AF.z) - 2700;
 const TOWN = { x: RIVX - 520, z: 0 }; TOWN.z = riverZ(TOWN.x) - 420;
@@ -496,16 +533,31 @@ function heightFn(x, z, cx, cliffN, rz, raw) {
   const rid = Math.max(0, 1 - Math.abs(r0) * 2.4);
   const mtn = smooth(400, 8000, inland);
   let h = 3 + smooth(0, 600, inland) * 16 + (n1 * 0.5 + 0.5) * (46 + mtn * 430) + rid * rid * mtn * 320;
-  const edge = Math.max(smooth(9000, 14500, -x), smooth(10000, 14800, Math.abs(z)));
-  h += edge * edge * 750 * smooth(0, 1500, inland);
+  // climates beyond the core: high alpine ridges in the west, rugged arctic hills in the north, dunes and mesas in the south
+  const ta = tArc(z), td = tDes(z), tl = tAlp(x);
+  if (tl > 0) h += tl * (rid * rid * 1150 + (n1 * 0.5 + 0.5) * 420) * smooth(0, 3000, inland);
+  if (ta > 0) h += ta * (rid * 380 + Math.abs(n1) * 170) * smooth(0, 900, inland);
+  if (td > 0) {
+    const dn = perlin(x * 0.0009 + 3, z * 0.0009 - 2), dune = (1 - Math.abs(Math.sin(x * 0.0042 + z * 0.0013 + dn * 4))) ** 2.2;
+    const mn = fbm(x * 0.00028 + 40, z * 0.00028 - 9, 3);
+    h = lerp(h, h * 0.45 + 16 + dune * 22 * smooth(0, 900, inland) + smooth(0.22, 0.3, mn) * 150 * smooth(0, 1500, inland), td);
+  }
   h += cliffN * smooth(-10, 140, inland) * 55;
   const shoreW = lerp(320, 35, cliffN);
   const sea = -10 - Math.min(110, Math.max(0, -inland) * 0.035);
   h = lerp(sea, h, smooth(-shoreW * 0.5, shoreW, inland));
+  // islands
+  if (inland < -2500) for (const I of ISLANDS) {
+    const d = Math.hypot(x - I.x, z - I.z); if (d > I.rad * 1.6) continue;
+    const k = 1 - d / (I.rad * 1.15), nn = fbm(x * 0.002 + I.seed, z * 0.002, 3);
+    h = Math.max(h, k > 0 ? 1.5 + I.peak * k ** 1.6 * (0.7 + nn * 0.6) + k * 5 : -2 - 60 * (d - I.rad * 1.15) / (I.rad * 0.45));
+  }
+  // the edge of the world: the land falls away into the ocean
+  const we = Math.max(Math.abs(z), -x); if (we > 29000) h = lerp(h, -45, smooth(29000, 33500, we));
   const rd = Math.abs(z - rz);
-  if (inland > -600 && rd < 1300) {
+  if (inland > -600 && rd < 1300 && x > -OUT + 5000) {
     const bed = riverBed(x), w = riverW(x);
-    const valley = 1 - smooth(w, w + 750, rd);
+    const valley = (1 - smooth(w, w + 750, rd)) * smooth(-OUT + 5000, -OUT + 9000, x);
     h = lerp(h, Math.min(h, bed + 6 + rd * 0.06), valley);
     const ch = 1 - smooth(w * 0.9, w * 1.9, rd);
     h = lerp(h, Math.min(h, bed - 3.5), ch);
@@ -524,20 +576,20 @@ function heightFn(x, z, cx, cliffN, rz, raw) {
 }
 AF.h = clamp(heightFn(AF.x, AF.z, coastX(AF.z), cliffAt(AF.z), riverZ(AF.x), true), 14, 70);
 
-let GN = 256, CELL = SIZE / GN, HGT = null;
+let GN = 256, CELL = SIZE / GN, HGT = null, GN2 = 160, CELL2 = OSIZE / GN2, HGT2 = null;
 function groundH(x, z) {
-  const fx = (x + HALF) / CELL, fz = (z + HALF) / CELL;
-  if (fx < 0 || fz < 0 || fx >= GN || fz >= GN) return -60;
-  const ix = fx | 0, iz = fz | 0, tx = fx - ix, tz = fz - iz, n1 = GN + 1;
+  let fx = (x + HALF) / CELL, fz = (z + HALF) / CELL, n = GN, H = HGT;
+  if (fx < 0 || fz < 0 || fx >= GN || fz >= GN) { fx = (x + OUT) / CELL2; fz = (z + OUT) / CELL2; n = GN2; H = HGT2; if (!H || fx < 0 || fz < 0 || fx >= GN2 || fz >= GN2) return -60; }
+  const ix = fx | 0, iz = fz | 0, tx = fx - ix, tz = fz - iz, n1 = n + 1;
   const i = iz * n1 + ix;
-  const h00 = HGT[i], h10 = HGT[i + 1], h01 = HGT[i + n1], h11 = HGT[i + n1 + 1];
+  const h00 = H[i], h10 = H[i + 1], h01 = H[i + n1], h11 = H[i + n1 + 1];
   if (tx + tz <= 1) return h00 + (h10 - h00) * tx + (h01 - h00) * tz;
   return h11 + (h01 - h11) * (1 - tx) + (h10 - h11) * (1 - tz);
 }
 function waterLevelAt(x, z) {
   let w = 0;
   if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r * 1.6) w = Math.max(w, LAKE.level);
-  if (x < RIVX + 300 && Math.abs(z - riverZ(x)) < riverW(x) * 2.2) w = Math.max(w, riverBed(x) + 2.5);
+  if (x < RIVX + 300 && x > -OUT + 8000 && Math.abs(z - riverZ(x)) < riverW(x) * 2.2) w = Math.max(w, riverBed(x) + 2.5);
   return w;
 }
 const onRunway = (x, z) => Math.abs(x - AF.x) < AF.wid * 0.5 + 6 && Math.abs(z - AF.z) < AF.len * 0.5 + 20;
@@ -591,20 +643,23 @@ const SEA_WAVES = (() => {
 const SEA_AMP = SEA_WAVES.reduce((t, v) => t + v.a, 0), CHOP_AMP = SEA_WAVES.slice(6).reduce((t, v) => t + v.a, 0);
 const waterU = {
   uTime: uniform(0), uSun: uniform(SUN), uDeep: uniform(new THREE.Color('#0b2d40')), uShallow: uniform(new THREE.Color('#22606c')), uReef: uniform(new THREE.Color('#4aa39a')),
-  uSSS: uniform(new THREE.Color('#2e8c80')), uSea: uniform(SEA_HAZE), uGrid: uniform(new V3(HALF, 100, 1)), ...fogU,
+  uSSS: uniform(new THREE.Color('#2e8c80')), uSea: uniform(SEA_HAZE), uGrid: uniform(new V3(HALF, 100, 1)), uGrid2: uniform(new V3(OUT, 400, 1)), ...fogU,
   uLight: uniform(1), uGlint: uniform(new THREE.Color(1, 0.93, 0.82)), // daylight on the water and the glint's colour (time of day)
 };
 // a 1x1 placeholder; buildDepthTex() fills it in before the first frame
 const waterDepthTex = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat); waterDepthTex.magFilter = waterDepthTex.minFilter = THREE.LinearFilter;
+const waterDepthTex2 = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat); waterDepthTex2.magFilter = waterDepthTex2.minFilter = THREE.LinearFilter;
 const waterMat = new THREE.NodeMaterial();
 waterMat.fog = false; // fogged by hand below, as before
 waterMat.fragmentNode = withOutput(Fn(() => {
-  const { uTime, uSun, uDeep, uShallow, uReef, uSSS, uSea, uGrid, uFogDensity, uLight, uGlint } = waterU;
+  const { uTime, uSun, uDeep, uShallow, uReef, uSSS, uSea, uGrid, uGrid2, uFogDensity, uLight, uGlint } = waterU;
   const vW = positionWorld, p = vW.xz, dist = length(cameraPosition.sub(vW));
   const fp = max(length(fwidth(p)), 0.0005); // metres of water covered by one pixel here
   const tuv = p.add(uGrid.x).div(uGrid.y).add(0.5).div(uGrid.z);
   const outside = tuv.x.lessThan(0).or(tuv.y.lessThan(0)).or(tuv.x.greaterThan(1)).or(tuv.y.greaterThan(1));
-  const depth = select(outside, float(60), texture(waterDepthTex, tuv).r.mul(60)).toVar();
+  const tuv2 = p.add(uGrid2.x).div(uGrid2.y).add(0.5).div(uGrid2.z);
+  const outside2 = tuv2.x.lessThan(0).or(tuv2.y.lessThan(0)).or(tuv2.x.greaterThan(1)).or(tuv2.y.greaterThan(1));
+  const depth = select(outside, select(outside2, float(60), texture(waterDepthTex2, tuv2).r.mul(60)), texture(waterDepthTex, tuv).r.mul(60)).toVar();
   const calm = smoothstep(0, 6, depth).mul(0.65).add(0.35);
   const patch = mx_noise_float(vec3(p.mul(0.0012), uTime.mul(0.008))).mul(0.4).add(0.85); // wind patches
   const grad = vec2(0).toVar(), hgt = float(0).toVar(), chop = float(0).toVar(), lost = float(0).toVar();
@@ -653,6 +708,11 @@ function buildDepthTex() {
   }
   waterDepthTex.image = { data, width: n1, height: n1 }; waterDepthTex.needsUpdate = true;
   waterU.uGrid.value.set(HALF, CELL, n1);
+  // and the outer world's shallows (round the islands, along the far coasts)
+  const n2 = GN2 + 1, d2 = new Uint8Array(n2 * n2 * 4);
+  for (let iz = 0; iz < n2; iz++) for (let ix = 0; ix < n2; ix++) { const i = iz * n2 + ix, dd = clamp(-HGT2[i], 0, 60); d2[i * 4] = Math.round(dd / 60 * 255); d2[i * 4 + 3] = 255; }
+  waterDepthTex2.image = { data: d2, width: n2, height: n2 }; waterDepthTex2.needsUpdate = true;
+  waterU.uGrid2.value.set(OUT, CELL2, n2);
 }
 // Reflections for the metal and glass: a small blurred copy of the sky over green ground.
 // It goes on each PBR material as its own envMap, not on scene.environment: since three r183
@@ -757,7 +817,7 @@ let smokeFX, fireFX;
 // =====================================================================
 //  World building
 // =====================================================================
-let terrainCanvas = null;
+let terrainCanvas = null, outerCanvas = null, mapCanvas = null;
 const loadText = $('loadtext'), loadBar = $('loadbar').firstElementChild;
 const progress = (t, f) => { loadText.textContent = t; loadBar.style.width = (f * 100).toFixed(0) + '%'; };
 
@@ -774,8 +834,19 @@ async function buildWorld() {
     for (let ix = 0; ix < n1; ix++) HGT[iz * n1 + ix] = heightFn(-HALF + ix * CELL, z, cxRow[iz], clRow[iz], rzCol[ix], false);
     if (iz % 48 === 0) { progress('Raising hills and cliffs…', 0.05 + 0.35 * iz / n1); await nextFrame(); }
   }
+  // the world beyond the core, on a coarser grid; under the core it sits a little lower, out of sight
+  GN2 = Q.ogrid; CELL2 = OSIZE / GN2; const m1 = GN2 + 1; HGT2 = new Float32Array(m1 * m1);
+  for (let iz = 0; iz < m1; iz++) {
+    const z = -OUT + iz * CELL2, cxz = coastX(z), clz = cliffAt(z);
+    for (let ix = 0; ix < m1; ix++) { const x = -OUT + ix * CELL2; let h = heightFn(x, z, cxz, clz, riverZ(x), false); if (Math.abs(x) < HALF - CELL2 * 0.6 && Math.abs(z) < HALF - CELL2 * 0.6) h -= 14; HGT2[iz * m1 + ix] = h; }
+    if (iz % 40 === 0) { progress('Raising mountains, dunes and islands…', 0.4 + 0.02 * iz / m1); await nextFrame(); }
+  }
   progress('Painting fields and forests…', 0.42); await nextFrame();
   terrainCanvas = await buildColorMap(BOOTQ.tex);
+  outerCanvas = await buildColorMap(Q.otex, OUT, true);
+  // one map of the whole world for the radar, the sector map and the big map
+  mapCanvas = document.createElement('canvas'); mapCanvas.width = mapCanvas.height = 1024;
+  { const mx = mapCanvas.getContext('2d'); mx.drawImage(outerCanvas, 0, 0, 1024, 1024); const a = (OUT - HALF) / OSIZE * 1024, w = SIZE / OSIZE * 1024; mx.drawImage(terrainCanvas, a, a, w, w); }
   progress('Laying the runway…', 0.7); await nextFrame();
 
   // terrain mesh
@@ -791,6 +862,13 @@ async function buildWorld() {
   const grain = texture(detail, wxz.mul(0.025)).r.mul(0.55).add(0.72).mul(texture(detail, wxz.mul(0.0037)).g.mul(0.36).add(0.82)).mul(texture(detail, wxz.mul(0.13)).r.mul(0.3).add(0.86));
   tmat.colorNode = materialColor.mul(vec4(grain, grain, grain, 1));
   const terrain = new THREE.Mesh(geo, tmat); terrain.receiveShadow = true; scene.add(terrain);
+  {
+    const og = new THREE.PlaneGeometry(OSIZE, OSIZE, GN2, GN2); og.rotateX(-Math.PI / 2);
+    const opa = og.attributes.position; for (let i = 0; i < opa.count; i++) opa.setY(i, HGT2[i]); og.computeVertexNormals();
+    const otex = new THREE.CanvasTexture(outerCanvas); otex.colorSpace = THREE.SRGBColorSpace; otex.anisotropy = Math.min(8, renderer.getMaxAnisotropy());
+    const omat = new THREE.MeshLambertNodeMaterial({ map: otex }); omat.colorNode = materialColor.mul(vec4(grain, grain, grain, 1));
+    const outerMesh = new THREE.Mesh(og, omat); outerMesh.receiveShadow = true; scene.add(outerMesh);
+  }
   buildDepthTex();
 
   // sea
@@ -800,7 +878,7 @@ async function buildWorld() {
   // river ribbon
   {
     const pts = [], idx = []; let k = 0;
-    for (let x = RIVX + 300; x > -HALF; x -= 40) {
+    for (let x = RIVX + 300; x > -OUT + 8000; x -= 40) {
       const z = riverZ(x), w = riverW(x) * 1.7, y = riverBed(x) + 2.5;
       const z2 = riverZ(x - 1), dz = z2 - z; const nl = Math.hypot(1, dz); const nx = -dz / nl, nz = -1 / nl;
       pts.push(x + nx * w, y, z + nz * w, x - nx * w, y, z - nz * w);
@@ -815,6 +893,7 @@ async function buildWorld() {
   buildTown();
   progress('Planting forests…', 0.86); await nextFrame();
   buildTrees(Q.trees);
+  buildOuterWorld(Q.otrees);
   progress('Seeding clouds…', 0.94); await nextFrame();
   buildClouds(Q.clouds);
   smokeFX = new Particles(4600, false);
@@ -823,20 +902,24 @@ async function buildWorld() {
   buildEnv();
 }
 
-async function buildColorMap(S) {
+async function buildColorMap(S, half = HALF, outer = false) {
   const c = document.createElement('canvas'); c.width = c.height = S;
   const ctx = c.getContext('2d'); const img = ctx.createImageData(S, S); const d = img.data;
-  const step = SIZE / S;
+  const step = half * 2 / S;
   const C = (r, g, b) => [r, g, b];
   const SAND = C(214, 201, 158), WETSAND = C(168, 160, 126), MUD = C(112, 104, 76), FLOOR = C(70, 92, 88),
     GRASS_A = C(84, 118, 54), GRASS_B = C(112, 140, 68), FOREST = C(40, 66, 33), ROCK = C(126, 121, 110), CHALK = C(206, 202, 186), MOOR = C(118, 120, 86),
-    TOWN_G = C(138, 128, 112), AF_G = C(118, 150, 80);
+    TOWN_G = C(138, 128, 112), AF_G = C(118, 150, 80),
+    DSAND = C(222, 194, 138), DSHADE = C(196, 160, 106), REDROCK = C(168, 104, 72), TUNDRA = C(122, 124, 98), SNOW = C(236, 240, 244), GRAVEL = C(96, 96, 92),
+    JUNGLE = C(46, 112, 50), BEACH = C(232, 222, 186);
   const FIELDS = [C(196, 176, 96), C(126, 152, 70), C(146, 116, 78), C(98, 130, 58), C(178, 162, 92), C(150, 160, 84)];
   const mix = (a, b, t) => { a[0] += (b[0] - a[0]) * t; a[1] += (b[1] - a[1]) * t; a[2] += (b[2] - a[2]) * t; };
   for (let py = 0; py < S; py++) {
-    const z = -HALF + (py + 0.5) * step; const cx = coastX(z); const cl = cliffAt(z);
+    const z = -half + (py + 0.5) * step; const cx = coastX(z); const cl = cliffAt(z); const ta = tArc(z), td = tDes(z);
     for (let px = 0; px < S; px++) {
-      const x = -HALF + (px + 0.5) * step;
+      const x = -half + (px + 0.5) * step;
+      // the outer map under the core is never seen
+      if (outer && Math.abs(x) < HALF - 600 && Math.abs(z) < HALF - 600) { const o = (py * S + px) * 4; d[o] = GRASS_A[0]; d[o + 1] = GRASS_A[1]; d[o + 2] = GRASS_A[2]; d[o + 3] = 255; continue; }
       const h = groundH(x, z);
       const sx = groundH(x + 20, z) - groundH(x - 20, z), sz = groundH(x, z + 20) - groundH(x, z - 20);
       const slope = Math.sqrt(sx * sx + sz * sz) / 40;
@@ -844,26 +927,34 @@ async function buildColorMap(S) {
       const n = perlin(x * 0.004, z * 0.004);
       let col;
       if (h < wl - 0.3) { col = [...WETSAND]; mix(col, FLOOR, clamp((wl - h) / 22, 0, 1)); }
-      else if (h < wl + 2.6 && slope < 0.3) { col = wl > 0.5 ? [...MUD] : [...SAND]; if (wl <= 0.5) mix(col, WETSAND, clamp(1 - (h - wl) / 1.2, 0, 1) * 0.6); }
+      else if (h < wl + 2.6 && slope < 0.3) { col = wl > 0.5 ? [...MUD] : [...SAND]; if (wl <= 0.5) { mix(col, inland < -2000 || td > 0.5 ? BEACH : ta > 0.5 ? GRAVEL : SAND, 0.8); mix(col, WETSAND, clamp(1 - (h - wl) / 1.2, 0, 1) * 0.6); } }
       else {
         col = [...GRASS_A]; mix(col, GRASS_B, n * 0.5 + 0.5);
         mix(col, MOOR, smooth(220, 540, h));
-        if (h < 175 && slope < 0.12 && inland > 300 && fbm(x * 0.00035 + 20, z * 0.00035, 2) > -0.12) {
+        if (h < 175 && slope < 0.12 && inland > 300 && Math.max(ta, td) < 0.5 && fbm(x * 0.00035 + 20, z * 0.00035, 2) > -0.12) {
           const wx = x + 110 * perlin(x * 0.002, z * 0.002), wz = z + 110 * perlin(x * 0.002 + 9, z * 0.002);
           const fx = Math.floor(wx / 240), fz = Math.floor(wz / 170); const ex = wx / 240 - fx, ez = wz / 170 - fz;
           const border = Math.min(ex, 1 - ex, ez, 1 - ez);
           const fc = FIELDS[Math.floor(hash2(fx, fz) * FIELDS.length)];
           if (border < 0.05) mix(col, FOREST, 0.6); else mix(col, fc, 0.9);
         }
-        const f = forestN(x, z); if (f > 0.08 && h < 620) mix(col, FOREST, smooth(0.08, 0.2, f) * 0.92);
+        const f = forestN(x, z); if (f > 0.08 && h < 620 + tAlp(x) * 300 && td < 0.5) mix(col, FOREST, smooth(0.08, 0.2, f) * 0.92);
+        // the climates: desert sand and red rock in the south, tundra in the north, lush green on the islands
+        if (td > 0) { const sc = [...DSAND]; mix(sc, DSHADE, clamp(n * 0.6 + 0.4, 0, 1) * 0.55); mix(sc, REDROCK, smooth(0.3, 0.75, slope)); mix(col, sc, td); }
+        if (ta > 0) mix(col, TUNDRA, ta * 0.65);
+        if (inland < -2000) { const jc = [...JUNGLE]; mix(jc, GRASS_B, n * 0.5 + 0.5); mix(jc, TUNDRA, smooth(-2000, -16000, z)); mix(col, jc, 0.85); }
         const rock = smooth(0.45, 0.95, slope);
-        if (rock > 0) mix(col, inland < 450 && h < 120 ? CHALK : ROCK, rock);
-        const td = Math.hypot(x - TOWN.x, z - TOWN.z); if (td < 650) mix(col, TOWN_G, (1 - td / 650) * 0.55);
+        if (rock > 0) mix(col, inland < 450 && h < 120 && td < 0.5 ? CHALK : td > 0.5 ? REDROCK : ROCK, rock);
+        // snow on the heights everywhere, down to the shore in the far north (never in the desert)
+        const snowLine = lerp(1150, 120, ta) + td * 3000;
+        const snow = smooth(snowLine - 80, snowLine + 220, h + n * 25) * (1 - smooth(0.7, 1.3, slope) * 0.6);
+        if (snow > 0) mix(col, SNOW, snow);
+        const tdist = Math.hypot(x - TOWN.x, z - TOWN.z); if (tdist < 650) mix(col, TOWN_G, (1 - tdist / 650) * 0.55);
         if (onAirfield(x, z)) { col = [...AF_G]; mix(col, GRASS_B, ((Math.floor((x - AF.x) / 18) & 1) ? 0.25 : 0)); }
       }
       const o = (py * S + px) * 4; d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = 255;
     }
-    if (py % 128 === 127) { progress('Painting fields and forests…', 0.42 + 0.27 * py / S); await nextFrame(); }
+    if (py % 128 === 127) { progress(outer ? 'Painting deserts, snowfields and islands…' : 'Painting fields and forests…', (outer ? 0.6 : 0.42) + (outer ? 0.12 : 0.18) * py / S); await nextFrame(); }
   }
   ctx.putImageData(img, 0, 0);
   return c;
@@ -1048,6 +1139,61 @@ function buildTrees(count) {
   }
 }
 
+// The world beyond the core: forests and snowy firs, palms on the islands and the desert coast, sea ice in the far
+// north, and two outposts (a desert village and an arctic station).
+function buildOuterWorld(count) {
+  const r = mulberry32(2024), fir = [], snowy = [], palm = [];
+  for (let a = 0; a < count * 14 && fir.length + snowy.length + palm.length < count; a++) {
+    const x = (r() * 2 - 1) * (OUT - 2500), z = (r() * 2 - 1) * (OUT - 2500);
+    if (Math.abs(x) < HALF - 300 && Math.abs(z) < HALF - 300) continue;
+    const h = groundH(x, z), wl = waterLevelAt(x, z); if (h < wl + 1.5) continue;
+    if (Math.abs(groundH(x + 12, z) - h) + Math.abs(groundH(x, z + 12) - h) > 9) continue;
+    const ta = tArc(z), td = tDes(z), inland = coastX(z) - x, f = forestN(x, z), t = { x, z, h, s: 0.7 + r() * 0.8, c: r() };
+    if (inland < -2000) { if (z > -12000 && r() < 0.8) palm.push(t); else if (z <= -12000 && f > 0.05) fir.push(t); }
+    else if (td > 0.5) { if (inland < 700 && r() < 0.35) palm.push(t); }
+    else if (ta > 0.4) { if (f > 0.1 && h < lerp(1150, 120, ta) + 200) snowy.push(t); }
+    else if (f > 0.1 && h < 900) fir.push(t);
+  }
+  const TR = [0.09, 0.06, 0.04];
+  const firGeo = mergeColored([[new THREE.CylinderGeometry(0.22, 0.3, 3, 5).translate(0, 1.5, 0), TR], [new THREE.ConeGeometry(3.1, 7, 7).translate(0, 5.5, 0), [0.045, 0.1, 0.05]], [new THREE.ConeGeometry(2.3, 5.5, 7).translate(0, 8.6, 0), [0.05, 0.115, 0.055]]]);
+  const snowGeo = mergeColored([[new THREE.CylinderGeometry(0.22, 0.3, 3, 5).translate(0, 1.5, 0), TR], [new THREE.ConeGeometry(3.1, 7, 7).translate(0, 5.5, 0), [0.06, 0.1, 0.07]], [new THREE.ConeGeometry(2.4, 3.2, 7).translate(0, 7.6, 0), [0.85, 0.88, 0.9]], [new THREE.ConeGeometry(1.6, 3.6, 6).translate(0, 10, 0), [0.9, 0.92, 0.95]]]);
+  const fronds = [];
+  for (let i = 0; i < 6; i++) { const a = i / 6 * 6.283; fronds.push([new THREE.ConeGeometry(0.7, 4.4, 4).scale(1, 1, 0.25).rotateZ(-Math.PI / 2 + 0.35).translate(2.0, 0, 0).rotateY(a).translate(0, 9.3, 0), [0.1 + (i % 2) * 0.03, 0.3, 0.08]]); }
+  const palmGeo = mergeColored([[new THREE.CylinderGeometry(0.18, 0.32, 9.4, 6).translate(0, 4.7, 0).rotateZ(0.12), [0.32, 0.24, 0.15]], ...fronds]);
+  const m = new THREE.Matrix4(), q = new Q4(), sc = new V3(), p = new V3(), cc = new THREE.Color(), up = new V3(0, 1, 0);
+  for (const [geo, items] of [[firGeo, fir], [snowGeo, snowy], [palmGeo, palm]]) {
+    if (!items.length) continue;
+    const im = new THREE.InstancedMesh(geo, new THREE.MeshLambertNodeMaterial({ vertexColors: true }), items.length);
+    items.forEach((t, i) => { p.set(t.x, t.h - 0.6, t.z); q.setFromAxisAngle(up, t.c * 6.28); sc.set(t.s, t.s * (0.85 + t.c * 0.35), t.s); m.compose(p, q, sc); im.setMatrixAt(i, m); const b = 0.85 + t.c * 0.4; im.setColorAt(i, cc.setRGB(b, b, b)); });
+    im.castShadow = BOOTQ.shadows; scene.add(im);
+  }
+  // sea ice in the far north: floes, packed tighter toward the shore
+  const floes = [];
+  for (let a = 0; a < 4000 && floes.length < 260; a++) {
+    const z = -OUT + 1500 + r() * 17000, x = coastX(z) - 300 + r() * 26000 * r(), rr = 15 + r() * r() * 140;
+    if (z > -16000 - r() * 4000 || groundH(x, z) > -1.5 || x > OUT - 2000) continue;
+    floes.push([x, z, rr]);
+  }
+  if (floes.length) {
+    const im = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1.06, 1.4, 7), lam(0xe9f1f6), floes.length);
+    floes.forEach(([x, z, rr], i) => { p.set(x, 0.25, z); q.setFromAxisAngle(up, rr); sc.set(rr, 1, rr * (0.6 + (rr % 0.4))); m.compose(p, q, sc); im.setMatrixAt(i, m); });
+    im.receiveShadow = true; scene.add(im);
+  }
+  // a desert village on the southern coast and an arctic station in the north
+  const outpost = (z0, kind) => {
+    const [bx, bz] = findFlat(coastX(z0) - 2600, z0, 220), r2 = mulberry32(kind === 'desert' ? 7 : 9);
+    const wall = lam(kind === 'desert' ? 0xd8bf94 : 0xa83a2c), roof = lam(kind === 'desert' ? 0xc9ad80 : 0x6b6f72);
+    for (let i = 0; i < (kind === 'desert' ? 26 : 12); i++) {
+      const x = bx + (r2() - 0.5) * 320, z = bz + (r2() - 0.5) * 320, h = groundH(x, z), w = 7 + r2() * 8, d = 7 + r2() * 9, hh = kind === 'desert' ? 4 + r2() * 4 : 3.5 + r2() * 2;
+      if (h < waterLevelAt(x, z) + 1) continue;
+      addBox(w, hh + 1, d, wall, x, h + hh / 2 - 0.5, z, r2() * 0.3);
+      addBox(w + 0.6, kind === 'desert' ? 0.5 : 0.8, d + 0.6, roof, x, h + hh + 0.3, z, r2() * 0.3);
+    }
+    if (kind !== 'desert') { const h = groundH(bx, bz); const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.6, 40, 6), lam(0xb03a2e)); mast.position.set(bx + 40, h + 20, bz); scene.add(mast); }
+    else { const h = groundH(bx, bz); const tw = new THREE.Mesh(new THREE.CylinderGeometry(3, 4, 16, 10), wall); tw.position.set(bx - 60, h + 8, bz + 30); scene.add(tw); }
+  };
+  outpost(24500, 'desert'); outpost(-24500, 'arctic');
+}
 const cloudCenters = [];
 const CLOUD_MATS = [];
 function buildClouds(n) {
@@ -1076,6 +1222,15 @@ function buildClouds(n) {
       const shade = oy < 40 ? 2 : oy < 90 ? 1 : 0;
       const sp = new THREE.Sprite(mats[ti * 3 + shade]); sp.position.set(cx + ox, cy + oy, cz + oz); sp.scale.set(s, s * 0.72, 1); sp.renderOrder = 1; scene.add(sp);
     }
+    cloudCenters.push({ x: cx, y: cy + 70, z: cz, r: rad });
+  }
+  // and a thinner layer over the rest of the world
+  for (let i = 0; i < n * 0.6; i++) {
+    const cx = (r() * 2 - 1) * (OUT - 2000), cz = (r() * 2 - 1) * (OUT - 2000);
+    if (Math.abs(cx) < 14000 && Math.abs(cz) < 14000) continue;
+    if (r() < tDes(cz) * 0.85 || r() > 0.4 + tArc(cz) * 0.6) continue;
+    const cy = 1450 + r() * 900, k = 4 + (r() * 6 | 0), ti = r() * 3 | 0; let rad = 0;
+    for (let j = 0; j < k; j++) { const ox = (r() - 0.5) * 700, oz = (r() - 0.5) * 700, oy = r() * 160, s2 = 280 + r() * 360; rad = Math.max(rad, Math.hypot(ox, oz) + s2 * 0.35); const sp = new THREE.Sprite(mats[ti * 3 + (oy < 50 ? 2 : oy < 100 ? 1 : 0)]); sp.position.set(cx + ox, cy + oy, cz + oz); sp.scale.set(s2, s2 * 0.72, 1); sp.renderOrder = 1; scene.add(sp); }
     cloudCenters.push({ x: cx, y: cy + 70, z: cz, r: rad });
   }
 }
@@ -1934,6 +2089,7 @@ function updateTracers() {
 const G = {
   state: 'loading', time: 0, timeScale: 1, planes: [], player: null, mission: null,
   stats: null, popups: [], cam: { mode: 'chase', kill: null, killT: 0, q: new Q4(), shake: 0, nearT: 0 }, msgs: [], hitFlash: 0, crashSites: [], aimYaw: 0, aimPitch: 0, ended: false,
+  route: { wps: [], i: 0, on: false, alt: 800 }, // waypoints set on the big map, and whether the autopilot is flying them
 };
 function msg(text, kind = 'info', dur = 3.6) { G.msgs.push({ text, kind, t: dur, dur }); if (G.msgs.length > 4) G.msgs.shift(); }
 
@@ -2198,6 +2354,7 @@ function updateBullets(dt) {
         }
       }
       if (!dead && !B.vis[i] && owner && owner.team === 'blue' && bulletVsGround(ox, oy, oz, nx, ny, nz, B.dmg[i], B.cannon[i], owner)) dead = true;
+      if (!dead && RANGE.on && owner && owner.player && !B.vis[i] && rangeShot(ox, oy, oz, nx, ny, nz)) dead = true;
       if (!dead && pl && owner !== pl && !B.crack[i] && pl.alive) {
         const dx = pl.pos.x - nx, dy = pl.pos.y - ny, dz = pl.pos.z - nz;
         if (dx * dx + dy * dy + dz * dz < 18 * 18) { B.crack[i] = 1; Sfx.crack(); }
@@ -2657,6 +2814,7 @@ const _aim = new V3(), _dir = new V3();
 function aiThink(p, dt, target) {
   const b = p.brain, sk = SKILL[p.skill] || SKILL.veteran;
   const df = p.role === 'raider' ? diff() : DIFF.normal;
+  b.engaged = target; // the HUD shows what your wingmen are after
   // a named ace: when badly hit, a last stand (no more dodging, full power, every missile)
   const boss = !!p.boss;
   if (boss && !p.lastStand && (bossHealth(p) < 0.35 || p.onFire)) { p.lastStand = true; b.mode = 'attack'; p.flares += 2; msg(`${BOSSES[p.boss].name}: "${BOSSES[p.boss].last}"`, 'danger', 4); }
@@ -2674,7 +2832,7 @@ function aiThink(p, dt, target) {
   const tooLow = _a.y < ahead + 160 || agl < 140;
   const fromC = Math.hypot(p.pos.x - AF.x * 0.3, p.pos.z);
   if (tooLow) { _dir.set(p.vel.x, 0, p.vel.z).normalize().multiplyScalar(0.6); _dir.y = 1; steerTo(p, _dir.normalize(), p.inp, 1); return; }
-  if (fromC > COMBAT * 0.95) { _dir.set(-p.pos.x, 0, -p.pos.z).normalize(); _dir.y = 0.1; steerTo(p, _dir, p.inp, sk.pull); return; }
+  if (fromC > AI_BOUND) { _dir.set(-p.pos.x, 0, -p.pos.z).normalize(); _dir.y = 0.1; steerTo(p, _dir, p.inp, sk.pull); return; }
   if (!target || !target.alive) { _dir.set(-p.fwd.z, 0.0, p.fwd.x).multiplyScalar(0.25).add(_b.set(p.fwd.x, 0, p.fwd.z)).normalize(); _dir.y = (900 - p.pos.y) * 0.0006; steerTo(p, _dir.normalize(), p.inp, 0.6); return; }
   _c.subVectors(target.pos, p.pos); const dist = _c.length(); _d.copy(_c).multiplyScalar(1 / dist);
   const tgtPointing = target.fwd.dot(_e.copy(_d).negate());
@@ -2740,6 +2898,7 @@ const MISSIONS = {
   naval: { name: 'Naval strike', blurb: 'A battleship is steaming along the coast with its flak manned. Bomb it until it sinks, then come home.' },
   ground: { name: 'Ground attack', blurb: 'An armoured convoy is moving up to a fuel depot guarded by flak guns. Destroy the tanks, trucks, fuel tanks and sheds.' },
   train: { name: 'Train busting', blurb: 'An ammunition train with flak wagons is running up the river valley to the harbour. Rockets and bombs set its wagons off one after another; stop it before it gets there.' },
+  range: { name: 'Gunnery range', local: true, blurb: 'Practice, single player: a tow plane streams a sleeve target to shoot at, and there are bombing circles and strafing boards on the range west of the airfield. Score what you can in six minutes.' },
   intercept: { name: 'Bomber intercept', blurb: 'Enemy bombers are heading for the harbour town with fighter cover. Shoot them down before three of them get through.' },
 };
 // at a Game Center table, is nobody else (no other person) sitting with you?
@@ -3083,6 +3242,7 @@ function updateBombs(dt) {
       explosion(b.pos, _a.set(0, 0, 0), big ? 2.1 : 1.6, water ? 'water' : 'ground');
       if (!water && !onShip) G.crashSites.push({ x: b.pos.x, y: b.pos.y, z: b.pos.z, t: 10, water: false });
       if (b.vis) continue; // another device's bomb: that device works out the damage
+      if (b.owner && b.owner.player && !water) rangeImpact(b.pos, 'Bomb');
       if (b.owner && b.owner.bomber) { GW.townHit = (GW.townHit || 0) + 1; continue; }
       blastDamage(b.pos, big ? 34 : 25, big ? 300 : 190, b.owner);
       // close to the blast hurts aircraft too
@@ -3135,7 +3295,7 @@ function gunnerFire(p, dt) {
       td = d; tgt = e;
     }
     if (!tgt) { p.tgT[i] = 0.35; continue; }
-    p.gunAim = (p.gunAim || new V3()).subVectors(tgt.pos, _gfrom).normalize(); p.gunAimT = 0.6;
+    p.gunAim = (p.gunAim || new V3()).subVectors(tgt.pos, _gfrom).normalize(); p.gunAimT = 0.6; p.gunTgt = tgt; p.gunTgtT = G.time + 1.2;
     p.tgT[i] = 0.12; spawnRound(p, _gfrom, tgt, 870, 7, 0.018 * (p.player ? 1 : diff().aim));
     if (p.player && !(p.gunnerT > G.time)) { msg('Gunner: firing on your tail!', 'info', 2); p.gunnerT = G.time + 20; }
   }
@@ -3149,7 +3309,7 @@ function bomberThink(p, dt) {
     for (let i = 0; i < p.bombs; i++) setTimeout(() => dropBomb(p), i * 160);
     msg(GW.townRuns >= TOWN_LIMIT ? 'Bombs on the town!' : `A bomber got through · bombs on the town! (${GW.townRuns} of ${TOWN_LIMIT})`, 'danger', 4);
   }
-  if (b.dropped) { _dir.set(-dx, 0, -dz).normalize(); _dir.y = 0.06; if (Math.hypot(p.pos.x, p.pos.z) > COMBAT * 0.97) { p.gone = true; p.alive = false; p.model.group.visible = false; } }
+  if (b.dropped) { _dir.set(-dx, 0, -dz).normalize(); _dir.y = 0.06; if (Math.hypot(p.pos.x, p.pos.z) > 9700) { p.gone = true; p.alive = false; p.model.group.visible = false; } }
   else { _dir.set(dx, 0, dz).normalize(); _dir.y = clamp((b.alt - p.pos.y) * 0.004, -0.15, 0.15); }
   steerTo(p, _dir.normalize(), p.inp, 0.5);
   // gunners: top turret and tail turret
@@ -3183,7 +3343,7 @@ function clearGroundWar() {
   for (const u of GW.units) scene.remove(u.g); GW.units = [];
   if (GW.ship) scene.remove(GW.ship.g); GW.ship = null;
   clearSearchlights();
-  for (const u of GW.train) scene.remove(u.g); GW.train = []; GW.sec = []; GW.tready = false;
+  for (const u of GW.train) scene.remove(u.g); GW.train = []; GW.sec = []; GW.tready = false; clearRange();
   for (const b of GW.bombs) scene.remove(b.mesh); GW.bombs = []; GW.flak = []; GW.shells = []; GW.townRuns = 0; GW.townHit = 0; GW.active = false; GW.own = {}; GW.gready = false;
 }
 function setupMission(m) {
@@ -3191,10 +3351,86 @@ function setupMission(m) {
   if (m.kind === 'naval') setupNaval(m);
   else if (m.kind === 'ground') setupGround(m);
   else if (m.kind === 'train') setupTrain(m);
+  else if (m.kind === 'range') setupRange(m);
   else if (m.kind === 'intercept') { m.bwave = 0; m.bwaves = clamp(Number(CAMP.on ? CAMPAIGN[CAMP.i].bwaves : settings.waves) || 2, 1, 3); m.maxScore = (m.bwaves * 3 + 1) * 200 + m.bwaves * 300 + 700; }
   GW.active = m.kind !== 'dogfight';
   missionLights(m.kind);
-  m.escortsLeft = m.kind === 'intercept' ? 0 : 3;
+  m.escortsLeft = m.kind === 'intercept' || m.kind === 'range' ? 0 : 3;
+}
+// ---- the gunnery range: a tow plane streaming a sleeve to shoot at, bombing circles and strafing boards
+let RANGE = { on: false };
+function setupRange(m) {
+  const [cx, cz] = findFlat(AF.x - 4200, AF.z + 600, 220), cy = groundH(cx, cz);
+  const g = new THREE.Group(); g.position.set(cx, cy + 0.3, cz); scene.add(g);
+  for (const [r, col] of [[50, 0xe9e4d6], [25, 0xd2412f], [10, 0xe9e4d6], [3.5, 0xd2412f]]) g.add(new THREE.Mesh(new THREE.RingGeometry(r - 1.8, r, 56).rotateX(-Math.PI / 2), lam(col, { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 })));
+  for (const a of [0, Math.PI / 2]) { const b = new THREE.Mesh(new THREE.PlaneGeometry(100, 1.2).rotateX(-Math.PI / 2).rotateY(a), lam(0xe9e4d6, { polygonOffset: true, polygonOffsetFactor: -2 })); g.add(b); }
+  const boards = [];
+  for (let i = 0; i < 5; i++) {
+    const x = cx - 80 + i * 40, z = cz - 420, h = groundH(x, z), bg = new THREE.Group(); bg.position.set(x, h, z); scene.add(bg);
+    mbox(9, 6, 0.4, lam(0xe9e4d6), 0, 4, 0, bg); mbox(3, 2.2, 0.5, lam(0xd2412f), 0, 4, 0, bg); for (const sx of [-3.8, 3.8]) mbox(0.3, 4, 0.3, gmats().dark, sx, 1, 0, bg);
+    boards.push({ g: bg, pos: new V3(x, h + 4, z), hits: 0, down: false });
+  }
+  const tow = new Plane('brute', { skill: 'veteran', id: 'tow', team: 'blue', role: 'tow', label: 'Tow plane' });
+  tow.place(cx - 2500, cy + 800, cz + 1500, Math.PI / 2, 0, 105); tow.gear = tow.gearT = 0; tow.throttle = 0.75; tow.missiles = 0; tow.bombs = 0; G.planes.push(tow);
+  const sleeve = new THREE.Group(); scene.add(sleeve);
+  const sm = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 1.1, 7, 12, 1, true).rotateX(Math.PI / 2), lam(0xe9e4d6, { side: THREE.DoubleSide })); sleeve.add(sm);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.95, 1.6, 12, 1, true).rotateX(Math.PI / 2).translate(0, 0, 1.2), lam(0xd2412f, { side: THREE.DoubleSide })); sleeve.add(band);
+  const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1, 4).translate(0, 0.5, 0), lam(0x2a2a2a)); scene.add(cable);
+  RANGE = { on: true, cx, cy, cz, g, boards, tow, sleeve, cable, spos: tow.pos.clone(), hist: [tow.pos.clone()], alive: true, back: 0, leg: 0,
+    hits: 0, sleeves: 0, boardHits: 0, best: null, t: 360 };
+  m.next = null; m.maxScore = 2600;
+}
+function clearRange() {
+  if (!RANGE.on) return; scene.remove(RANGE.g, RANGE.sleeve, RANGE.cable); for (const b of RANGE.boards) scene.remove(b.g);
+  if (RANGE.tow) removePlane(RANGE.tow); RANGE = { on: false };
+}
+function towThink(p, dt) {
+  const R = RANGE; if (!R.on) return;
+  const legs = [[-3200, 1500], [3200, 1500], [3200, -1800], [-3200, -1800]], [lx, lz] = legs[R.leg];
+  const dx = R.cx + lx - p.pos.x, dz = R.cz + lz - p.pos.z; if (Math.hypot(dx, dz) < 600) R.leg = (R.leg + 1) % 4;
+  _dir.set(dx, 0, dz).normalize(); _dir.y = clamp((R.cy + 800 - p.pos.y) * 0.003, -0.15, 0.15);
+  steerTo(p, _dir.normalize(), p.inp, 0.45); p.throttle = 0.72; p.firing = false;
+  for (const k in p.hp) p.hp[k] = Math.max(p.hp[k], p.spec.hp[k]); // nobody shoots the tow plane down
+}
+const _sl2 = new V3();
+function updateRange(dt) {
+  const R = RANGE; if (!R.on || !R.tow) return;
+  const tw = R.tow, last = R.hist[R.hist.length - 1];
+  if (tw.pos.distanceTo(last) > 6) { R.hist.push(tw.pos.clone()); if (R.hist.length > 140) R.hist.shift(); }
+  // the sleeve rides 260 m back along the tow plane's path and 35 m below it
+  let acc = 0; _sl2.copy(R.hist[0]);
+  for (let i = R.hist.length - 1; i > 0; i--) { const seg = R.hist[i].distanceTo(R.hist[i - 1]); if (acc + seg >= 260) { _sl2.lerpVectors(R.hist[i], R.hist[i - 1], (260 - acc) / Math.max(seg, 1e-3)); break; } acc += seg; }
+  _sl2.y -= 35; R.spos.lerp(_sl2, Math.min(1, dt * 2));
+  R.sleeve.visible = R.cable.visible = R.alive;
+  if (R.alive) {
+    R.sleeve.position.copy(R.spos); R.sleeve.lookAt(tw.pos);
+    _a.copy(tw.pos).addScaledVector(tw.fwd, 7); _b.subVectors(R.spos, _a); const L = _b.length();
+    R.cable.position.copy(_a); R.cable.scale.set(1, L, 1); R.cable.quaternion.setFromUnitVectors(_UP, _b.multiplyScalar(1 / L));
+  } else if ((R.back -= dt) <= 0) { R.alive = true; msg('Tow plane: a new sleeve is streaming', 'info', 3); }
+  R.t -= dt;
+}
+// a round through the sleeve, or into a board
+function rangeShot(ox, oy, oz, nx, ny, nz) {
+  const R = RANGE; if (!R.on) return false;
+  _c.set(ox, oy, oz); _d.set(nx, ny, nz);
+  // the sleeve is about 7 m long: test along its length, a little generously (it is practice)
+  let onSleeve = false;
+  if (R.alive) { _e.subVectors(R.tow.pos, R.spos).normalize(); for (const k of [-3, 0, 3]) if (segPointDist(_c, _d, _sl2.copy(R.spos).addScaledVector(_e, k)) < 3) { onSleeve = true; break; } }
+  if (onSleeve) {
+    R.hits++; G.stats.score += 15; G.stats.hits++; G.hitMarker = 0.12;
+    for (let k = 0; k < 4; k++) fireFX.spawn(nx, ny, nz, rand(-12, 12), rand(-12, 12), rand(-12, 12), 0.15, 0.6, 2, 1, 0.85, 0.55, 1, 2, 4, 2);
+    if (R.hits % 12 === 0) { R.alive = false; R.back = 6; R.sleeves++; G.stats.score += 150; debris(R.spos, _a.set(0, -5, 0), 10); msg(`Sleeve shot away!  +150 · ${R.hits} hits`, 'good', 3); }
+    return true;
+  }
+  for (const b of R.boards) { if (Math.abs(b.pos.x - nx) > 12 || Math.abs(b.pos.z - nz) > 12) continue; if (segPointDist(_c, _d, b.pos) < 3.8) { b.hits++; R.boardHits++; G.stats.score += 10; G.stats.hits++; if (b.hits === 15) { b.g.rotation.x = -1.2; G.stats.score += 100; msg('Board shredded!  +100', 'good', 2.5); } for (let k = 0; k < 3; k++) smokeFX.spawn(nx, ny, nz, rand(-3, 3), rand(1, 5), rand(-3, 3), 0.8, 1, 2, 0.8, 0.78, 0.7, 0.7, 1, 0, 0); return true; } }
+  return false;
+}
+// how close a bomb or rocket came to the middle of the circles
+function rangeImpact(pos, what) {
+  const R = RANGE; if (!R.on) return; const d = Math.hypot(pos.x - R.cx, pos.z - R.cz); if (d > 500) return;
+  const pts = d < 3.5 ? 400 : d < 10 ? 250 : d < 25 ? 120 : d < 50 ? 50 : 0;
+  if (R.best == null || d < R.best) R.best = d;
+  G.stats.score += pts; msg(`${what} ${d < 3.5 ? 'bullseye!' : Math.round(d) + ' m from the centre'}${pts ? `  +${pts}` : ''}`, pts >= 250 ? 'good' : 'info', 3);
 }
 function updateGroundWar(dt) {
   if (!GW.active) return;
@@ -3206,7 +3442,7 @@ function updateGroundWar(dt) {
     if (u.tur && G.player) { _a.subVectors(G.player.pos, u.pos); const yaw = Math.atan2(-_a.x, -_a.z) - u.hdg; u.tur.rotation.y = yaw; if (u.el) u.el.rotation.x = clamp(Math.atan2(_a.y, Math.hypot(_a.x, _a.z)), 0, 1.4); }
   }
   if (GW.ship) updateShip(GW.ship, dt);
-  updateTrain(dt);
+  updateTrain(dt); updateRange(dt);
   updateFlak(dt); updateBombs(dt);
   // flying into the battleship ends badly
   if (GW.ship) for (const p of G.planes) if (!p.gone && !p.remote && p.alive && insideShip(GW.ship, p.pos, 1)) crash(p, 'hit the battleship');
@@ -3227,6 +3463,7 @@ function missionObjective(m, dt) {
   // naval / ground / train: fighters come to defend the target now and then
   if (m.next != null) { m.next -= dt; if (m.next <= 0) { m.next = null; m.escortsLeft--; spawnEscorts(2, (m.kind === 'naval' ? (GW.ship ? GW.ship.pos : GW.center) : m.kind === 'train' && GW.train[0] ? GW.train[0].pos : GW.gc).clone().setY(1400), 'Enemy fighters scrambled to defend the target'); } }
   else if (m.escortsLeft > 0 && mRaiders(m).length === 0) m.next = 45;
+  if (m.kind === 'range') { if (RANGE.on && RANGE.t <= 0 && m.phase === 'combat') { m.phase = 'rtb'; msg('The range is closed. Land at the airfield', 'good', 6); } return; }
   if (m.kind === 'train') {
     if (!GW.train.some(u => u.ammo && u.alive)) { m.phase = 'rtb'; if (!NET.on || m.local) msg('Every ammunition wagon is gone. Return to base and land', 'good', 6); }
     else if (RAIL && GW.trainS >= RAIL.len - 45) { m.phase = 'over'; m.endT = 4; m.cause = 'let the ammunition train reach the depot'; m.trainLost = true; if (!NET.on || m.local) msg('The train reached the depot. Mission failed', 'danger', 6); }
@@ -3239,6 +3476,7 @@ function missionObjective(m, dt) {
 function missionLine(m) {
   if (m.kind === 'naval') return GW.ship && GW.ship.alive ? `Sink the battleship · ${Math.max(0, Math.round(GW.ship.hp / GW.ship.max * 100))}% afloat` : 'Battleship sinking';
   if (m.kind === 'ground') { const left = GW.units.filter(u => !u.optional && u.alive).length; return `Destroy the convoy and depot · ${left} of ${m.targetsTotal} targets left`; }
+  if (m.kind === 'range') { const R = RANGE; return R.on ? `Gunnery range · sleeve hits ${R.hits} · boards ${R.boardHits} · best drop ${R.best == null ? '—' : Math.round(R.best) + ' m'} · ${fmtTime(Math.max(0, R.t))} left` : ''; }
   if (m.kind === 'train') { const left = GW.train.filter(u => u.ammo && u.alive).length; return `Stop the ammunition train · ${left} of ${m.targetsTotal || 6} wagons left · ${RAIL ? Math.max(0, (RAIL.len - GW.trainS) / 1000).toFixed(1) : '?'} km to the depot`; }
   if (m.kind === 'dogfight') { const n = mRaiders(m).length; return m.next != null ? `Wave ${m.wave + 1} of ${WAVES.length} inbound in ${Math.ceil(m.next)} s` : `Wave ${m.wave} of ${WAVES.length} · ${n} bandit${n === 1 ? '' : 's'} left`; }
   if (m.kind === 'intercept') { const n = G.planes.filter(p => p.bomber && p.alive && !p.gone && !p.remote).length; return m.next != null ? `Bombers inbound in ${Math.ceil(m.next)} s · town hit ${GW.townRuns || 0} of ${TOWN_LIMIT}` : `Stop the bombers · ${n} inbound · town hit ${GW.townRuns || 0} of ${TOWN_LIMIT}`; }
@@ -3250,6 +3488,7 @@ function objectivePos(kind) {
   if (m.kind === 'dogfight' && NET.on) { const r = raidersOf('dogfight')[0]; return r ? _e.copy(r.pos) : null; }
   if (m.kind === 'naval' && GW.ship && GW.ship.alive) return _e.copy(GW.ship.pos).setY(12);
   if (m.kind === 'ground') { const u = GW.units.find(u => u.alive && !u.optional); return u ? _e.copy(u.pos).setY(u.pos.y + 6) : null; }
+  if (m.kind === 'range') return RANGE.on && RANGE.alive ? _e.copy(RANGE.spos) : RANGE.on ? _e.set(RANGE.cx, RANGE.cy + 10, RANGE.cz) : null;
   if (m.kind === 'train') { const u = GW.train.find(u => u.alive && u.ammo); return u ? _e.copy(u.pos).setY(u.pos.y + 7) : null; }
   if (m.kind === 'intercept') { const b = G.planes.find(p => p.bomber && p.alive && !p.gone && !p.remote); return b ? _e.copy(b.pos) : _e.set(TOWN.x, 200, TOWN.z); }
   return null;
@@ -3294,6 +3533,7 @@ function dropKind(kind, won) {
 }
 function netMissionStart(kind) {
   if (!NET.on || NET.opts.mode !== 'coop' || NET.seat == null) return;
+  if (MISSIONS[kind] && MISSIONS[kind].local) kind = 'free'; // the range is single player
   if (!MISSIONS[kind]) { netMissionLeave(); return; }
   const r = NM.kinds[kind];
   if (NM.mine === kind) return;
@@ -3514,6 +3754,7 @@ function updateRockets(dt) {
     if (!boom && r.age > 7) boom = 'missile';
     if (!boom) continue;
     explosion(r.pos, _ZERO, 0.7, boom);
+    if (!r.vis && boom === 'ground' && r.owner && r.owner.player) rangeImpact(r.pos, 'Rocket');
     if (!r.vis) {
       if (hit) hitPart(hit, 'fuse', 85, r.owner);
       blastDamage(r.pos, 14, 140, r.owner);
@@ -3957,7 +4198,7 @@ function startMission(mode) {
     if (cm) { G.mission.camp = CAMP.i; msg(`Mission ${CAMP.i + 1} · ${cm.title}: ${cm.brief}`, 'info', 9); }
     setupMission(G.mission);
     const k = G.mission.kind;
-    if (mode !== 'sortie') { if (k !== 'dogfight') G.mission.next = k === 'intercept' ? 6 : 30; msg(k === 'dogfight' ? 'Bandits inbound from the sea' : k === 'naval' ? 'Battleship off the coast · bomb it until it sinks (B to drop)' : k === 'train' ? 'Ammunition train in the river valley · rockets (K) and bombs (B)' : k === 'ground' ? 'Convoy and depot inland · bomb and strafe them (B to drop)' : 'Bombers heading for the town · stop them', 'info', 5); }
+    if (mode !== 'sortie') { if (k !== 'dogfight') G.mission.next = k === 'intercept' ? 6 : 30; msg(k === 'dogfight' ? 'Bandits inbound from the sea' : k === 'naval' ? 'Battleship off the coast · bomb it until it sinks (B to drop)' : k === 'train' ? 'Ammunition train in the river valley · rockets (K) and bombs (B)' : k === 'range' ? 'Gunnery range west of the airfield · shoot the sleeve, bomb the circles, strafe the boards' : k === 'ground' ? 'Convoy and depot inland · bomb and strafe them (B to drop)' : 'Bombers heading for the town · stop them', 'info', 5); }
     else if (k !== 'dogfight') msg(`${MISSIONS[k].name}: take off first`, 'info', 6);
     spawnWingmen(cm ? cm.wingmen || 0 : Number(settings.wingmen) || 0);
   } else {
@@ -4323,7 +4564,7 @@ function endMission(success) {
   const kind = m.kind || 'dogfight', mname = MISSIONS[kind].name;
   $('dbEyebrow').textContent = `${mname} · ${SPECS[settings.plane].full} · ${m.mode === 'sortie' ? 'full sortie' : 'quick start'}`;
   $('dbTitle').textContent = !pl.alive ? 'Shot down' : m.townLost ? 'The town was bombed' : m.trainLost ? 'The train got through' : success ? 'Mission complete' : m.belly ? 'Down safe, aircraft damaged' : 'Mission ended';
-  const goal = kind === 'naval' ? 'The battleship sunk' : kind === 'ground' ? 'The convoy and depot destroyed' : kind === 'train' ? 'The ammunition train stopped' : kind === 'intercept' ? 'The town kept safe' : `All ${WAVES.length} wave${WAVES.length === 1 ? '' : 's'} beaten`;
+  const goal = kind === 'range' ? `Range practice done: ${RANGE.hits || 0} sleeve hits,` : kind === 'naval' ? 'The battleship sunk' : kind === 'ground' ? 'The convoy and depot destroyed' : kind === 'train' ? 'The ammunition train stopped' : kind === 'intercept' ? 'The town kept safe' : `All ${WAVES.length} wave${WAVES.length === 1 ? '' : 's'} beaten`;
   $('dbLede').textContent = m.townLost ? `${TOWN_LIMIT} bombers got through to the town. You shot down ${st.kills}.` : !pl.alive ? `You ${m.cause || 'went down'} with ${st.kills} kill${st.kills === 1 ? '' : 's'}${st.ground ? ` and ${st.ground} ground target${st.ground === 1 ? '' : 's'}` : ''} to your name.` : success ? `${goal} and the aircraft back on the airfield.` : `${st.kills} kill${st.kills === 1 ? '' : 's'} before the sortie ended.`;
   $('dbGrade').textContent = grade;
   const cells = [['Score', total], kind === 'naval' || kind === 'ground' || kind === 'train' ? ['Targets destroyed', st.ground || 0] : ['Kills', `${st.kills}${st.killList.includes('Ace') ? ' · ace' : ''}`], ['Accuracy', `${(acc * 100).toFixed(1)}%`], ['Rounds fired', st.shots], ['Damage taken', Math.round(st.dmgTaken)], ['Flight time', fmtTime(G.time)], ['Landing', landTxt], ['Bonus', `+${landing + survive + accB}`]];
@@ -4363,11 +4604,12 @@ addEventListener('keydown', e => {
     else if (e.code === 'KeyB' && G.player && !G.player.onGround) dropPlayerBomb();
     else if (e.code === 'KeyX' || e.code === 'Enter') firePlayerMissile(); else if (e.code === 'KeyF') playerFlares(); else if (e.code === 'KeyM') cycleMap();
     else if (e.code === 'KeyK') firePlayerRockets(); else if (e.code === 'KeyJ') bailOut();
-    else if (e.code === 'KeyL') toggleAltLock(); else if (e.code === 'KeyO') toggleForm();
+    else if (e.code === 'KeyL') toggleAltLock(); else if (e.code === 'KeyO') toggleForm(); else if (e.code === 'KeyN') openBigMap(); else if (e.code === 'KeyI') toggleRoute();
     else if (e.code === 'KeyT') wingCommand('attack'); else if (e.code === 'KeyY') wingCommand('cover'); else if (e.code === 'KeyU') wingCommand('ground');
     else if (e.code === 'Escape' || e.code === 'KeyP' || e.code === 'KeyH') pause(true);
     else if (/^Digit[0-9]$/.test(e.code) && G.player) { const d = +e.code.slice(5); G.player.throttle = d === 0 ? 1 : d / 10; }
   } else if (G.state === 'paused' && (e.code === 'Escape' || e.code === 'KeyP')) pause(false);
+  else if (G.state === 'bigmap' && (e.code === 'Escape' || e.code === 'KeyN')) closeBigMap();
 });
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => { keys.clear(); mouseFire = false; touch.fire = false; touch.boost = false; touch.rud = 0; if (G.state === 'play') pause(true); });
@@ -4434,9 +4676,10 @@ $('tBomb').addEventListener('pointerdown', e => { e.preventDefault(); dropPlayer
 $('tRkt').addEventListener('pointerdown', e => { e.preventDefault(); firePlayerRockets(); });
 $('tAlt').addEventListener('pointerdown', e => { e.preventDefault(); toggleAltLock(); });
 $('tForm').addEventListener('pointerdown', e => { e.preventDefault(); toggleForm(); });
+$('tRoute').addEventListener('pointerdown', e => { e.preventDefault(); toggleRoute(); });
 $('tWing').addEventListener('pointerdown', e => { e.preventDefault(); cycleWing(); });
 $('tBail').addEventListener('pointerdown', e => { e.preventDefault(); if (G.player && G.player.alive && !G.bailWin) G.bailArm = Math.max(G.bailArm || 0, 0.01); bailOut(); });
-$('tMap').addEventListener('click', () => cycleMap());
+$('tMap').addEventListener('click', () => openBigMap()); // the corner map's style is chosen on the big map
 function cycleMap() {
   const order = ['radar', 'sector', 'off']; settings.map = order[(order.indexOf(settings.map) + 1) % 3]; saveSettings();
   $('optMap').value = $('setMap').value = settings.map;
@@ -4506,6 +4749,12 @@ function playerControl(dt) {
   p.boosting = wantBoost && p.throttle >= 0.99 && p.wep > 0.02 && p.engineOn;
   p.wep = p.spec.jet ? 1 : p.boosting ? Math.max(0, p.wep - dt / 18) : Math.min(1, p.wep + dt / (p.throttle < 0.9 ? 30 : 60));
   $('tThr').classList.toggle('boost', p.boosting);
+  // ROUTE: the autopilot flies the waypoints you set on the big map until you take the stick
+  const grabbed = kx || ky || Math.abs(touch.sx) > 0.3 || Math.abs(touch.sy) > 0.3;
+  if (G.route.on) {
+    if (!p.alive || p.onGround || grabbed) { G.route.on = false; msg(grabbed ? 'You have control · ROUTE flies it again' : 'Route off', 'info', 2.5); }
+    else if (routeFly(p, dt)) { if (kz) p.inp.yaw = clamp(p.inp.yaw + kz, -1, 1); return; }
+  }
   // FORM: the aircraft flies itself onto a friend's wing until you take the stick
   if (G.form) {
     const L = G.form, grab = kx || ky || Math.abs(touch.sx) > 0.3 || Math.abs(touch.sy) > 0.3 || (settings.control === 'tilt' && touch.tilt && touch.tiltRef && Math.abs(touch.tilt.roll - touch.tiltRef.roll) > 12);
@@ -4570,6 +4819,77 @@ function formFly(p, dt, L) {
   p.boosting = dd > 250 && ahead < 0 && p.wep > 0.1 && p.engineOn && p.throttle >= 0.99; // catch up
   G.aimYaw = Math.atan2(-p.fwd.x, -p.fwd.z); G.aimPitch = Math.asin(clamp(p.fwd.y, -1, 1));
 }
+function routeTarget() { const r = G.route; return r.wps.length && r.i < r.wps.length ? r.wps[r.i] : null; }
+function routeFly(p, dt) {
+  const wp = routeTarget(); if (!wp) { G.route.on = false; return false; }
+  const dx = wp.x - p.pos.x, dz = wp.z - p.pos.z, d = Math.hypot(dx, dz);
+  if (d < 450) {
+    G.route.i++;
+    if (G.route.i >= G.route.wps.length) { G.route.on = false; msg('Last waypoint reached · you have control', 'good', 3.5); return false; }
+    msg(`Waypoint ${G.route.i} reached · on to ${G.route.i + 1}`, 'good', 2.5); return routeFly(p, dt);
+  }
+  // hold the height you set off at, but keep 250 m over the ground ahead
+  let floor = 0; for (let t = 0; t <= 4; t++) { const fx = p.pos.x + dx / d * t * 600, fz = p.pos.z + dz / d * t * 600; floor = Math.max(floor, groundH(fx, fz), waterLevelAt(fx, fz)); }
+  const alt = Math.max(G.route.alt, floor + 250);
+  _dir.set(dx / d, clamp((alt - p.pos.y) * 0.004, -0.25, 0.3), dz / d).normalize();
+  steerTo(p, _dir, p.inp, 0.75);
+  G.aimYaw = Math.atan2(-p.fwd.x, -p.fwd.z); G.aimPitch = Math.asin(clamp(p.fwd.y, -1, 1));
+  return true;
+}
+function toggleRoute() {
+  const p = G.player, r = G.route; if (!p || !p.alive || p.onGround || G.state !== 'play') return;
+  if (r.on) { r.on = false; msg('Route off · you have control', 'info', 2); return; }
+  if (!r.wps.length) { msg(`No route · open the map (${isTouch ? 'MAP' : 'N'}) and tap to add waypoints`, 'warn', 3); return; }
+  if (r.i >= r.wps.length) r.i = 0;
+  r.on = true; r.alt = Math.max(p.pos.y, 500); G.form = null;
+  msg(`Flying the route to waypoint ${r.i + 1} · move the stick to take over`, 'good', 3);
+}
+// ---- the big map: the whole world, where everyone is, and waypoints you tap in
+let bmS = 600;
+function openBigMap() {
+  if (G.state !== 'play' || !mapCanvas) return;
+  G.state = 'bigmap'; if (document.pointerLockElement) document.exitPointerLock();
+  const c = $('bmCanvas'), dpr = Math.min(devicePixelRatio || 1, 2);
+  // on a short landscape screen (a phone) the buttons go beside the map instead of under it
+  const side = innerWidth > innerHeight && innerHeight < 620; document.querySelector('.mapbox').classList.toggle('side', side);
+  bmS = Math.max(200, Math.floor(side ? Math.min(innerHeight - 36, innerWidth - 300) : Math.min(innerWidth - 32, innerHeight - (innerWidth > innerHeight ? 150 : 210))));
+  c.style.width = c.style.height = bmS + 'px'; c.width = c.height = Math.round(bmS * dpr);
+  $('bmCorner').textContent = `Corner map: ${{ radar: 'radar', sector: 'sector', off: 'off' }[settings.map]}`;
+  showScreen('bigmap'); $('touch').hidden = true; drawBigMap();
+}
+function closeBigMap() { if (G.state !== 'bigmap') return; G.state = 'play'; showScreen(null); $('touch').hidden = !isTouch; last = performance.now(); }
+function drawBigMap() {
+  const c = $('bmCanvas'), x = c.getContext('2d'), S = c.width, k = S / bmS, sc = S / OSIZE, toM = (wx, wz) => [(wx + OUT) * sc, (wz + OUT) * sc];
+  x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(mapCanvas, 0, 0, S, S);
+  x.strokeStyle = 'rgba(241,232,210,0.12)'; x.lineWidth = 1; for (let g = -OUT + 4000; g < OUT; g += 4000) { const [a] = toM(g, 0); x.beginPath(); x.moveTo(a, 0); x.lineTo(a, S); x.moveTo(0, a); x.lineTo(S, a); x.stroke(); }
+  const label = (t, wx, wz, col = '#f1e8d2', size = 11) => { const [a, b] = toM(wx, wz); x.font = `700 ${size * k}px ${COND}`; x.textAlign = 'center'; x.fillStyle = 'rgba(10,12,10,0.7)'; x.fillText(t, a + k, b + k); x.fillStyle = col; x.fillText(t, a, b); };
+  label('ARCTIC', -6000, -27000, '#e8eef2', 13); label('DESERT', -6000, 27500, '#f0d9a8', 13); label('MOUNTAINS', -25000, 3000, '#e8e4dc', 13); label('ISLANDS', 20000, 14000, '#c8f0c0', 13); label('SEA', 12000, -2000, '#bfe0ee', 13);
+  const [ax, az] = toM(AF.x, AF.z); x.fillStyle = '#f1e8d2'; x.fillRect(ax - 2 * k, az - AF.len * sc / 2, 4 * k, Math.max(6 * k, AF.len * sc)); label('AIRFIELD', AF.x + 2200, AF.z + 600);
+  label('TOWN', TOWN.x, TOWN.z - 900);
+  if (GW.active) { x.fillStyle = '#e2553f'; for (const u of allUnits()) if (u.alive) { const [a, b] = toM(u.pos.x, u.pos.z); x.fillRect(a - 2 * k, b - 2 * k, 4 * k, 4 * k); } if (GW.ship && GW.ship.alive) { const [a, b] = toM(GW.ship.pos.x, GW.ship.pos.z); x.fillRect(a - 4 * k, b - 4 * k, 8 * k, 8 * k); } }
+  const p = G.player;
+  for (const e of G.planes) { if (!e.alive || e.gone) continue; const [a, b] = toM(e.pos.x, e.pos.z); const col = e === p ? '#eaa53c' : p && !hostile(e, p) ? '#97c46f' : '#e2553f'; x.save(); x.translate(a, b); x.rotate(Math.atan2(e.fwd.x, -e.fwd.z)); const r = (e === p ? 7 : 5) * k; x.fillStyle = col; x.beginPath(); x.moveTo(0, -r * 1.3); x.lineTo(r, r); x.lineTo(0, r * 0.45); x.lineTo(-r, r); x.closePath(); x.fill(); x.restore(); }
+  // the route
+  const r = G.route; if (r.wps.length) {
+    x.strokeStyle = '#5fd3e8'; x.lineWidth = 2 * k; x.setLineDash([6 * k, 5 * k]); x.beginPath();
+    if (p) { const [a, b] = toM(p.pos.x, p.pos.z); x.moveTo(a, b); }
+    r.wps.forEach((w, i) => { if (i < r.i && r.on) return; const [a, b] = toM(w.x, w.z); x.lineTo(a, b); }); x.stroke(); x.setLineDash([]);
+    r.wps.forEach((w, i) => { const [a, b] = toM(w.x, w.z); x.fillStyle = i === r.i ? '#5fd3e8' : 'rgba(95,211,232,0.6)'; x.beginPath(); x.arc(a, b, 9 * k, 0, 6.283); x.fill(); x.fillStyle = '#0d1a1e'; x.font = `700 ${11 * k}px ${COND}`; x.textAlign = 'center'; x.fillText(String(i + 1), a, b + 4 * k); });
+  }
+  $('bmInfo').textContent = r.wps.length ? `${r.wps.length} waypoint${r.wps.length === 1 ? '' : 's'} · tap the map to add (up to 6), tap one to remove it` : 'Tap the map to set waypoints, then Fly route: the autopilot flies them until you move the stick.';
+  $('bmFly').disabled = !r.wps.length;
+}
+$('bmCanvas').addEventListener('pointerdown', e => {
+  e.preventDefault(); const c = $('bmCanvas'), rc = c.getBoundingClientRect();
+  const wx = (e.clientX - rc.left) / rc.width * OSIZE - OUT, wz = (e.clientY - rc.top) / rc.height * OSIZE - OUT, near = OSIZE / rc.width * 14, r = G.route;
+  const hit = r.wps.findIndex(w => Math.hypot(w.x - wx, w.z - wz) < near);
+  if (hit >= 0) r.wps.splice(hit, 1); else if (r.wps.length < 6) r.wps.push({ x: clamp(wx, -COMBAT, COMBAT), z: clamp(wz, -COMBAT, COMBAT) });
+  r.on = false; r.i = 0; drawBigMap();
+});
+$('bmFly').addEventListener('click', () => { closeBigMap(); G.route.i = 0; G.route.on = false; toggleRoute(); });
+$('bmClear').addEventListener('click', () => { G.route.wps = []; G.route.on = false; G.route.i = 0; drawBigMap(); });
+$('bmCorner').addEventListener('click', () => { cycleMap(); $('bmCorner').textContent = `Corner map: ${settings.map}`; });
+$('bmClose').addEventListener('click', closeBigMap);
 function toggleAltLock() {
   const p = G.player; if (!p || !p.alive || p.onGround || G.state !== 'play') return;
   if (G.altLock != null) { G.altLock = null; msg('Altitude lock off', 'info', 2); }
@@ -4852,6 +5172,12 @@ function drawHUD(rdt) {
       for (const [dx, dy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { hx.moveTo(s.x + dx * sz, s.y + dy * sz * 0.6); hx.lineTo(s.x + dx * sz, s.y + dy * sz); hx.lineTo(s.x + dx * sz * 0.6, s.y + dy * sz); } hx.stroke();
       if (e.alive && e.label) txt(friend ? `${e.label} · ${Math.round(e.pos.y)} m` : e.label, s.x, s.y - sz - 6, 11, col, 'center', COND, 600);
       if (e.alive) txt(`${d < 1000 ? `${Math.round(d)} m` : `${(d / 1000).toFixed(1)} km`} ${altTxt}`, s.x, s.y + sz + 14, 11, col, 'center');
+      // your gunner's and your wingmen's targets
+      if (e.alive && !friend) {
+        const tags = []; if (p.gunTgt === e && p.gunTgtT > G.time) tags.push('GUNNER');
+        for (const w of WING.list) if (w.alive && !w.gone && w.brain && w.brain.engaged === e) tags.push(w.label.toUpperCase());
+        if (tags.length) { hx.strokeStyle = '#97c46f'; hx.lineWidth = 1.5; hx.setLineDash([3, 3]); hx.beginPath(); hx.arc(s.x, s.y, sz + 6, 0, 6.283); hx.stroke(); hx.setLineDash([]); txt('◆ ' + tags.join(' · '), s.x, s.y + sz + 28, 10, '#97c46f', 'center', COND, 700); }
+      }
       if (e.alive && (!friend || fair) && d < 1500 && p.fwd.dot(_b.subVectors(e.pos, p.pos).normalize()) > 0.75 && d < leadD) { lead = e; leadD = d; }
     } else if (e.alive) {
       // off screen: an arrow at the edge pointing at it (green for friends, with their name and height)
@@ -4883,6 +5209,10 @@ function drawHUD(rdt) {
       else { _a.copy(op).applyMatrix4(camera.matrixWorldInverse); let ax = _a.x, ay = -_a.y; if (_a.z > 0) { ax = -ax; ay = -ay; } const ang = Math.atan2(ay, ax), x = HW / 2 + Math.cos(ang) * (HW / 2 - 60), y = HH / 2 + Math.sin(ang) * (HH / 2 - 70); hx.save(); hx.translate(x, y); hx.rotate(ang); hx.fillStyle = '#f2c14e'; hx.beginPath(); hx.moveTo(14, 0); hx.lineTo(-6, -9); hx.lineTo(-1, 0); hx.lineTo(-6, 9); hx.fill(); hx.restore(); txt(`${(od / 1000).toFixed(1)} km`, x - Math.cos(ang) * 24, y - Math.sin(ang) * 24 + 4, 10, '#f2c14e', 'center'); }
     }
   }
+  if (needHome(p) && Math.hypot(p.pos.x - AF.x, p.pos.z - AF.z) > 1500) worldMarker(p, _f.set(AF.x, AF.h + 30, AF.z), '#97c46f', 'HOME');
+  { const wp = routeTarget(); if (wp) worldMarker(p, _f.set(wp.x, Math.max(groundH(wp.x, wp.z) + 20, p.pos.y), wp.z), '#5fd3e8', `WP${G.route.i + 1}`); }
+  if (!p.gear && !p.onGround && p.agl() < 160 && Math.hypot(p.pos.x - AF.x, p.pos.z - AF.z) < 3500 && p.V < 75) txt(`GEAR UP · ${isTouch ? 'TAP GEAR' : 'PRESS G'} TO LAND`, HW / 2, HH * 0.58, 14, '#ff6a4d', 'center', COND, 800);
+  drawLanding(p);
   // bomb sight: where a bomb released now would land
   if (p.bombs > 0 && !p.onGround) {
     const im = bombImpact(p);
@@ -4924,16 +5254,13 @@ function drawHUD(rdt) {
   hx.globalAlpha = 1; G.popups = G.popups.filter(x => x.t > 0);
   if (G.rearmT > 0) txt(`REARMING · ${Math.ceil(3 - G.rearmT)}`, HW / 2, HH * 0.4, 20, '#97c46f', 'center', COND, 700);
   const m = G.mission;
-  if (m && (m.phase === 'rtb' || (m.phase === 'combat' && p.fuel < 40))) {
-    const af = _a.set(AF.x, AF.h + 20, AF.z + AF.len * 0.45); const s = proj(af); const d = af.distanceTo(p.pos);
-    if (s.ok) { hx.strokeStyle = '#97c46f'; hx.lineWidth = 2; hx.strokeRect(s.x - 10, s.y - 10, 20, 20); txt(`BASE ${(d / 1000).toFixed(1)} km`, s.x, s.y + 26, 11, '#97c46f', 'center'); }
-  }
   // objective, score
   const obj = !m ? '' : NET.on && !m.local ? netObjective() : m.phase === 'takeoff' ? liftOffText() : m.phase === 'combat' && m.kind && m.kind !== 'dogfight' ? missionLine(m) : !p.alive && G.chute && G.chute.who === p ? 'Bailed out · wait to be picked up' : m.phase === 'combat' ? (m.next !== null ? `Wave ${m.wave + 1} inbound in ${Math.ceil(m.next)} s` : `Wave ${m.wave} of ${WAVES.length} · ${enemies().length} bandit${enemies().length === 1 ? '' : 's'} remaining`) : m.phase === 'rtb' ? 'Return to base and land on the runway' : m.phase === 'landed' ? 'Landed' : '';
-  txt(obj.toUpperCase(), HW / 2, safeT + 18, isTouch ? 13 : 15, '#f1e8d2', 'center', COND, 600);
+  drawCompass(p, isTouch && !TABLET ? HW / 2 - 30 : HW / 2, safeT, Math.min(isTouch ? (TABLET ? 300 : 220) : 380, HW * 0.36));
+  txt(obj.toUpperCase(), HW / 2, safeT + 40, isTouch ? 13 : 15, '#f1e8d2', 'center', COND, 600);
   // a named ace in the air: name and how much of the aircraft is left
   const bp = G.planes.find(e => e.boss && e.alive && !e.gone);
-  if (bp) { const B = BOSSES[bp.boss], f = bossHealth(bp), w = 200, x0 = HW / 2 - w / 2, y0 = safeT + 30; hx.fillStyle = 'rgba(20,20,18,0.55)'; hx.fillRect(x0 - 2, y0 - 2, w + 4, 9); hx.fillStyle = bp.lastStand ? '#ff6a4d' : '#e2553f'; hx.fillRect(x0, y0, w * f, 5); txt(`${B.name.toUpperCase()} · ${B.call.toUpperCase()}`, HW / 2, y0 + 20, 11, '#ff8a6d', 'center', COND, 700); }
+  if (bp) { const B = BOSSES[bp.boss], f = bossHealth(bp), w = 200, x0 = HW / 2 - w / 2, y0 = safeT + 50; hx.fillStyle = 'rgba(20,20,18,0.55)'; hx.fillRect(x0 - 2, y0 - 2, w + 4, 9); hx.fillStyle = bp.lastStand ? '#ff6a4d' : '#e2553f'; hx.fillRect(x0, y0, w * f, 5); txt(`${B.name.toUpperCase()} · ${B.call.toUpperCase()}`, HW / 2, y0 + 20, 11, '#ff8a6d', 'center', COND, 700); }
   // your wingmen's orders
   if (G.altLock != null || G.form) txt(G.form ? `FORMATION ON ${(G.form.label || 'WINGMAN').toUpperCase()}${isTouch ? '' : ' · O'}` : `ALT LOCK ${G.altLock} M${isTouch ? '' : ' · L'}`, HW / 2, HH - (isTouch ? 184 : 144), 11, '#eaa53c', 'center', COND, 700);
   const wl = wingAlive(); if (wl.length) txt(`WINGMEN ${wl.length} · ${WING_CMDS[WING.cmd].toUpperCase()}${isTouch ? '' : ' · T Y U'}`, HW / 2, HH - (isTouch ? 168 : 128), 11, '#97c46f', 'center', COND, 600);
@@ -4992,6 +5319,65 @@ function drawHUD(rdt) {
     hx.globalAlpha = 0.95; hx.drawImage(gaugeCanvas, (HW - gw) / 2, HH - gh - (isTouch ? 44 : 8), gw, gh); hx.globalAlpha = 1;
   }
 }
+// ---- navigation: a heading tape, the way home, waypoints
+const bearingTo = (p, x, z) => (Math.atan2(x - p.pos.x, -(z - p.pos.z)) * 57.2958 + 360) % 360;
+function drawCompass(p, cx, y, w) {
+  const hdg = (Math.atan2(p.fwd.x, -p.fwd.z) * 57.2958 + 360) % 360, k = w / 100; // 100° across the tape
+  hx.save(); hx.fillStyle = 'rgba(14,16,12,0.38)'; hx.fillRect(cx - w / 2, y, w, 22); hx.beginPath(); hx.rect(cx - w / 2, y, w, 26); hx.clip();
+  hx.strokeStyle = 'rgba(241,232,210,0.75)'; hx.lineWidth = 1;
+  for (let a = Math.ceil((hdg - 55) / 5) * 5; a <= hdg + 55; a += 5) {
+    const x = cx + (a - hdg) * k, aa = ((a % 360) + 360) % 360;
+    hx.beginPath(); hx.moveTo(x, y + 22); hx.lineTo(x, y + (aa % 15 === 0 ? 14 : 18)); hx.stroke();
+    if (aa % 45 === 0) txt(['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][aa / 45], x, y + 12, 11, aa === 0 ? '#eaa53c' : '#f1e8d2', 'center', COND, 700);
+    else if (aa % 15 === 0) txt(String(aa), x, y + 11, 9, 'rgba(241,232,210,0.8)', 'center');
+  }
+  // where things are: home (green), the objective (gold), your next waypoint (cyan)
+  const mark = (b, col, label) => { let d = ((b - hdg + 540) % 360) - 180; const off = Math.abs(d) > 50; d = clamp(d, -50, 50); const x = cx + d * k; hx.fillStyle = col; hx.beginPath(); hx.moveTo(x, y + 22); hx.lineTo(x - 5, y + 28); hx.lineTo(x + 5, y + 28); hx.fill(); if (!off) txt(label, x, y + 38, 9, col, 'center', COND, 700); };
+  hx.restore(); hx.save();
+  mark(bearingTo(p, AF.x, AF.z), '#97c46f', 'HOME');
+  const op = NET.on && !(G.mission && G.mission.local) ? netObjectivePos() : objectivePos(); if (op) mark(bearingTo(p, op.x, op.z), '#f2c14e', 'OBJ');
+  const wp = routeTarget(); if (wp) mark(bearingTo(p, wp.x, wp.z), '#5fd3e8', 'WP' + (G.route.i + 1));
+  hx.restore();
+  hx.fillStyle = 'rgba(14,16,12,0.85)'; hx.fillRect(cx - 20, y + 22, 40, 15); hx.strokeStyle = '#eaa53c'; hx.strokeRect(cx - 20, y + 22, 40, 15);
+  txt(String(Math.round(hdg) % 360).padStart(3, '0'), cx, y + 34, 11, '#eaa53c', 'center');
+}
+// a marker in the world: a diamond with a label when it is on screen, an arrow at the edge when it isn't
+function worldMarker(p, pos, col, label) {
+  const s2 = proj(pos), d = pos.distanceTo(p.pos);
+  if (s2.ok && s2.x > 0 && s2.x < HW && s2.y > 0 && s2.y < HH) { hx.strokeStyle = col; hx.lineWidth = 2; hx.beginPath(); hx.moveTo(s2.x, s2.y - 10); hx.lineTo(s2.x + 8, s2.y); hx.lineTo(s2.x, s2.y + 10); hx.lineTo(s2.x - 8, s2.y); hx.closePath(); hx.stroke(); txt(`${label} ${(d / 1000).toFixed(1)} km`, s2.x, s2.y + 24, 11, col, 'center', COND, 700); return; }
+  _a.copy(pos).applyMatrix4(camera.matrixWorldInverse); let ax = _a.x, ay = -_a.y; if (_a.z > 0) { ax = -ax; ay = -ay; }
+  const ang = Math.atan2(ay, ax), x = HW / 2 + Math.cos(ang) * (HW / 2 - 70), y = HH / 2 + Math.sin(ang) * (HH / 2 - 84);
+  hx.save(); hx.translate(x, y); hx.rotate(ang); hx.fillStyle = col; hx.beginPath(); hx.moveTo(13, 0); hx.lineTo(-6, -8); hx.lineTo(-1, 0); hx.lineTo(-6, 8); hx.fill(); hx.restore();
+  txt(`${label} ${(d / 1000).toFixed(1)}`, x - Math.cos(ang) * 26, y - Math.sin(ang) * 26 + 4, 10, col, 'center', COND, 700);
+}
+// the way home shows when you need it: heading back to land, short of fuel, damaged, or setting up to land
+function needHome(p) {
+  const m = G.mission; const d = Math.hypot(p.pos.x - AF.x, p.pos.z - AF.z);
+  return (m && m.phase === 'rtb') || p.fuel < p.spec.fuel * 0.3 || playerInTrouble(p) || (p.gear && d < 9000) || (p.ammo && Object.values(p.ammo).every(v => v <= 0));
+}
+// ---- landing: the runway outlined, gates down a 3.5° glide path, and how you are doing
+const _lg = new V3();
+function drawLanding(p) {
+  const d = Math.hypot(p.pos.x - AF.x, p.pos.z - AF.z), agl = p.pos.y - AF.h;
+  if (!p.gear || p.onGround || d > 7500 || agl > 1000) return;
+  const north = p.fwd.z < 0, dir = north ? 1 : -1, zT = AF.z + dir * (AF.len / 2 - 160); // touchdown zone at the near end
+  const quad = (pts, col, wdt) => { const s2 = pts.map(q => proj(_lg.set(q[0], q[1], q[2]))); if (s2.some(q => !q.ok)) return; hx.strokeStyle = col; hx.lineWidth = wdt; hx.beginPath(); s2.forEach((q, i) => i ? hx.lineTo(q.x, q.y) : hx.moveTo(q.x, q.y)); hx.closePath(); hx.stroke(); };
+  const W = AF.wid / 2, L = AF.len / 2, y0 = AF.h + 0.4;
+  quad([[AF.x - W, y0, AF.z - L], [AF.x + W, y0, AF.z - L], [AF.x + W, y0, AF.z + L], [AF.x - W, y0, AF.z + L]], 'rgba(151,196,111,0.9)', 2);
+  const along = (p.pos.z - zT) * dir, slope = Math.tan(3.5 * Math.PI / 180);
+  for (let g = 500; g <= 4500; g += 500) {
+    if (g > along + 200 || g < along - 2500) continue;
+    const gz = zT + dir * g, gy = AF.h + 4 + g * slope, a = clamp(1 - Math.abs(g - along) / 2500, 0.25, 1);
+    quad([[AF.x - 35, gy - 18, gz], [AF.x + 35, gy - 18, gz], [AF.x + 35, gy + 18, gz], [AF.x - 35, gy + 18, gz]], `rgba(151,196,111,${a})`, 1.5);
+  }
+  if (along < 0 || along > 6000) return;
+  const ideal = AF.h + 4 + along * slope, dh = p.pos.y - ideal, lat = (p.pos.x - AF.x) * (north ? 1 : -1);
+  const vs = p.stallSpeed() * 1.3, mph = v => Math.round(v * 2.237 / 5) * 5;
+  const lines = [Math.abs(dh) < 25 ? 'ON THE GLIDE PATH' : dh > 0 ? `HIGH ${Math.round(dh)} M · DESCEND` : `LOW ${Math.round(-dh)} M · CLIMB`,
+    Math.abs(lat) < 20 ? 'ON THE CENTRELINE' : lat > 0 ? `◀ STEER LEFT ${Math.round(lat)} M` : `STEER RIGHT ${Math.round(-lat)} M ▶`,
+    p.V > vs * 1.25 ? `TOO FAST · SLOW TO ${mph(vs)} MPH` : p.V < vs * 0.92 ? `TOO SLOW · ${mph(vs)} MPH` : `SPEED ${mph(p.V)} MPH ✓`];
+  lines.forEach((l, i) => txt(l, HW / 2 + 70, HH / 2 - 18 + i * 16, 12, /ON THE|✓/.test(l) ? '#97c46f' : '#eaa53c', 'left', COND, 700)); // beside the reticle, clear of the aircraft
+}
 // the touch buttons that come and go: rockets, wingman orders, bail out
 function touchExtras(p) {
   if (!isTouch) return;
@@ -4999,20 +5385,21 @@ function touchExtras(p) {
   rk.hidden = !(p.alive && p.rockets > 0); if (!rk.hidden) rk.textContent = `RKT ${p.rockets}`;
   $('tAlt').hidden = !p.alive || p.onGround; $('tAlt').classList.toggle('on', G.altLock != null);
   $('tForm').hidden = !p.alive || p.onGround || (!G.form && !formLeaderFor(p)); $('tForm').classList.toggle('on', !!G.form);
+  $('tRoute').hidden = !p.alive || p.onGround || !G.route.wps.length; $('tRoute').classList.toggle('on', G.route.on);
   const wl = wingAlive(); wg.hidden = !wl.length || !p.alive; if (!wg.hidden) wg.textContent = { cover: 'WING · COVER', attack: 'WING · ATTACK', ground: 'WING · GROUND' }[WING.cmd];
   const bail = canBail(p) && (G.bailWin || (p.alive && playerInTrouble(p))); bl.hidden = !bail; bl.classList.toggle('on', !!G.bailWin && (G.time * 3) % 1 < 0.6);
 }
 function liftOffText() { const p = G.player, v = p ? Math.round(p.stallSpeed() * 1.15 * 2.237 / 5) * 5 : 100; return `Take off · full throttle${p && p.spec.jet ? ', afterburner helps' : ''}, lift off near ${v} mph`; }
 function drawMsgs() {
-  let y = NM.banner ? (isTouch ? 132 : 110) : 64; // below the join banner while it shows
+  let y = NM.banner ? (isTouch ? 150 : 128) : 82; // below the join banner while it shows
   for (const m of G.msgs) { const a = clamp(m.t / 0.6, 0, 1); hx.globalAlpha = a; txt(m.text, HW / 2, y, isTouch ? 14 : 16, m.kind === 'danger' ? '#e2553f' : m.kind === 'warn' ? '#eaa53c' : m.kind === 'good' ? '#97c46f' : '#f1e8d2', 'center', COND, 600); y += 22; }
   hx.globalAlpha = 1;
 }
 function drawSectorMap(p, x, y, S) {
-  const ext = COMBAT * 1.15, sc = S / (ext * 2), pxs = terrainCanvas.width / SIZE;
+  const ext = COMBAT * 1.15, sc = S / (ext * 2), pxs = mapCanvas.width / OSIZE;
   const toM = (wx, wz) => [x + clamp((wx + ext) * sc, 2, S - 2), y + clamp((wz + ext) * sc, 2, S - 2)];
   hx.save(); hx.globalAlpha = 0.86;
-  hx.drawImage(terrainCanvas, (-ext + HALF) * pxs, (-ext + HALF) * pxs, ext * 2 * pxs, ext * 2 * pxs, x, y, S, S);
+  hx.drawImage(mapCanvas, (-ext + OUT) * pxs, (-ext + OUT) * pxs, ext * 2 * pxs, ext * 2 * pxs, x, y, S, S);
   hx.globalAlpha = 1; hx.strokeStyle = 'rgba(241,232,210,0.75)'; hx.lineWidth = 1.5; hx.strokeRect(x, y, S, S);
   hx.beginPath(); hx.rect(x, y, S, S); hx.clip();
   const [cx0, cy0] = toM(0, 0); hx.strokeStyle = 'rgba(226,85,63,0.4)'; hx.setLineDash([4, 4]); hx.beginPath(); hx.arc(cx0, cy0, COMBAT * sc, 0, 6.283); hx.stroke(); hx.setLineDash([]);
@@ -5023,6 +5410,7 @@ function drawSectorMap(p, x, y, S) {
     if (e === LOCK.target) { hx.strokeStyle = LOCK.locked ? '#ff4a3a' : '#eaa53c'; hx.lineWidth = 1.5; hx.strokeRect(ex - 5, ez - 5, 10, 10); }
   }
   hx.fillStyle = '#ffffff'; for (const m of MSL) { const [mx, mz] = toM(m.pos.x, m.pos.z); hx.fillRect(mx - 1, mz - 1, 2, 2); }
+  hx.fillStyle = '#5fd3e8'; G.route.wps.forEach((w, i) => { const [wx, wz] = toM(w.x, w.z); hx.beginPath(); hx.arc(wx, wz, i === G.route.i ? 3.5 : 2.5, 0, 6.283); hx.fill(); });
   if (GW.active) { hx.fillStyle = '#e2553f'; for (const u of allUnits()) if (u.alive) { const [ux, uz] = toM(u.pos.x, u.pos.z); hx.fillRect(ux - 1.5, uz - 1.5, 3, 3); } if (GW.ship && GW.ship.alive) { const [sx, sz] = toM(GW.ship.pos.x, GW.ship.pos.z); hx.fillRect(sx - 2.5, sz - 2.5, 5, 5); } }
   const [px, pz] = toM(p.pos.x, p.pos.z), hdg = Math.atan2(p.fwd.x, -p.fwd.z);
   hx.translate(px, pz); hx.rotate(hdg); hx.fillStyle = '#eaa53c'; hx.beginPath(); hx.moveTo(0, -7); hx.lineTo(5, 5); hx.lineTo(-5, 5); hx.fill();
@@ -5035,13 +5423,14 @@ function drawRadar(p, cx, cy, R) {
   const range = 6000, hdg = Math.atan2(p.fwd.x, -p.fwd.z);
   hx.save(); hx.beginPath(); hx.arc(cx, cy, R, 0, 6.283); hx.clip();
   hx.translate(cx, cy); hx.rotate(-hdg);
-  const sc = R / range, pxs = terrainCanvas.width / SIZE;
+  const sc = R / range, pxs = mapCanvas.width / OSIZE;
   hx.globalAlpha = 0.72;
-  hx.drawImage(terrainCanvas, (p.pos.x - range + HALF) * pxs, (p.pos.z - range + HALF) * pxs, range * 2 * pxs, range * 2 * pxs, -R, -R, R * 2, R * 2);
+  hx.drawImage(mapCanvas, (p.pos.x - range + OUT) * pxs, (p.pos.z - range + OUT) * pxs, range * 2 * pxs, range * 2 * pxs, -R, -R, R * 2, R * 2);
   hx.globalAlpha = 1;
   hx.fillStyle = '#f1e8d2'; hx.fillRect((AF.x - p.pos.x) * sc - 1.5, (AF.z - AF.len / 2 - p.pos.z) * sc, 3, AF.len * sc);
   if (GW.active) { hx.fillStyle = '#e2553f'; for (const u of allUnits()) if (u.alive) { let ex = (u.pos.x - p.pos.x) * sc, ez = (u.pos.z - p.pos.z) * sc; const l = Math.hypot(ex, ez); if (l > R - 4) { ex *= (R - 4) / l; ez *= (R - 4) / l; } hx.fillRect(ex - 2, ez - 2, 4, 4); } const S = GW.ship; if (S && S.alive) { let ex = (S.pos.x - p.pos.x) * sc, ez = (S.pos.z - p.pos.z) * sc; const l = Math.hypot(ex, ez); if (l > R - 6) { ex *= (R - 6) / l; ez *= (R - 6) / l; } hx.save(); hx.translate(ex, ez); hx.rotate(-S.hdg); hx.fillRect(-2.5, -8, 5, 16); hx.restore(); } }
   for (const e of G.planes) { if (e === p || !e.alive || e.gone) continue; let ex = (e.pos.x - p.pos.x) * sc, ez = (e.pos.z - p.pos.z) * sc; const l = Math.hypot(ex, ez); if (l > R - 4) { ex *= (R - 4) / l; ez *= (R - 4) / l; } blip(ex, ez, Math.atan2(e.fwd.x, -e.fwd.z), !hostile(e, p) ? '#97c46f' : e.ace ? '#ff6a4d' : '#e2553f', 4); }
+  { const wp = routeTarget(); if (wp) { let ex = (wp.x - p.pos.x) * sc, ez = (wp.z - p.pos.z) * sc; const l = Math.hypot(ex, ez); if (l > R - 4) { ex *= (R - 4) / l; ez *= (R - 4) / l; } hx.fillStyle = '#5fd3e8'; hx.beginPath(); hx.arc(ex, ez, 3.5, 0, 6.283); hx.fill(); } }
   hx.restore();
   hx.strokeStyle = 'rgba(241,232,210,0.6)'; hx.lineWidth = 1.5; hx.beginPath(); hx.arc(cx, cy, R, 0, 6.283); hx.stroke();
   hx.fillStyle = '#eaa53c'; hx.beginPath(); hx.moveTo(cx, cy - 6); hx.lineTo(cx + 4.5, cy + 5); hx.lineTo(cx - 4.5, cy + 5); hx.fill();
@@ -5107,7 +5496,7 @@ function drawGauges(p) {
 // =====================================================================
 //  Screens
 // =====================================================================
-function showScreen(id) { for (const s of ['loading', 'menu', 'pause', 'debrief']) $(s).hidden = s !== id; }
+function showScreen(id) { for (const s of ['loading', 'menu', 'pause', 'debrief', 'bigmap']) $(s).hidden = s !== id; }
 function pause(on) {
   if (on && G.state === 'play') { G.state = 'paused'; showScreen('pause'); $('touch').hidden = true; mouseFire = false; touch.fire = false; if (document.pointerLockElement) document.exitPointerLock(); fillSettings(); if (Sfx.ok) Sfx.ctx.suspend(); }
   else if (!on && G.state === 'paused') { touch.tiltRef = null; G.state = 'play'; showScreen(null); $('touch').hidden = !isTouch; if (Sfx.ok) Sfx.ctx.resume(); }
@@ -5115,11 +5504,11 @@ function pause(on) {
 function fillSettings() {
   $('setControl').value = settings.control; $('setQuality').value = settings.quality; $('setVolume').value = settings.volume; $('setInvert').checked = settings.invert; $('setKill').checked = settings.killcam;
   const help = isTouch ? [
-    ['Steer (stick)', 'left thumb'], ['Throttle', 'slider'], ['Boost', 'drag into the red top of the slider'], ['Fire all guns', 'FIRE'], ['Missile', 'MSL (wait for the lock)'], ['Flares', 'FLARE'], ['Corner map', 'MAP'], ['Gear / flaps', 'GEAR · FLAP'], ['Camera', 'CAM'], ['Pause', 'II'], ['Drop a bomb', 'BOMB'], ['Rockets', 'RKT (fires a pair)'], ['Wingmen', 'WING cycles cover / attack / ground'], ['Bail out', 'BAIL (shows when you are hit)'], ['Hold this height', 'ALT (push or pull to release)'], ['Fly on a friend\'s wing', 'FORM (move the stick to take over)'], ['Stick', 'part-way holds a bank angle, all the way rolls'], ['Rudder', 'hold ◀ RUD / RUD ▶ (turn on in settings)'],
+    ['Steer (stick)', 'left thumb'], ['Throttle', 'slider'], ['Boost', 'drag into the red top of the slider'], ['Fire all guns', 'FIRE'], ['Missile', 'MSL (wait for the lock)'], ['Flares', 'FLARE'], ['Big map, waypoints', 'MAP (corner map style is chosen there)'], ['Fly the route', 'ROUTE'], ['Gear / flaps', 'GEAR · FLAP'], ['Camera', 'CAM'], ['Pause', 'II'], ['Drop a bomb', 'BOMB'], ['Rockets', 'RKT (fires a pair)'], ['Wingmen', 'WING cycles cover / attack / ground'], ['Bail out', 'BAIL (shows when you are hit)'], ['Hold this height', 'ALT (push or pull to release)'], ['Fly on a friend\'s wing', 'FORM (move the stick to take over)'], ['Stick', 'part-way holds a bank angle, all the way rolls'], ['Rudder', 'hold ◀ RUD / RUD ▶ (turn on in settings)'],
     ['Stick, assisted', 'auto-levels, holds height'], ['Touch-drag aim', 'drag anywhere, plane follows'], ['Tilt', 'tilt to steer · tap the left side to re-centre'],
   ] : [
     ['Aim (mouse mode)', 'move mouse'], ['Fire', 'click · Space'], ['Missile', 'right click · X'], ['Flares', 'F'], ['Pitch', 'W / S'], ['Roll', 'A / D'], ['Rudder', 'Q / E'], ['Throttle', 'Shift / Z · wheel · 1–0'],
-    ['Boost', 'hold Shift at full throttle'], ['Drop a bomb', 'B in the air'], ['Rockets', 'K (a pair)'], ['Wingmen', 'T attack my target · Y cover me · U ground'], ['Bail out', 'J (twice if not hit)'], ['Hold this height', 'L'], ['Fly on a friend\'s wing', 'O'], ['Tight turn', 'V for flaps (slows you down)'], ['Corner map', 'M'], ['Gear', 'G'], ['Flaps', 'V'], ['Brakes', 'B'], ['Camera', 'C'], ['Pause', 'Esc · P'], ['Gamepad', 'RT fire · LB missile · RB flares · LT bomb · L3 rockets · R3 bail · D-pad ◀ attack ▶ cover · Back ground · Y map'],
+    ['Boost', 'hold Shift at full throttle'], ['Drop a bomb', 'B in the air'], ['Rockets', 'K (a pair)'], ['Wingmen', 'T attack my target · Y cover me · U ground'], ['Bail out', 'J (twice if not hit)'], ['Hold this height', 'L'], ['Fly on a friend\'s wing', 'O'], ['Tight turn', 'V for flaps (slows you down)'], ['Corner map', 'M'], ['Big map, waypoints', 'N'], ['Fly the route', 'I'], ['Gear', 'G'], ['Flaps', 'V'], ['Brakes', 'B'], ['Camera', 'C'], ['Pause', 'Esc · P'], ['Gamepad', 'RT fire · LB missile · RB flares · LT bomb · L3 rockets · R3 bail · D-pad ◀ attack ▶ cover · Back ground · Y map'],
   ];
   $('helpGrid').innerHTML = help.map(([a, b]) => `<div><span>${a}</span><span>${b}</span></div>`).join('');
   $('pauseEyebrow').textContent = G.player ? `${SPECS[settings.plane].full} · ${fmtTime(G.time)} airborne · ${G.stats ? G.stats.kills : 0} kills` : 'Settings';
@@ -5227,7 +5616,7 @@ $('btnMissionHere').addEventListener('click', startMissionHere);
 function fillMissionSelect() {
   const sel = $('setMission'), online = NET.on && NET.opts.mode === 'coop';
   $('missionHere').hidden = !G.player || !G.player.alive || (NET.on && !online) || (G.mission && G.mission.camp != null);
-  const opts = (online ? [['free', 'Free play']] : []).concat(Object.entries(MISSIONS).map(([k, ms]) => {
+  const opts = (online ? [['free', 'Free play']] : []).concat(Object.entries(MISSIONS).filter(([, ms]) => !(online && ms.local)).map(([k, ms]) => {
     const r = online && NM.kinds[k]; return [k, ms.name + (!r ? '' : NM.mine === k ? ' · you are in it' : ` · join ${r.name}`)];
   }));
   sel.innerHTML = ''; for (const [k, t] of opts) { const o = document.createElement('option'); o.value = k; o.textContent = t; sel.append(o); }
@@ -5245,6 +5634,7 @@ function applyMenuMode(mode) {
   for (const b of $('modeTabs').querySelectorAll('button')) b.setAttribute('aria-selected', String((b.dataset.mode === 'campaign') === camp));
   $('campBox').hidden = !camp;
   $('missionHead').hidden = $('missionList').hidden = camp || (NET.on && NET.opts.mode !== 'coop');
+  for (const b of $('missionList').querySelectorAll('.pcard')) if (MISSIONS[b.dataset.mission] && MISSIONS[b.dataset.mission].local) b.hidden = NET.on; // the range is single player
   if (!NET.on) for (const id of ['optEnemiesL', 'optWavesL', 'optTodL', 'optWingL']) $(id).hidden = camp || (EMBED && (id === 'optEnemiesL' || id === 'optWavesL'));
   if (camp) buildCampCards();
   for (const b of $('planeList').querySelectorAll('.pcard')) { const lk = camp && !planeUnlocked(b.dataset.plane); b.classList.toggle('locked', lk); b.querySelector('.lockNote').textContent = lk ? 'Campaign: ' + lockText(b.dataset.plane) : ''; }
@@ -5410,7 +5800,7 @@ function simulate(dt) {
   G.time += dt;
   const pl = G.player;
   playerControl(dt);
-  for (const p of G.planes) if (!p.player && !p.remote && p.alive && p.brain) { if (p.bomber) bomberThink(p, dt); else if (p.role === 'wingman') wingThink(p, dt); else aiThink(p, dt, pickTarget(p, dt)); }
+  for (const p of G.planes) if (!p.player && !p.remote && p.alive && p.brain) { if (p.bomber) bomberThink(p, dt); else if (p.role === 'wingman') wingThink(p, dt); else if (p.role === 'tow') towThink(p, dt); else aiThink(p, dt, pickTarget(p, dt)); }
   if (pl && pl.rktPair > 0) { pl.rktPair -= dt; if (pl.rktPair <= 0) fireRocket(pl); }
   if (G.bailArm > 0) G.bailArm -= dt;
   let rem = dt;
@@ -5447,7 +5837,8 @@ function frame(now) {
   let rdt = Math.min(0.1, (now - last) / 1000); last = now; G.frame++;
   // Pause stops the world. The one exception: a table where another person is flying with you,
   // whose sky can't stop, so it keeps going (your plane holds level) while your menu is open.
-  const live = G.state === 'play' || (NET.on && G.player && (G.state === 'debrief' || ((G.state === 'paused' || G.state === 'paused-menu') && sharedSky())));
+  const live = G.state === 'play' || (NET.on && G.player && (G.state === 'debrief' || ((G.state === 'paused' || G.state === 'paused-menu' || G.state === 'bigmap') && sharedSky())));
+  if (G.state === 'bigmap' && (G.bmT = (G.bmT || 0) + 1) % 15 === 0) drawBigMap(); // keep it current while others fly
   if (live) {
     const dt = rdt * G.timeScale;
     // the kill replay freezes the fight (you, the others, rounds in flight); only the aircraft you shot keeps falling
@@ -5520,7 +5911,7 @@ window.__game = { get post() { return !!renderPipeline; }, get fx() { return { s
       resolve(canvas.toDataURL('image/png'));
     }));
   }, G, settings, startMission, SPECS, NET, netSend, finishNet, MSL, LOCK, launchMissile, dropFlares, DIFF, explosion, Sfx };
-window.__gw = GW; window.__gwDrop = p => { while (p.bombs > 0 && dropBomb(p)); }; window.__town = TOWN; window.__simNoPlayer = dt => { updateBullets(dt); updateGroundWar(dt); }; window.__kill = p => destroy(p, 'shot down', G.player, false); window.__net = NET; window.__netMenu = () => netMenu(); window.__nm = NM; window.__handleNet = handleNet; window.__netMissionStart = netMissionStart; window.__keys = keys; window.__touch = touch; window.__x = { toggleAltLock, toggleForm, canHurt, freeFire, gunnerFire, waterU, skyU, CAMP, CAMPAIGN, WING, wingCommand, bailOut, firePlayerRockets, fireRocket, ROCKETS, CHUTES, endMission, applyTimeOfDay, TOD, BOSSES, bossHealth, rail: () => RAIL, applyMenuMode, spawnChute, canBail, simulate }; window.__blast = blastDamage; window.__damageUnit = damageUnit; window.__netObjective = netObjective;
+window.__gw = GW; window.__gwDrop = p => { while (p.bombs > 0 && dropBomb(p)); }; window.__town = TOWN; window.__simNoPlayer = dt => { updateBullets(dt); updateGroundWar(dt); }; window.__kill = p => destroy(p, 'shot down', G.player, false); window.__net = NET; window.__netMenu = () => netMenu(); window.__nm = NM; window.__handleNet = handleNet; window.__netMissionStart = netMissionStart; window.__keys = keys; window.__touch = touch; window.__x = { get RANGE() { return RANGE; }, openBigMap, closeBigMap, toggleRoute, routeTarget, toggleAltLock, toggleForm, canHurt, freeFire, gunnerFire, waterU, skyU, CAMP, CAMPAIGN, WING, wingCommand, bailOut, firePlayerRockets, fireRocket, ROCKETS, CHUTES, endMission, applyTimeOfDay, TOD, BOSSES, bossHealth, rail: () => RAIL, applyMenuMode, spawnChute, canBail, simulate }; window.__blast = blastDamage; window.__damageUnit = damageUnit; window.__netObjective = netObjective;
 
 (async function boot() {
   resizeHUD();

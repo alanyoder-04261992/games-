@@ -30,6 +30,26 @@ Rendering uses ACES tone mapping. The aircraft have metallic and glossy material
 
 The **High** graphics setting adds bloom, which makes the sun, tracers, fires and explosions glow. It also turns on 4× multisampling, finer terrain and textures, and more trees. Phones default to Medium.
 
+## The world
+
+The detailed core (the coast, the airfield, the town and the missions, 30 × 30 km) sits in the middle of a world about 68 × 68 km, on a coarser grid of its own:
+
+- **North:** arctic. Rugged hills under snow down to the shore, snowy firs, sea ice floating off the coast, and an arctic station with a radio mast.
+- **South:** desert. Dunes, flat-topped mesas, red rock, palms along the coast and a desert village.
+- **West:** high mountains. Ridges up to about 2,000 m with snow above about 1,150 m; the river runs on up its valley.
+- **East:** islands out at sea, lush in the south and rocky in the north, with shallows round them.
+- **Edge:** the land falls away into the open ocean at the edge.
+
+You may fly anywhere within 27 km of the centre (LEAVING SECTOR warns you, and further out the aircraft turns back); computer fighters stay within 15 km of the fight. Clouds thin out over the desert and thicken in the north. The water shader knows the outer world's depths, so the islands and far coasts have shallows too.
+
+## Finding your way and landing
+
+- **Compass:** a heading tape at the top of the HUD, with ticks for HOME (green), the objective (gold) and your next waypoint (cyan).
+- **Home marker:** a HOME marker (or an arrow at the screen edge) appears when you need it: heading back to land, short of fuel, damaged, out of ammunition, or with the gear down near the field.
+- **Landing guide:** with the gear down within 7.5 km of the airfield and below 1,000 m, the runway is outlined in green and gates mark a 3.5° glide path to the near end (whichever way you are heading). Beside the reticle it reads high or low, left or right of the centreline, and your speed against the approach speed (1.3 × stall). If you are low and slow near the field with the gear up, GEAR UP flashes.
+- **Big map:** **N** (or **MAP** on touch) opens a map of the whole world: climates, the airfield and town, mission targets, every aircraft as an arrow, and your route. Tap or click to add waypoints (up to 6); tap one to remove it. **Fly route** hands the controls to an autopilot that flies the waypoints in turn, holding your height but keeping 250 m above the ground ahead; any stick input takes over again. **I** (or **ROUTE**) turns it on and off from the cockpit. The corner map's style (radar, sector, off) is chosen on the big map on touch, and with **M** on a keyboard. In single player the game pauses while the map is open.
+- **Who your helpers are shooting:** an enemy your gunner or a wingman is firing at gets a green dashed ring and a tag (GUNNER, MACK, DUTCH).
+
 ## Campaign (single player)
 
 The menu has two tabs: **Campaign** and **Free flight & missions**. The campaign is single player. In the Game Center it shows when nobody else is sitting at your table; with friends there, everyone uses Free flight. It is ten missions in a row:
@@ -78,6 +98,7 @@ The game's menu has:
   - *Naval strike*: a 190 m battleship steams up and down the coast about 5 km out. Its ten light AA mounts throw up flak bursts timed to where you will be and streams of tracer when you come close, its turrets turn to follow you, and its main battery shells the coast now and then. Bomb and rocket it until it rolls over and sinks: its hull takes about 1,600 points, so two direct 250 kg bomb hits and a few pairs of rockets do it in one sortie (four 500 kg bombs on their own; cannon fire helps a little), then land. Fighters scramble to defend it.
   - *Ground attack*: a convoy of tanks and trucks drives up a track to a fuel depot (four fuel tanks and two supply sheds) guarded by three flak guns. Bomb and strafe them: trucks fall to guns, tanks need cannon or bombs, and fuel tanks go up in a fireball. Flak guns are optional targets. Fighters scramble to defend it.
   - *Train busting*: an ammunition train (locomotive, tender, two flak wagons, six ammunition wagons) runs up the river valley on the north bank to a depot by the harbour, about 10 km. An ammunition wagon that blows up can set off the cars next to it, so the train goes up car by car. Destroy every ammunition wagon before it reaches the depot; knocking out the locomotive stops the train.
+  - *Gunnery range* (single player): a tow plane flies an oval over the range west of the airfield, streaming a sleeve target 260 m behind it on a cable. Hits on the sleeve score 15; twelve shoot it away (+150) and a new one streams out. Bombs and rockets dropped on the circles score by how close they land (bullseye +400, 10 m +250, 25 m +120, 50 m +50). Five strafing boards score 10 a hit and shred after 15 (+100). The range closes after six minutes; then land. The tow plane can't be shot down.
   - *Bomber intercept*: formations of twin-engine bombers with fighter cover fly for the harbour town. Their top and tail gunners shoot back. If three bombers get through and drop on the town, the mission fails. The *Waves* option sets how many formations come (one to three).
   - **Bombs**: every aircraft carries bombs, in every mission (two to four on fighters, eight on the attack jet, ten in the bomber). Drop with **B** in the air (B is still the brake on the ground), **BOMB** on touch, or **LT** on a gamepad. A bomb sight on the HUD shows where a bomb released now would land and how long it would fall. Land on the airfield to rearm.
   - Targets show as red brackets on screen and squares on the radar; a gold marker (or an arrow at the edge of the screen) points to the objective.
@@ -178,6 +199,8 @@ A co-op round starts in **free play**: no raiders. The menu shows a *Free play* 
 | Bail out | **BAIL** (appears when you are badly hit or going down) |
 | Hold this height | **ALT**; push or pull the stick to release it |
 | Fly on a friend's wing | **FORM** (shows when a friend or wingman is in the air); move the stick to take over |
+| Big map and waypoints | **MAP** |
+| Fly the route | **ROUTE** (shows once you have set waypoints) |
 
 **iPad.** iPadOS Safari reports itself as a Mac, so the game also counts a Mac with a touch screen as an iPad and turns the touch controls on (even with a keyboard attached; switch *Phone mode* off to use the keyboard and trackpad instead). On a tablet the HUD is drawn about 20% larger, and the stick and buttons are bigger and spread out for thumbs. Pinch and double-tap zoom are blocked over the game. *Add to Home Screen* opens it full screen.
 
@@ -206,6 +229,8 @@ Landscape works best, and the menu has a Full screen button on Android.
 | Bail out | J (twice from an aircraft that isn't damaged) |
 | Hold this height (altitude lock) | L; a big pull or push releases it |
 | Fly on a friend's wing (formation) | O; moving the stick takes over |
+| Big map and waypoints | N |
+| Fly the route | I |
 
 ### Gamepad
 
