@@ -6,7 +6,7 @@
 // records the final classification when the host calls the results, so rematches and the
 // "game over" state work like every other game.
 
-const TRACK_IDS = ['ridgeline', 'lakeside', 'hollow'];
+const TRACK_IDS = ['ridgeline', 'lakeside', 'hollow', 'cedar', 'harvest', 'mesa', 'mudline'];
 
 function setup({ seed, options }) {
   return { seed, options: { ...options }, over: false, results: null };
@@ -55,11 +55,11 @@ const tile = `<svg viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg" role
 
 export default {
   id: 'rally',
-  version: '2.1', // shown on the home tile; bump it whenever you improve the game
+  version: '2.3', // shown on the home tile; bump it whenever you improve the game
   name: 'Ridgeline Rally',
   tagline: 'Country-road racing over hills, farms and lakeshores. Race your friends or the computer.',
   description:
-    'A real-time 3D racing game. Pick a hot hatch, a V8 coupe or a mid-engine GT and race up to four friends and a field of computer cars around three circuits, from fast farmland sweepers to lakeside hairpins. Works with a keyboard, a gamepad or the touch controls on a phone.',
+    'A real-time 3D racing game. Pick a hot hatch, a V8 coupe or a mid-engine GT and race up to four friends and a field of computer cars around seven circuits, from fast farmland sweepers and lakeside hairpins to a dirt stage with jumps. Crash hard enough and your car will wipe out or roll. Works with a keyboard, a gamepad or the touch controls on a phone.',
   seats: 4,
   seatLabels: ['Driver 1', 'Driver 2', 'Driver 3', 'Driver 4'],
   players: '1–4 drivers',
@@ -71,7 +71,7 @@ export default {
       label: 'Circuit',
       type: 'select',
       default: 'ridgeline',
-      choices: [{ value: 'ridgeline', label: 'Ridgeline Loop' }, { value: 'lakeside', label: 'Lakeside Sprint' }, { value: 'hollow', label: 'Hollow Creek' }],
+      choices: [{ value: 'ridgeline', label: 'Ridgeline Loop' }, { value: 'lakeside', label: 'Lakeside Sprint' }, { value: 'hollow', label: 'Hollow Creek' }, { value: 'cedar', label: 'Cedar Pass' }, { value: 'harvest', label: 'Harvest Flats' }, { value: 'mesa', label: 'Red Mesa' }, { value: 'mudline', label: 'Mudline Dirt (jumps)' }],
     },
     { key: 'laps', label: 'Laps', type: 'select', default: 3, choices: [{ value: 1, label: '1' }, { value: 2, label: '2' }, { value: 3, label: '3' }, { value: 5, label: '5' }, { value: 10, label: '10' }] },
     { key: 'opponents', label: 'Computer cars', type: 'select', default: 3, choices: [{ value: 0, label: 'None' }, { value: 1, label: '1' }, { value: 2, label: '2' }, { value: 3, label: '3' }, { value: 4, label: '4' }] },

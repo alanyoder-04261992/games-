@@ -19,8 +19,18 @@ npm start        # Game Center at http://localhost:8080, Ridgeline Rally is a ti
 | Ridgeline Loop | fast sweepers and crests over farm country | midday |
 | Lakeside Sprint | tighter corners round a lake | golden hour |
 | Hollow Creek | hairpins and a long back straight through the woods | morning |
+| Cedar Pass | switchbacks and a summit run through tall pines | morning |
+| Harvest Flats | flat-out straights between the wheat fields | midday |
+| Red Mesa | fast sweepers in dry red-rock canyon country | late afternoon |
+| Mudline Dirt | a dirt stage: loose surface (80 % grip), dust, four jumps | overcast |
 
 Each circuit is a closed spline. The road heights follow the land, smoothed into gentle grades, and the terrain is flattened under and beside the road. Corners get red-and-white kerbs and tyre stacks, and boards on the roadside warn of the big braking zones.
+
+A circuit can set `surface: 'dirt'` (less grip, brown dust, no kerbs), `ground: 'dry'` (golden scrub and banded red rock instead of green fields) and `jumps: n`: kickers placed on straight stretches, each a ramp that steepens to its lip and a long landing slope, added to the road heights. Cars really leave the ground there; the gas holds the nose up in flight and the brake tips it down.
+
+**Turbo** (human drivers only): hold for about half a g of extra thrust; a full tank lasts 3.2 s and refills in 9 s, and needs 15 % to light. Flames from the tailpipes, a field-of-view kick and a whoosh. **Easy drifts**: a brake tap (under 0.9 s) followed by the gas within 0.45 s while steering flicks a human driver's car into the drift controller; the handbrake still works on keyboard and gamepad.
+
+**Crashes.** A big hit (another car side-on, a tree, over about 30 mph into it) spins the car out and takes the controls away for a moment; a really bad one (a side-on hit over about 47 mph, a tree head-on over about 49 mph, sliding sideways off the road into rough ground, a landing nose-first or very hard) rolls or flips it. A crashing car is a tumbling box that bounces and rolls until it stops; if it ends on its side or roof it is set back on its wheels where it is, never back on the road.
 
 | Car | Drive | Feel |
 |---|---|---|
