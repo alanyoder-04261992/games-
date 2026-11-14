@@ -8,6 +8,7 @@ import { RoundedBoxGeometry } from '../../vendor/three/addons/geometries/Rounded
 import { OrbitControls } from '../../vendor/three/addons/controls/OrbitControls.js';
 import { GRIND, RING, PLAYER_COLORS } from './cards.js';
 import * as T from './textures.js';
+import { newAdapt, adaptStep } from './adapt.js';
 
 const TAU = Math.PI * 2;
 const BOARD_R = 10.2;
@@ -245,7 +246,9 @@ export class Table3D {
     // light over the whole face and fades the colors and the lettering to grey
     const faceMats = {};
     const tileFace = (k, dims) => (faceMats[`${k}:${dims.w}`] ||= new THREE.MeshStandardMaterial({ map: tileTex(k, dims), roughness: 0.72, metalness: 0, envMapIntensity: 0.35 }));
-    const bodyMat = new THREE.MeshPhysicalMaterial({ color: '#f1ece0', roughness: 0.42, clearcoat: 0.5, clearcoatRoughness: 0.3 });
+    // a matte, slightly warm cream: a glossy near-white body sparkled along every tile edge as the
+    // camera moved (read as white flashing on phones)
+    const bodyMat = new THREE.MeshStandardMaterial({ color: '#d8cfbb', roughness: 0.75, metalness: 0, envMapIntensity: 0.5 });
     for (const [track, list, dims] of [['grind', GRIND, INNER], ['free', RING, OUTER]]) {
       const geo = new RoundedBoxGeometry(dims.w, TILE_H, dims.d, 3, 0.05);
       const plane = new THREE.PlaneGeometry(dims.w - 0.12, dims.d - 0.12);
@@ -1021,20 +1024,14 @@ export class Table3D {
     this.renderer.render(this.scene, this.camera);
   }
 
-  // Keep the frame rate up on slower hardware (TV and console browsers, older phones) by
-  // lowering the render resolution a step at a time; raise it again when there is headroom.
+  // Keep the frame rate up on slower hardware by lowering the render resolution, without letting
+  // the words go blurry or the picture flip between sharp and soft (see adapt.js).
   #adapt(dt) {
-    const a = (this._adapt ||= { sum: 0, n: 0, scale: 1 });
-    a.sum += dt;
-    a.n++;
-    if (a.sum < 2) return;
-    const avg = a.sum / a.n;
-    a.sum = a.n = 0;
+    const a = (this._adapt ||= newAdapt());
     const max = Math.min(window.devicePixelRatio || 1, this.quality === 'high' ? 2 : 1.25);
-    if (avg > 1 / 40 && a.scale > 0.5) a.scale = Math.max(0.5, a.scale - 0.15);
-    else if (avg < 1 / 57 && a.scale < 1) a.scale = Math.min(1, a.scale + 0.1);
-    else return;
-    this.renderer.setPixelRatio(max * a.scale);
+    const scale = adaptStep(a, dt, max);
+    if (scale == null) return;
+    this.renderer.setPixelRatio(max * scale);
     this.resize();
   }
 
@@ -1058,6 +1055,7 @@ export class Table3D {
   setQuality(q) {
     this.quality = q;
     if (this.renderer) {
+      this._adapt = null; // a new quality starts the resolution control afresh
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q === 'high' ? 2 : 1.25));
       this.renderer.shadowMap.enabled = true;
     }
