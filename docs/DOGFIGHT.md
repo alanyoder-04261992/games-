@@ -47,7 +47,7 @@ You may fly anywhere within 27 km of the centre (LEAVING SECTOR warns you, and f
 - **Compass:** a heading tape at the top of the HUD, with ticks for HOME (green), the objective (gold) and your next waypoint (cyan).
 - **Home marker:** a HOME marker (or an arrow at the screen edge) appears when you need it: heading back to land, short of fuel, damaged, out of ammunition, or with the gear down near the field.
 - **Landing guide:** with the gear down within 7.5 km of the airfield and below 1,000 m, the runway is outlined in green and gates mark a 3.5° glide path to the near end (whichever way you are heading). Beside the reticle it reads high or low, left or right of the centreline, and your speed against the approach speed (1.3 × stall). If you are low and slow near the field with the gear up, GEAR UP flashes.
-- **Big map:** **N** (or **MAP** on touch) opens a map of the whole world: climates, the airfield and town, mission targets, every aircraft as an arrow, and your route. Tap or click to add waypoints (up to 6); tap one to remove it. **Fly route** hands the controls to an autopilot that flies the waypoints in turn, holding your height but keeping 250 m above the ground ahead; any stick input takes over again. **I** (or **ROUTE**) turns it on and off from the cockpit. The corner map's style (radar, sector, off) is chosen on the big map on touch, and with **M** on a keyboard. In single player the game pauses while the map is open.
+- **Big map:** **N** (or **MAP** on touch) opens a map of the whole world: climates, the airfield and town, mission targets, every aircraft as an arrow, and your route. Tap or click to add waypoints (up to 6); tap one to remove it. **Fly route** hands the controls to an autopilot that flies the waypoints in turn, holding your height but keeping 250 m above the ground ahead; any stick input takes over again. **I** (or **•••** › Route on touch) turns it on and off from the cockpit. The corner map's style (radar, sector, off) is chosen on the big map on touch, and with **M** on a keyboard. In single player the game pauses while the map is open.
 - **Who your helpers are shooting:** an enemy your gunner or a wingman is firing at gets a green dashed ring and a tag (GUNNER, MACK, DUTCH).
 
 ## Campaign (single player)
@@ -86,12 +86,12 @@ The last wave of a single-player dogfight brings a named ace instead of an ordin
 The game's menu has:
 
 - **Time of day**: Day, Sunset or Night. At sunset the sun sits low over the sea. At night there are stars and a moon; the town's windows, the runway lights and the lighthouse are lit; tracers glow brighter; and **searchlights** sweep the sky round the targets (the battleship carries two). A searchlight that catches you locks on until you turn hard out of it, and while you are lit the flak is far more accurate. In the dark, unlit, it is far less accurate. Online, it is a table option.
-- **Wingmen**: none, one or two (Mack and Dutch). They cover you by default. **T** sends them after your target (the locked one, or the nearest ahead). **Y** brings them back to cover you; they form up on your wings and go after anything that comes near you. **U** sends them in on the ground target: they dive with guns, rockets and bombs, pull out and come round again. On a phone or iPad, **WING** steps through the orders that make sense at that moment.
+- **Wingmen**: none, one or two (Mack and Dutch). They cover you by default. **T** sends them after your target (the locked one, or the nearest ahead). **Y** brings them back to cover you; they form up on your wings and go after anything that comes near you. **U** sends them in on the ground target: they dive with guns, rockets and bombs, pull out and come round again. On a phone or iPad, **•••** › Wingmen steps through the orders that make sense at that moment.
 - **Rockets**: every fighter carries rockets: six on most fighters, ten on the Thunder, twelve on the jets, nineteen on the Striker, none on the bomber. **K**, **RKT** or **L3** fires a pair. They burn for a second, then fall like shells, and burst on aircraft, vehicles, wagons, the battleship or the ground (about 14 m blast). Land to rearm.
 - **Flaps in a fight**: lowering the flaps (V or FLAP) in the air gives combat flaps: bank and pull back and your aircraft comes round at up to about 60 degrees a second, at any speed, jets included (a Kestrel turns about 15–18 without them, a Lancer at 540 mph about 14). It bleeds speed doing it and fades out as you near the stall, so a long hard turn ends slower. The extra turn swings the aircraft round the vertical the way you are banked, nose and flight path together, so it neither stalls nor adds g. It reads how hard you pull the stick (or how hard the aim point asks), not the g-limited elevator. Raise the flaps to get the speed back. Computer pilots never get combat flaps.
 - **Rudder**: Q and E (or the rudder buttons) skid the nose round, and the flight path follows it, so a rudder turn keeps its new heading when you let go. In mouse or touch-drag aim it turns the aim point with it.
-- **Altitude lock** (L, or ALT on touch): holds the height you are at, through turns too, until you push or pull the stick hard (or move the mouse up or down).
-- **Formation** (O, or FORM): your aircraft flies itself onto the right wing of the nearest friend (another pilot first, otherwise a wingman), about 40 m out, and keeps station; you can still shoot. Move the stick to take over. A wingman you form up on holds a steady course for you.
+- **Altitude lock** (L, or **•••** › Alt lock on touch): holds the height you are at, through turns too, until you push or pull the stick hard (or move the mouse up or down).
+- **Formation** (O, or **•••** › Formation on touch): your aircraft flies itself onto the right wing of the nearest friend (another pilot first, otherwise a wingman), about 40 m out, and keeps station; you can still shoot. Move the stick to take over. A wingman you form up on holds a steady course for you.
 - **Bailing out**: when you are shot down and the wreck is still falling, the HUD flashes **BAIL OUT**. Press **J**, **BAIL** or **R3** to jump. The same key works from a damaged aircraft at any time (twice from a healthy one). You fall clear, open the parachute a few hundred metres up and float down; a car or a boat picks you up and you are back in the air in a fresh aircraft, −100 points, and the mission goes on. If the wreck hits first, the mission is over. Half the time you are thrown clear when your aircraft explodes. Computer pilots often bail out too.
 - **Mission**. The pause menu can **switch mission mid-flight**: the old fight is cleared and the new one starts round you. Online in co-op, missions are shared (see Multiplayer).
   - *Dogfight*: waves of enemy fighters come in off the sea; shoot them all down, then land.
@@ -109,7 +109,7 @@ The game's menu has:
 - **Difficulty**, **Missile lock** (auto or manual) and **Corner map** are in the same menu and in the pause menu.
 - **Phone mode**: Auto turns the touch controls on for phones. On forces them, which is useful on a tablet or a touch laptop. Off hides them in favour of the keyboard and mouse. The same switch is in the pause menu.
 - **Tilt** (pause menu → Controls → Tilt phone): on iPhone and iPad the first tap asks for motion access. Tap the left half of the screen to re-centre on however you are holding the phone. Until the sensor answers, the stick keeps working.
-- **Rudder buttons** (touch, off by default): two hold buttons above the stick, ◀ RUD and RUD ▶, that yaw the nose for fine aiming and for steering on the runway. Keyboard and gamepad already have rudder (Q / E, right stick).
+- **Rudder buttons** (touch, off by default; also **•••** › Rudder): two hold buttons either side of the stick, ◀ RUD and RUD ▶, that yaw the nose for fine aiming and for steering on the runway. Keyboard and gamepad already have rudder (Q / E, right stick).
 
 ## Multiplayer
 
@@ -186,27 +186,38 @@ A co-op round starts in **free play**: no raiders. The menu shows a *Free play* 
 
 ### Phone and tablet
 
+The phone layout keeps few buttons on screen, at least 12 px apart, and leaves room for both thumbs. The left thumb steers. The right thumb has **FIRE** in the corner, with the other weapons and the throttle around it. Top right are only **MAP**, **•••** and **II**. Everything you need now and then is in the tray that **•••** opens.
+
 | Action | Control |
 |---|---|
 | Steer | Left thumb anywhere on the left side (a floating stick) |
-| Throttle | Vertical slider next to FIRE |
-| Fire | Hold **FIRE** |
-| Gear / flaps | **GEAR**, **FLAP** |
-| Camera / pause | **CAM**, **II** |
-| Rudder (optional) | hold **◀ RUD** or **RUD ▶**; turn on *Rudder buttons* in the menu or pause menu |
-| Bomb / rockets | **BOMB**, **RKT** (they appear while you carry them) |
-| Wingmen | **WING** (cover → attack → ground) |
-| Bail out | **BAIL** (appears when you are badly hit or going down) |
-| Hold this height | **ALT**; push or pull the stick to release it |
-| Fly on a friend's wing | **FORM** (shows when a friend or wingman is in the air); move the stick to take over |
-| Big map and waypoints | **MAP** |
-| Fly the route | **ROUTE** (shows once you have set waypoints) |
+| Throttle | Vertical slider, left of the weapons; its red top is boost |
+| Fire | Hold **FIRE** (bottom-right corner) |
+| Missile / flares | **MSL** (left of FIRE) · **FLARE** (above FIRE) |
+| Combat flaps | **FLAP** (above FLARE) |
+| Bomb / rockets | **BOMB**, **RKT** (above MSL; they appear while you carry them) |
+| Big map and waypoints / pause | **MAP** · **II** |
+| Gear | **GEAR UP** appears in the middle while the wheels are down in the air. **GEAR DOWN** appears when you are under 450 m, slow enough for the gear and within 6 km of the airfield. Also **•••** › Gear |
+| Bail out | **BAIL** (appears in the middle when you are badly hit or going down) |
+| Camera | **•••** › Camera (chase or cockpit) |
+| Hold this height | **•••** › Alt lock; push or pull the stick to release it |
+| Rudder (optional) | **•••** › Rudder (or *Rudder buttons* in the menu): **◀ RUD** and **RUD ▶** either side of the stick, held to yaw |
+| Wingmen | **•••** › Wingmen (cover → attack → ground) |
+| Fly on a friend's wing | **•••** › Formation (when a friend or wingman is in the air); move the stick to take over |
+| Fly the route | **•••** › Route (once you have set waypoints) |
+| Corner map | **•••** › Corner map (radar → whole sector → off) |
+
+Each tray button shows its current setting. One that can't be used yet is greyed out. The tray closes after a choice, when you touch the stick or a weapon, or after six seconds. Camera, Wingmen and Corner map keep it open so you can step through them.
+
+On a phone the bottom flight line shows speed, height and g (plus WEP while boost is used up), then gun rounds and fuel. Missiles, flares, bombs and rockets are counted on their buttons, and the throttle on its slider. The objective line shrinks to fit between the corner map and the buttons. The score is one line under the buttons, with at most two online pilots (always including you).
+
+**Notch and Dynamic Island.** Inside the Game Center the game runs in a frame, where `env(safe-area-inset-*)` is always 0. `ui.js` measures the page's safe area and posts it to the frame (`{type: 'safe', l, r, t, b}`), and `play.html` uses it for the `--sl/--sr/--st/--sb` CSS variables and the HUD's margins. This keeps every button and HUD item off an iPhone's Dynamic Island in landscape.
 
 **iPad.** iPadOS Safari reports itself as a Mac, so the game also counts a Mac with a touch screen as an iPad and turns the touch controls on (even with a keyboard attached; switch *Phone mode* off to use the keyboard and trackpad instead). On a tablet the HUD is drawn about 20% larger, and the stick and buttons are bigger and spread out for thumbs. Pinch and double-tap zoom are blocked over the game. *Add to Home Screen* opens it full screen.
 
 The control style is set in the pause menu:
 
-- **Stick · assisted** (the default on phones). Moving the stick part of the way sideways banks to an angle and holds it (up to 80°); all the way to the edge rolls freely. The stick has a curve, gentle near the centre and full at the edge (softer for up and down than for rolling). Forward and back ask for a pitch rate, the same pushing as pulling (about 17° a second at three-quarter stick in a Kestrel at 270 mph; pushing may go to about −3 g). Let go and the wings level and it holds the climb or dive you were in, so a gentle descent stays a descent; let go nearly level (within about 5°) and it holds that height. Hands off and heading into the ground within about five seconds, it pulls up by itself and the HUD shows PULL UP. It holds height in turns, the rudder is automatic, and a limiter stops you stalling or overstressing. The rudder buttons bank it gently into a flat turn, so the new heading stays when you let go.
+- **Stick · assisted** (the default on phones). Moving the stick part of the way sideways banks to an angle and holds it (up to 80°); all the way to the edge rolls freely. The stick has a curve, gentle near the centre and full at the edge (softer for up and down than for rolling). Forward and back ask for a pitch rate, the same pushing as pulling (about 17° a second at three-quarter stick in a Kestrel at 270 mph; pushing may go to about −3 g, and a jet's fly-by-wire lets a push reach about −3.5 g, counting the extra elevator a steady nose-down rate needs, so at 670 mph the nose comes down at about 11° a second against 12.5° a second pulling). Let go and the wings level and it holds the climb or dive you were in, so a gentle descent stays a descent; let go nearly level (within about 5°) and it holds that height. Hands off and heading into the ground within about five seconds, it pulls up by itself and the HUD shows PULL UP. It holds height in turns, the rudder is automatic, and a limiter stops you stalling or overstressing. The rudder buttons bank it gently into a flat turn, so the new heading stays when you let go.
 - **Stick · manual.** Raw control surfaces.
 - **Touch-drag aim.** Drag anywhere to move an aim point, and the aircraft flies toward it.
 - **Tilt.** Tilt the phone to steer (assisted). If the browser blocks motion sensors, the game switches back to the stick.
