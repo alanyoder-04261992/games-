@@ -795,7 +795,7 @@ function showLobby() {
   app.replaceChildren(page);
   const chat = chatBox(client);
   const render = (lobby) => {
-    if (!lobby) return;
+    if (!lobby || current?.client !== client) return; // this table was left (or we were removed)
     if (!client.isHost && !current.joinTracked) {
       current.joinTracked = true;
       track('join', { g: lobby.gameId, m: 'guest' });
@@ -828,6 +828,8 @@ function showLobby() {
         h(
           'div.gc-seat-actions',
           isHost && !mine && s.kind !== 'human' ? h('button.btn.chip', { onclick: () => room.setSeat(s.seat, 'human', client.playerId) }, 'Sit here') : null,
+          !isHost && s.kind === 'open' && !lobby.players.find((p) => p.id === client.playerId)?.device ? h('button.btn.chip.gold', { onclick: () => client.send({ t: 'sit', seat: s.seat }) }, 'Sit here') : null,
+          isHost ? seatMoveMenu(s) : null,
           isHost && s.kind === 'open' ? h('button.btn.chip', { onclick: () => room.setSeat(s.seat, 'bot') }, h('span', { html: ROBOT_SVG }), 'Add computer') : null,
           isHost && s.kind === 'bot' ? h('button.btn.chip', { onclick: () => room.setSeat(s.seat, 'open') }, 'Open seat') : null,
           isHost && s.kind === 'human' && !s.isHost ? h('button.btn.chip.danger', { onclick: () => confirm(`Remove ${s.name}?`) && room.kick(s.playerId) }, 'Remove') : null,
@@ -835,7 +837,52 @@ function showLobby() {
         ),
       );
     };
+    const seatName = (x) => `${game.seatLabels?.[x.seat] || `Seat ${x.seat + 1}`}${x.kind === 'open' ? ' (empty)' : `: ${x.name}`}`;
+    // the host moves people: seat someone who is watching, or trade two seats
+    const seatMoveMenu = (s) => {
+      const choices = [
+        ...watchers.filter((w) => w.connected).map((w) => ({ value: `w:${w.id}`, label: `Seat ${w.name} here` })),
+        ...lobby.seats.filter((x) => x.seat !== s.seat && (s.kind !== 'open' || x.kind !== 'open')).map((x) => ({ value: `s:${x.seat}`, label: `Swap with ${seatName(x)}` })),
+      ];
+      if (!choices.length) return null;
+      return h(
+        'select.gc-input.small.gc-seat-move',
+        {
+          'aria-label': `Change ${seatName(s)}`,
+          onchange: (e) => {
+            const [kind, v] = e.target.value.split(':');
+            if (kind === 'w') room.setSeat(s.seat, 'human', v);
+            if (kind === 's') room.swapSeats(s.seat, Number(v));
+            e.target.value = '';
+          },
+        },
+        h('option', { value: '' }, 'Change seat…'),
+        choices.map((c) => h('option', { value: c.value }, c.label)),
+      );
+    };
     const watchers = lobby.players.filter((p) => p.seat == null);
+    const meWatching = !isHost && watchers.some((w) => w.id === client.playerId);
+    const watchList = watchers.length
+      ? h(
+          'div.gc-watchers',
+          isHost ? null : h('p.gc-hint', meWatching ? (lobby.seats.some((x) => x.kind === 'open') ? 'You’re watching. Tap “Sit here” on an empty seat to play.' : 'You’re watching: every seat is taken. The host can give you a seat.') : `Watching: ${watchers.map((w) => w.name).join(', ')}`),
+          isHost
+            ? watchers.filter((w) => w.connected).map((w) =>
+                h(
+                  'label.gc-watcher',
+                  avatar(w.name, w.hue, { size: 'sm' }),
+                  h('span', `${w.name} is watching`),
+                  h(
+                    'select.gc-input.small',
+                    { onchange: (e) => e.target.value !== '' && room.setSeat(Number(e.target.value), 'human', w.id) },
+                    h('option', { value: '' }, 'Give a seat…'),
+                    lobby.seats.filter((x) => !x.isHost).map((x) => h('option', { value: x.seat }, seatName(x))),
+                  ),
+                ),
+              )
+            : null,
+        )
+      : null;
     page.replaceChildren(
       topbar({ back: () => leaveCurrent() && go('#/'), title: `${game.name} · online table` }),
       h(
@@ -864,7 +911,7 @@ function showLobby() {
           game.sameDevice && lobby.seats.some((x) => x.kind !== 'human')
             ? h('button.btn.ghost.gc-add-local', { onclick: () => addLocalSheet(game, client, room) }, '+ Add a player on this device')
             : null,
-          watchers.length ? h('p.gc-hint', `Watching: ${watchers.map((w) => w.name).join(', ')}`) : null,
+          watchList,
         ),
         h(
           'section.gc-lobby-side',
@@ -1040,6 +1087,7 @@ async function showTable() {
     offline.classList.toggle('show', !(s === 'online' || s === 'offline'));
   });
   client.on('toast', (t) => toast(t));
+  if (online) watchersBar(stage, client);
   await loadStyles(game);
   const mod = await game.ui();
   if (!current || current.client !== client) return;
@@ -1152,6 +1200,37 @@ function rematchFallback(stage, client) {
       stage.append(bar);
     }, 1500); // give the game's own end screen time to appear first
   });
+}
+
+// During an online game: someone who joined after the start watches until the host seats them.
+// The host gets a bar with a button for that; the person watching is told what's going on.
+function watchersBar(stage, client) {
+  const bar = h('div.gc-watch-bar');
+  bar.hidden = true;
+  stage.after(bar);
+  let shown = ''; // what the bar says now (repainted only when that changes, so taps land)
+  let closed = ''; // the host closed it for these people; someone new brings it back
+  const paint = (lobby) => {
+    if (!bar.isConnected && bar.dataset.mounted) return off();
+    bar.dataset.mounted = '1';
+    const waiting = lobby?.started ? lobby.players.filter((p) => p.seat == null && p.connected && !p.isHost) : [];
+    const host = lobby?.players.find((p) => p.isHost);
+    let text = '';
+    if (client.isHost && waiting.length) text = `${waiting.map((p) => p.name).join(', ')} ${waiting.length === 1 ? 'is' : 'are'} watching`;
+    else if (!client.isHost && waiting.some((p) => p.id === client.playerId)) text = `You’re watching. ${host?.name || 'The host'} can give you a seat.`;
+    if (text && text === closed) text = '';
+    if (text === shown) return;
+    shown = text;
+    bar.hidden = !text;
+    if (!text) return;
+    bar.replaceChildren(
+      h('span', text),
+      client.isHost ? h('button.btn.gold.chip', { type: 'button', onclick: () => settingsSheet() }, 'Give a seat') : null,
+      h('button.gc-watch-x', { type: 'button', 'aria-label': 'Close', onclick: () => ((closed = text), (shown = ''), (bar.hidden = true)) }, '×'),
+    );
+  };
+  const off = client.on('lobby', paint);
+  paint(client.lobby);
 }
 
 // ---------------------------------------------------------------------
@@ -1396,7 +1475,7 @@ function seatManager(room, redraw) {
         'div.gc-seat-line',
         avatar(s.name, s.hue, { bot: s.kind === 'bot', size: 'sm' }),
         h('span', `${room.game.seatLabels?.[s.seat] || 'Seat ' + (s.seat + 1)}: ${s.name}`, s.kind === 'human' && !s.connected ? h('small', ' (offline — computer covers)') : null),
-        s.kind === 'bot' && waiting.length
+        (s.kind === 'bot' || (s.kind === 'human' && !s.connected && !s.isHost && !s.device)) && waiting.length
           ? h(
               'select.gc-input.small',
               {
@@ -1414,7 +1493,7 @@ function seatManager(room, redraw) {
         s.kind === 'human' && !s.isHost ? h('button.btn.chip.danger', { onclick: () => (room.kick(s.playerId), redraw()) }, 'Remove') : null,
       ),
     ),
-    waiting.length ? h('p.gc-hint', `Waiting to play: ${waiting.map((p) => p.name).join(', ')}`) : null,
+    waiting.length ? h('p.gc-hint', `Waiting to play: ${waiting.map((p) => p.name).join(', ')}. Pick “Seat a player…” next to a computer player (or someone who went offline) to give them that seat.`) : null,
   );
 }
 
