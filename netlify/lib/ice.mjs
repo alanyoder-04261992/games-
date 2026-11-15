@@ -20,16 +20,26 @@ const json = (body, maxAge = 0) => new Response(JSON.stringify(body), { headers:
 
 // GET /api/ice  →  { iceServers: [...], relay: 'cloudflare' | 'public' }
 export async function handleIce(env, fetchImpl = fetch, now = Date.now()) {
-  const id = env.CF_TURN_KEY_ID;
-  const token = env.CF_TURN_API_TOKEN;
+  // cleaned: a key pasted with a space, a line break or quote marks round it is the commonest
+  // setup slip ("Bearer " pasted in front of the token, too)
+  const clean = (v) => String(v || '').trim().replace(/^["'`]+|["'`]+$/g, '').replace(/^Bearer\s+/i, '').trim();
+  let id = clean(env.CF_TURN_KEY_ID);
+  // the Turn Token ID is hexadecimal (0-9, a-f), so a letter O can only be a mistyped zero
+  if (/^[0-9a-fA-FoO]+$/.test(id)) id = id.replace(/[oO]/g, '0');
+  const token = clean(env.CF_TURN_API_TOKEN);
   if (!id || !token) return json({ iceServers: PUBLIC_ICE, relay: 'public' }, 3600);
   if (cache && cache.until > now) return json(cache.body, 3600);
+  let status = 0;
   try {
-    const res = await fetchImpl(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(id)}/credentials/generate-ice-servers`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ ttl: TTL }),
-    });
+    const ask = (path) =>
+      fetchImpl(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(id)}/credentials/${path}`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ ttl: TTL }),
+      });
+    let res = await ask('generate-ice-servers');
+    if (res.status === 404) res = await ask('generate'); // Cloudflare's older address for the same thing
+    status = res.status;
     if (!res.ok) throw new Error(`Cloudflare answered ${res.status}`);
     const data = await res.json();
     const list = [data.iceServers].flat().filter(Boolean);
@@ -43,6 +53,8 @@ export async function handleIce(env, fetchImpl = fetch, now = Date.now()) {
     return json(body, 3600);
   } catch (e) {
     console.warn('TURN credentials failed:', e.message);
-    return json({ iceServers: PUBLIC_ICE, relay: 'public', error: 'relay-unavailable' });
+    // the reason, never the key: 401/403 = wrong API token, 404 = wrong Turn Token ID
+    const hint = status === 401 || status === 403 ? 'check CF_TURN_API_TOKEN' : status === 404 ? 'check CF_TURN_KEY_ID' : status ? 'Cloudflare error' : 'could not reach Cloudflare';
+    return json({ iceServers: PUBLIC_ICE, relay: 'public', error: 'relay-unavailable', cloudflareStatus: status || null, hint });
   }
 }
