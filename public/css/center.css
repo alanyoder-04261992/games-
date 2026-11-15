@@ -662,3 +662,13 @@ body.gc-reloading { opacity: 0.6; transition: opacity 0.2s; }
   .gi-table td, .gi-table th { padding: 8px 6px; }
   .gi-table td:first-child { white-space: normal; }
 }
+
+/* ---- table code choice and the "can't reach the host" screen ---- */
+.gc-codebox { display: flex; flex-direction: column; gap: 8px; }
+.gc-codebox[hidden], .gc-codebox [hidden] { display: none !important; }
+.gc-mycode { font-family: var(--display); font-size: 22px; letter-spacing: 0.25em; text-align: center; text-transform: uppercase; }
+.gc-unreachable { max-width: 460px; text-align: left; gap: 10px; }
+.gc-unreachable h2 { text-align: center; }
+.gc-unreachable p { color: var(--muted); line-height: 1.5; }
+.gc-unreachable ul { margin: 0; padding-left: 20px; line-height: 1.5; }
+.gc-unreachable li { margin: 6px 0; }

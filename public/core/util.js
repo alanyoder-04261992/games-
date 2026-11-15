@@ -97,6 +97,12 @@ export function uid(n = 10) {
 }
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+// Table codes: 4 to 8 letters and digits. A code the host types is cleaned the same way.
+export function cleanCode(c) {
+  const v = String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  return v.length >= 4 ? v : null;
+}
+
 export function roomCode(n = 5) {
   const a = new Uint8Array(n);
   crypto.getRandomValues(a);

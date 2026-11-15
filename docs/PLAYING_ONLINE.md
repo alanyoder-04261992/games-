@@ -6,7 +6,10 @@ home page, **Step-by-step guide** in the lobby, the **?** button at the table, o
 
 ## Start a table (the host)
 1. On the home page, pick a game and tap **Multiplayer**. Check the game's settings in the
-   pop-up and tap **Continue**. A 5-letter table code appears.
+   pop-up, choose a **Table code**: *New each time*, or *My own code* (4 to 8 letters or
+   numbers that stay the same every time you host, so friends can keep it), and tap
+   **Continue**. The table code appears. Refreshing the page in the lobby reopens the same
+   table with the same code, and friends reconnect by themselves.
 2. Tap **Invite** to text or email the link, or read the code out loud.
 3. Friends appear in seats as they join. In Rook the first friend sits across from you as
    your partner. Use **Sit here**, **Add computer** or **Remove** to arrange the table.
@@ -62,12 +65,28 @@ Most turn-based games let people share a phone or tablet:
 ## Troubleshooting
 | Problem | Try this |
 | --- | --- |
-| "No table found" | Codes never use I, O, 0 or 1. Make sure the host still has the table open. |
-| Stuck on "Connecting…" | Switch between Wi-Fi and cellular. Some work, school and hotel networks block direct connections. |
+| "No table found" | Check the code (made-up codes never use I, O, 0 or 1; your own code can be anything). Make sure the host still has the table open. |
+| "Can't reach table … yet" / stuck on "Connecting…" | That network is blocking the direct connection. Switch between Wi-Fi and mobile data and tap **Try again**; turn off a VPN or iCloud Private Relay. For the host: set up the free relay below so this stops happening. |
 | A player shows "Reconnecting…" | Their device slept or lost signal. A computer covers; they reopen the link to take over. |
 | Nobody hears me (voice) | Make sure the mic is green. If the host muted you, ask them to allow you. If the browser blocked the mic, allow it in site settings and tap Join voice again. |
 | I can't hear anyone (voice) | Turn the volume up and the silent switch off; on iPhone tap the screen once. |
 | Everything froze | The host's device went to sleep — have the host unlock and reopen the Game Center. |
+
+## For the host: a relay so everyone can connect
+
+Players' devices connect straight to the host's. Most networks allow that, but some (often
+mobile data, and work, school or hotel Wi-Fi) block it, and a player on one of them sits on
+"Connecting to the host". A **relay** passes the game through for them. The Game Center uses
+PeerJS's free shared relay, which is often busy; your own free Cloudflare relay makes it reliable:
+
+1. Sign in at dash.cloudflare.com (a free account works) → **Realtime** (or "Calls") →
+   **TURN Server** → **Create**. Name it "Game Center".
+2. Copy the **Turn Token ID** and the **API Token** it shows (the API token is shown once).
+3. In Netlify: the site → **Site configuration → Environment variables**. Add
+   `CF_TURN_KEY_ID` = the Turn Token ID and `CF_TURN_API_TOKEN` = the API Token (scope:
+   Functions).
+4. **Deploys → Trigger deploy**. Every player now gets relay details from `/api/ice` before
+   connecting. Cloudflare's free tier covers far more than a family's game nights.
 
 ## Put it on your home screen
 - **iPhone / iPad:** Safari → Share → **Add to Home Screen**.
