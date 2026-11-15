@@ -23,7 +23,9 @@ export async function handleIce(env, fetchImpl = fetch, now = Date.now()) {
   // cleaned: a key pasted with a space, a line break or quote marks round it is the commonest
   // setup slip ("Bearer " pasted in front of the token, too)
   const clean = (v) => String(v || '').trim().replace(/^["'`]+|["'`]+$/g, '').replace(/^Bearer\s+/i, '').trim();
-  const id = clean(env.CF_TURN_KEY_ID);
+  let id = clean(env.CF_TURN_KEY_ID);
+  // the Turn Token ID is hexadecimal (0-9, a-f), so a letter O can only be a mistyped zero
+  if (/^[0-9a-fA-FoO]+$/.test(id)) id = id.replace(/[oO]/g, '0');
   const token = clean(env.CF_TURN_API_TOKEN);
   if (!id || !token) return json({ iceServers: PUBLIC_ICE, relay: 'public' }, 3600);
   if (cache && cache.until > now) return json(cache.body, 3600);

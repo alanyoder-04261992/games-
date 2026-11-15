@@ -59,3 +59,14 @@ test('keys are trimmed, the older Cloudflare address is tried on 404, and failur
   assert.equal(bad.hint, 'check CF_TURN_API_TOKEN');
   assert.ok(!JSON.stringify(bad).includes('"T"'), 'never echoes the key');
 });
+
+test('a Turn Token ID typed with the letter O for zero still works', async () => {
+  _resetCache();
+  let asked = '';
+  const fake = async (url) => {
+    asked = url.split('/keys/')[1].split('/')[0];
+    return new Response(JSON.stringify({ iceServers: [{ urls: ['turn:turn.cloudflare.com:3478'], username: 'u', credential: 'c' }] }));
+  };
+  await handleIce({ CF_TURN_KEY_ID: 'Oae223d38337781a5aa56744ad70a122', CF_TURN_API_TOKEN: 'T' }, fake);
+  assert.equal(asked, '0ae223d38337781a5aa56744ad70a122');
+});
