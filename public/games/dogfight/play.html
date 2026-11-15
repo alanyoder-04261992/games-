@@ -2173,9 +2173,12 @@ class Plane {
     if (s.gLimit && V > 30 && this.alive) {
       const den = Math.max(1, qd * s.S * lk), kE = s.Ke * Math.max(0.2, tailF * comp);
       const aMax = (s.gLimit * s.mass * 9.81 / den - s.CL0) / s.CLa; const lim = Math.max(0.05, (aMax - s.trimA) * s.Cma / kE);
-      // pushing over: down to about -3.5 g, allowing the extra elevator a steady nose-down rate needs against pitch damping
-      const aMin = (-3.5 * s.mass * 9.81 / den - s.CL0) / s.CLa;
-      const limN = Math.max(0.05, (s.trimA - aMin) * s.Cma / kE + (this.w.x < 0 ? s.Cmq * -this.w.x * sq / (Math.max(qn, 0.01) * kE) : 0));
+      // pushing over: down to about -4 g, so at speed the nose comes down about as fast as it comes up. It allows for the extra
+      // elevator a steady push at that g needs against pitch damping (the rate it settles at, not the rate now, so it never
+      // runs away), and stays clear of the -5.5 g that overstresses the airframe
+      const nN = Math.min(4, s.gLimit * 0.45), wSS = (nN + 1) * 9.81 / V;
+      const aMin = (-nN * s.mass * 9.81 / den - s.CL0) / s.CLa;
+      const limN = Math.max(0.05, ((s.trimA - aMin) * s.Cma + s.Cmq * wSS * sq / Math.max(qn, 0.01)) / kE);
       pc = clamp(pc, -limN, lim);
     }
     let pA = qn * (s.Ke * pc * tailF * comp * (1 - 0.5 * stall) - s.Cma * (alpha - s.trimA)) - s.Cmq * this.w.x * sq;
@@ -2738,7 +2741,11 @@ function pitchCaps(p) {
   const qd = 0.5 * 1.225 * Math.exp(-Math.max(0, p.pos.y) / 8500) * V * V;
   const aG = ((8.5 * s.mass * 9.81) / (qd * s.S * (p.lkEff || 1)) - s.CL0 - p.flapT * (p.player ? 0.8 : 0.38)) / s.CLa;
   const aMax = Math.min(s.stallA * 0.9, aG);
-  return { hi: s.Cma * (aMax - s.trimA) / s.Ke, lo: s.Cma * (-s.stallA * 0.85 - s.trimA) / s.Ke }; // pushing over may go to about -3 g
+  // pushing over: to the stall at low speed, and no harder than about -4.2 g at speed (-5.5 g overstresses the airframe)
+  const aN = Math.max(-s.stallA * 0.85, (-4.2 * s.mass * 9.81 / (qd * s.S * (p.lkEff || 1)) - s.CL0) / s.CLa);
+  // plus the elevator a steady push needs against pitch damping (at the rate it settles at), or it never gets there
+  const qn = qd / 7411, wN = (aN > -s.stallA * 0.85 ? 5.2 : 1 + Math.max(0, -(s.CL0 + s.CLa * aN) * qd * s.S * (p.lkEff || 1) / (s.mass * 9.81))) * 9.81 / V;
+  return { hi: s.Cma * (aMax - s.trimA) / s.Ke, lo: (s.Cma * (aN - s.trimA) - s.Cmq * wN * Math.sqrt(qn + 0.02) / qn) / s.Ke };
 }
 function trimFor(p, nz) {
   const s = p.spec, V = Math.max(p.V, 25);
@@ -5176,7 +5183,7 @@ function drawHUD(rdt) {
   if (isTouch && !tTray.hidden && performance.now() > trayT) showTray(false);
   // vision effects
   if (p.alive) {
-    const gl = clamp((p.gs - 7.8) / 2.4, 0, 1), rl = clamp((-p.gs - 2.4) / 1.6, 0, 1);
+    const gl = clamp((p.gs - 7.8) / 2.4, 0, 1), rl = clamp((-p.gs - 3.5) / 2.5, 0, 1); // red-out: from -3.5 g, full at -6 g
     if (gl > 0 || rl > 0) { const g = hx.createRadialGradient(HW / 2, HH / 2, Math.min(HW, HH) * 0.15 * (1 - gl), HW / 2, HH / 2, Math.max(HW, HH) * 0.7); const col = rl > 0 ? `rgba(120,0,0,${rl * 0.95})` : `rgba(0,0,0,${gl * 0.97})`; g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, col); hx.fillStyle = g; hx.fillRect(0, 0, HW, HH); }
     let cl = 0; for (const c of cloudCenters) { const d = Math.hypot(camera.position.x - c.x, (camera.position.y - c.y) * 2.2, camera.position.z - c.z); if (d < c.r) cl = Math.max(cl, 1 - d / c.r); }
     if (cl > 0) { hx.fillStyle = `rgba(232,236,240,${Math.min(0.85, cl * 1.6)})`; hx.fillRect(0, 0, HW, HH); }
