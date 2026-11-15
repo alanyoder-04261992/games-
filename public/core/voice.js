@@ -1,8 +1,9 @@
 // Voice chat for online tables.
 //
 // Everyone at an online table hears voice chat without doing anything: they "listen" from the
-// moment they arrive (no microphone needed, nothing to allow). Tapping the mic button opens
-// their microphone so they can talk (always on, with a mute button). Players and watchers
+// moment they arrive and the whole time they're there (no microphone needed, nothing to allow).
+// Talking is tap to talk: tapping the mic opens the microphone and you're live; tap again and
+// it's off (the mic stays ready, muted, so the next tap is instant). Players and watchers
 // alike, so a table can have as many voices as it has people. Audio travels peer to peer over
 // WebRTC (through the table's relay when a network needs it); nothing is recorded or stored.
 //
@@ -148,6 +149,23 @@ export class Voice extends Emitter {
     this.emit('change');
   }
 
+  // Tap to talk: the first tap opens the microphone (asking permission once); after that each
+  // tap turns talking on or off. Listening never stops.
+  get talking() {
+    return this.state === 'on' && !this.muted && !this.hostMuted;
+  }
+
+  async toggleTalk() {
+    if (this.hostMuted) return false;
+    if (this.state !== 'on') {
+      this.muted = false;
+      await this.join();
+      return true;
+    }
+    this.setMuted(!this.muted);
+    return true;
+  }
+
   toggleMute() {
     if (this.hostMuted) return false;
     this.setMuted(!this.muted);
@@ -195,6 +213,10 @@ export class Voice extends Emitter {
           connected: me ? this.hearing : !!call?.live || (!mic && this.state !== 'on'),
           speaking: this.speaking.has(p.id),
         };
+      })
+      .map((r) => {
+        r.live = r.mic && !r.muted && !r.hostMuted; // talking right now (their mic is on)
+        return r;
       })
       .filter((r) => r.on);
   }

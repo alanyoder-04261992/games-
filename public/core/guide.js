@@ -63,9 +63,9 @@ export function onlineGuide({ onHost, onJoin } = {}) {
 
     h('section.gd-section', h('h3', 'Talk while you play (voice chat)'),
       h('div.gd-tips',
-        tip('sound', 'Everyone hears, nobody has to join', 'Voice chat plays for everyone at the table on its own — no mic needed to listen. On iPhone, sound starts after your first tap (or tap ', h('b', 'Tap to hear'), ').'),
-        tip('mic', 'Talk', 'Tap the ', h('b', 'microphone'), ' at the top of the table (or ', h('b', 'Talk'), ' in the lobby) and allow the microphone. Everyone at the table hears you — players and people watching.'),
-        tip('mic', 'Always on, with mute', 'Your mic stays on so you can just talk. Tap the green mic to mute; tap the red one to talk again. Whoever is talking lights up green.'),
+        tip('sound', 'Everyone hears, the whole time', 'Voice chat plays for everyone at the table on its own — no mic needed to listen. On iPhone, sound starts after your first tap (or tap ', h('b', 'Tap to hear'), ').'),
+        tip('mic', 'Tap to talk', 'Tap the ', h('b', 'microphone'), ' at the top of the table (or ', h('b', 'Tap to talk'), ' in the lobby); the first time, allow the microphone. It turns green and everyone hears you. Tap again when you’re done.'),
+        tip('seats', 'See who’s talking', 'A face shows in the top bar for everyone whose mic is on, glowing while their voice comes through. Tap your own face to stop talking.'),
         tip('seats', 'The host can mute anyone', 'The host taps the people button next to the mic and picks ', h('b', 'Mute for all'), '. That person can’t unmute until the host taps ', h('b', 'Allow to talk'), '.'),
         tip('chat', 'Too loud? Silence just for you', 'In the same list, ', h('b', 'Silence'), ' stops you hearing one person without muting them for anyone else.'),
       ),
@@ -86,8 +86,8 @@ export function onlineGuide({ onHost, onJoin } = {}) {
       qa('It says “Connecting…” and never joins', 'Try switching between Wi-Fi and cellular on the phone that is stuck. Some work, school and hotel networks block direct connections between devices; cellular data almost always works.'),
       qa('Someone shows “Reconnecting…”', 'Their device lost the connection or went to sleep. A computer player is covering for them — they just reopen the link or refresh to take their seat back.'),
       qa('The game froze for everybody', 'The host’s device probably went to sleep. Have the host unlock their screen and open the Game Center again.'),
-      qa('Voice chat: nobody can hear me', 'Check the mic at the top is green, not red. If it says the host muted you, ask them to tap Allow to talk. If the browser blocked the microphone, allow it in the browser’s site settings (on iPhone: Settings → Safari → Microphone) and tap Talk again.'),
-      qa('Voice chat: I can’t hear anyone', 'Turn up the volume and make sure the phone isn’t on silent. On iPhone, tap the screen once (or Tap to hear) — phones only start sound after a tap. If the voice list says voice is off, tap Turn voice on. If one person is missing, they may be on a network that blocks direct connections; switching them to cellular usually fixes it.'),
+      qa('Voice chat: nobody can hear me', 'Tap the mic at the top so it turns green — it’s tap to talk. If it says the host muted you, ask them to tap Allow to talk. If the browser blocked the microphone, allow it in the browser’s site settings (on iPhone: Settings → Safari → Microphone) and tap Talk again.'),
+      qa('Voice chat: I can’t hear anyone', 'Turn up the volume and make sure the phone isn’t on silent. On iPhone, tap the screen once (or Tap to hear) — phones only start sound after a tap. Someone is only heard while their face shows in the top bar. If one person is missing, they may be on a network that blocks direct connections; switching them to cellular usually fixes it.'),
             qa('Can I play from a computer and others on phones?', 'Yes — any mix of phones, tablets and computers works, in any modern browser (Safari, Chrome, Edge, Firefox).'),
     ),
 

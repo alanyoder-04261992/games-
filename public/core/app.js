@@ -1081,7 +1081,7 @@ async function showTable() {
   const bar = h(
     'div.gc-gamebar',
     h('button.gc-icon-btn', { onclick: () => leaveCurrent() && go('#/'), title: 'Back to Game Center', 'aria-label': 'Back' }, h('span', { html: ICON.back })),
-    h('div.gc-gamebar-title', h('strong', game.name), online ? h('button.gc-room-chip', { onclick: () => inviteSheet(game, code) }, h('span.gc-conn', { dataset: { status: client.isHost ? current.room.status : client.status } }), code) : null, online ? voiceStrip() : null),
+    h('div.gc-gamebar-title', h('strong', game.name), online ? h('button.gc-room-chip', { onclick: () => inviteSheet(game, code) }, h('span.gc-conn', { dataset: { status: client.isHost ? current.room.status : client.status } }), code) : null, online ? talkingPill() : null),
     h(
       'div.gc-gamebar-right',
       online ? micButton() : null,
@@ -1268,8 +1268,8 @@ function voiceFor() {
     let blockedToast = false;
     voice.on('blocked', () => !blockedToast && ((blockedToast = true), toast('Tap anywhere to hear voice chat', { ms: 6000 })));
     current.voice = voice;
-    // everyone at an online table hears voice chat from the start; the mic is only for talking
-    if (store.get('gc.voice.listen') !== false) voice.listen();
+    // everyone at an online table hears voice chat the whole time; the mic is tap to talk
+    voice.listen();
   }
   return current.voice;
 }
@@ -1302,18 +1302,15 @@ function onSpeaking(el, fn) {
 }
 
 function micState(voice) {
-  if (voice.state === 'starting') return { cls: 'starting', icon: ICON.mic, label: 'Starting your mic…' };
-  if (voice.state === 'listening') return { cls: 'off', icon: ICON.micPlus, label: 'You hear everyone — tap to talk' };
-  if (voice.state !== 'on') return { cls: 'off', icon: ICON.micPlus, label: 'Turn on voice chat' };
-  if (voice.hostMuted) return { cls: 'host-muted', icon: ICON.micOff, label: 'The host muted you' };
-  if (voice.muted) return { cls: 'muted', icon: ICON.micOff, label: 'You are muted — tap to talk' };
-  return { cls: 'live', icon: ICON.mic, label: 'Your mic is on — tap to mute' };
+  if (voice.state === 'starting') return { cls: 'starting', icon: ICON.mic, label: 'Starting your mic…', text: 'Starting…' };
+  if (voice.hostMuted) return { cls: 'host-muted', icon: ICON.micOff, label: 'The host muted you', text: 'Muted by host' };
+  if (voice.talking) return { cls: 'live', icon: ICON.mic, label: 'You’re talking — tap to stop', text: 'Stop talking' };
+  return { cls: 'off', icon: ICON.mic, label: 'Tap to talk (you always hear everyone)', text: 'Tap to talk' };
 }
 
 function pressMic(voice) {
-  if (voice.state === 'on') {
-    if (!voice.toggleMute()) toast('The host muted you. Ask them to unmute you.');
-  } else voice.join();
+  if (voice.hostMuted) return toast('The host muted you. Ask them to let you talk.');
+  voice.toggleTalk();
 }
 
 function micButton() {
@@ -1323,43 +1320,47 @@ function micButton() {
     const st = micState(voice);
     return [
       h(`button.gc-icon-btn.gc-mic.${st.cls}`, { title: st.label, 'aria-label': st.label, onclick: () => pressMic(voice) }, h('span', { html: st.icon }), h('i.gc-mic-level')),
-      voice.hearing ? h('button.gc-icon-btn.gc-mic-more', { title: 'Voice chat', 'aria-label': 'Voice chat people', onclick: () => voicePanel() }, h('span', { html: ICON.people })) : null,
+      h('button.gc-icon-btn.gc-mic-more', { title: 'Voice chat', 'aria-label': 'Voice chat people', onclick: () => voicePanel() }, h('span', { html: ICON.people })),
       voice.blocked ? h('button.btn.gold.chip.gc-tap-hear', { onclick: () => voice.unblock() }, 'Tap to hear') : null,
     ];
   });
 }
 
-function voiceStrip() {
-  const el = h('button.gc-voice-strip', { title: 'Voice chat', onclick: () => voicePanel() });
-  return live(
-    el,
-    (voice) =>
-    voice.roster().filter((r) => r.mic).map((r) =>
+// Who is talking right now, under the top bar: everyone whose mic is on, glowing while their
+// voice is heard. Your own chip says you're live and stops talking when tapped.
+function talkingPill() {
+  const el = h('div.gc-talking-pill', { 'aria-live': 'polite' });
+  live(el, (voice) => {
+    const people = voice.roster().filter((r) => r.live);
+    el.hidden = !people.length;
+    return people.map((r) =>
       h(
-        'span.gc-vs-face' + (r.speaking ? '.speaking' : '') + (r.muted || r.hostMuted || r.localMuted ? '.muted' : ''),
-        { title: `${r.name}${r.me ? ' (you)' : ''}${r.hostMuted ? ' — muted by host' : r.muted ? ' — muted' : ''}` },
+        'button.gc-tp-face' + (r.speaking ? '.speaking' : '') + (r.me ? '.me' : ''),
+        { type: 'button', dataset: { id: r.id }, title: r.me ? 'You’re talking — tap to stop' : `${r.name} is talking`, onclick: () => (r.me ? pressMic(voice) : voicePanel()) },
         avatar(r.name, r.hue, { size: 'sm' }),
-        r.muted || r.hostMuted || r.localMuted ? h('i', { html: ICON.micOff }) : null,
+        h('span', r.me ? 'You' : r.name),
+        h('i', { html: ICON.mic }),
       ),
-    ),
-    ['change', 'speaking'],
-  );
+    );
+  });
+  // the glow follows their voice without rebuilding the buttons
+  onSpeaking(el, (speaking) => el.querySelectorAll('.gc-tp-face').forEach((b) => b.classList.toggle('speaking', speaking.has(b.dataset.id))));
+  return el;
 }
 
 function voiceBox() {
   const el = h('div.gc-voice-box');
   return live(el, (voice) => {
     const st = micState(voice);
-    const people = voice.roster();
-    const talkers = people.filter((r) => r.mic);
+    const talkers = voice.roster().filter((r) => r.live && !r.me);
     return [
-      voice.state === 'on'
-        ? h('div.gc-voice-row', h(`button.btn.${st.cls === 'live' ? 'ghost' : 'gold'}`, { onclick: () => pressMic(voice) }, h('span', { html: st.icon }), st.cls === 'live' ? 'Mute' : st.cls === 'host-muted' ? 'Muted by host' : 'Unmute'), h('button.btn.text', { onclick: () => voicePanel() }, `${people.length} in voice`), h('button.btn.text', { onclick: () => voice.stopTalking() }, 'Mic off'))
-        : voice.hearing || voice.state === 'starting'
-          ? h('div.gc-voice-row', h('button.btn.gold', { onclick: () => voice.join(), disabled: voice.state === 'starting' }, h('span', { html: ICON.mic }), voice.state === 'starting' ? 'Starting…' : 'Talk'), h('small', talkers.length ? `You hear ${talkers.map((r) => r.name).join(', ')}. Tap Talk to turn on your mic.` : 'You’ll hear anyone who talks. Tap Talk to turn on your mic.'), h('button.btn.text', { onclick: () => voice.leave() }, 'Turn off'))
-          : h('div.gc-voice-row', h('button.btn.gold', { onclick: () => voice.listen() }, h('span', { html: ICON.sound }), 'Turn on voice'), h('small', 'Voice is off on this device: you don’t hear anyone.')),
+      h(
+        'div.gc-voice-row',
+        h(`button.btn.${st.cls === 'live' ? 'gc-talking' : 'gold'}`, { onclick: () => pressMic(voice), disabled: voice.state === 'starting' }, h('span', { html: st.icon }), st.text),
+        h('small', st.cls === 'live' ? 'Everyone hears you. Tap again when you’re done.' : talkers.length ? `Talking now: ${talkers.map((r) => r.name).join(', ')}` : 'You always hear everyone. Tap to talk.'),
+        h('button.btn.text', { onclick: () => voicePanel() }, 'People'),
+      ),
       voice.blocked ? h('button.btn.gold.gc-tap-hear', { onclick: () => voice.unblock() }, h('span', { html: ICON.sound }), 'Tap to hear voice') : null,
-      talkers.length ? h('div.gc-voice-faces', voiceStrip()) : null,
     ];
   });
 }
@@ -1374,12 +1375,11 @@ function voicePanel() {
     const roster = voice.roster();
     const inVoice = new Set(roster.map((r) => r.id));
     const others = (current?.client.lobby?.players || []).filter((p) => !inVoice.has(p.id) && p.connected);
-    const status = (r) =>
-      !r.mic ? (r.me ? 'Listening — tap “Talk” to use your mic' : !r.connected ? 'Connecting…' : 'Listening (no mic)') : r.hostMuted ? 'Muted by host' : r.muted ? 'Muted' : !r.connected ? 'Connecting…' : r.speaking ? 'Talking' : r.me ? 'Mic on' : 'Mic on';
+    const status = (r) => (r.hostMuted ? 'Muted by host' : r.live ? (r.speaking ? 'Talking' : 'Mic on') : r.me ? 'Listening — tap Talk to speak' : !r.connected ? 'Connecting…' : 'Listening');
     statusOf = status;
     return [
       h('h2', 'Voice chat'),
-      h('p.gc-hint', 'Everyone at the table hears whoever talks; nobody needs a mic to listen. ', isHost ? 'As the host you can mute anyone for the whole table.' : 'Silence someone just for yourself with the speaker button.'),
+      h('p.gc-hint', 'Everyone always hears whoever is talking. Tap to talk, tap again when you’re done. ', isHost ? 'As the host you can mute anyone for the whole table.' : 'Silence someone just for yourself with the speaker button.'),
       h(
         'div.gc-voice-list',
         roster.map((r) =>
@@ -1390,10 +1390,8 @@ function voicePanel() {
             h('div.gc-voice-who', h('strong', r.name, r.me ? ' (you)' : '', r.isHost ? h('span.gc-host-tag', 'Host') : null), h('small.' + (r.hostMuted || r.muted ? 'off' : r.speaking ? 'on' : ''), status(r))),
             h(
               'div.gc-voice-actions',
-              r.me && !r.mic
-                ? h('button.btn.chip.gold', { onclick: () => voice.join() }, h('span', { html: ICON.mic }), 'Talk')
-                : r.me
-                ? h(`button.btn.chip${voice.muted ? '.on' : ''}`, { disabled: voice.hostMuted, onclick: () => voice.toggleMute() }, h('span', { html: voice.muted || voice.hostMuted ? ICON.micOff : ICON.mic }), voice.muted ? 'Unmute' : 'Mute')
+              r.me
+                ? h(`button.btn.chip${voice.talking ? '.on' : '.gold'}`, { disabled: voice.hostMuted, onclick: () => pressMic(voice) }, h('span', { html: ICON.mic }), voice.talking ? 'Stop talking' : 'Talk')
                 : !r.mic
                 ? null
                 : h(`button.btn.chip${r.localMuted ? '.on' : ''}`, { title: 'Only you stop hearing them', onclick: () => voice.setLocalMute(r.id, !r.localMuted) }, h('span', { html: r.localMuted ? ICON.mute : ICON.sound }), r.localMuted ? 'Hear' : 'Silence'),
@@ -1402,12 +1400,10 @@ function voicePanel() {
           ),
         ),
       ),
-      others.length ? h('p.gc-hint', `Voice turned off: ${others.map((p) => p.name).join(', ')} (they don’t hear anyone)`) : null,
+      others.length ? h('p.gc-hint', `Still connecting: ${others.map((p) => p.name).join(', ')}`) : null,
       isHost && others.some((p) => p.hostMuted) ? h('p.gc-hint', 'Players you muted stay muted if they rejoin voice.') : null,
       h(
         'div.gc-actions',
-        voice.state === 'on' ? h('button.btn.ghost', { onclick: () => voice.stopTalking() }, 'Turn my mic off') : null,
-        voice.hearing ? h('button.btn.text', { onclick: () => (voice.leave(), sheet.close()) }, 'Turn voice off') : h('button.btn.gold', { onclick: () => voice.listen() }, h('span', { html: ICON.sound }), 'Turn voice on'),
         h('button.btn.ghost', { onclick: () => sheet.close() }, 'Done'),
       ),
     ];
