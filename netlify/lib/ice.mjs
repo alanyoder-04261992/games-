@@ -20,16 +20,22 @@ const json = (body, maxAge = 0) => new Response(JSON.stringify(body), { headers:
 
 // GET /api/ice  →  { iceServers: [...], relay: 'cloudflare' | 'public' }
 export async function handleIce(env, fetchImpl = fetch, now = Date.now()) {
-  const id = env.CF_TURN_KEY_ID;
-  const token = env.CF_TURN_API_TOKEN;
+  // trimmed: a key pasted with a space or line break is the commonest setup slip
+  const id = String(env.CF_TURN_KEY_ID || '').trim();
+  const token = String(env.CF_TURN_API_TOKEN || '').trim();
   if (!id || !token) return json({ iceServers: PUBLIC_ICE, relay: 'public' }, 3600);
   if (cache && cache.until > now) return json(cache.body, 3600);
+  let status = 0;
   try {
-    const res = await fetchImpl(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(id)}/credentials/generate-ice-servers`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ ttl: TTL }),
-    });
+    const ask = (path) =>
+      fetchImpl(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(id)}/credentials/${path}`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ ttl: TTL }),
+      });
+    let res = await ask('generate-ice-servers');
+    if (res.status === 404) res = await ask('generate'); // Cloudflare's older address for the same thing
+    status = res.status;
     if (!res.ok) throw new Error(`Cloudflare answered ${res.status}`);
     const data = await res.json();
     const list = [data.iceServers].flat().filter(Boolean);
@@ -43,6 +49,8 @@ export async function handleIce(env, fetchImpl = fetch, now = Date.now()) {
     return json(body, 3600);
   } catch (e) {
     console.warn('TURN credentials failed:', e.message);
-    return json({ iceServers: PUBLIC_ICE, relay: 'public', error: 'relay-unavailable' });
+    // the reason, never the key: 401/403 = wrong API token, 404 = wrong Turn Token ID
+    const hint = status === 401 || status === 403 ? 'check CF_TURN_API_TOKEN' : status === 404 ? 'check CF_TURN_KEY_ID' : status ? 'Cloudflare error' : 'could not reach Cloudflare';
+    return json({ iceServers: PUBLIC_ICE, relay: 'public', error: 'relay-unavailable', cloudflareStatus: status || null, hint });
   }
 }

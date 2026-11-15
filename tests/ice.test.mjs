@@ -40,3 +40,22 @@ test('if Cloudflare fails, players still get the public servers', async () => {
   assert.equal(body.error, 'relay-unavailable');
   assert.deepEqual(body.iceServers, PUBLIC_ICE);
 });
+
+test('keys are trimmed, the older Cloudflare address is tried on 404, and failures say why', async () => {
+  _resetCache();
+  const seen = [];
+  const fake = async (url, init) => {
+    seen.push(url.split('/').pop());
+    assert.equal(init.headers.authorization, 'Bearer TOK');
+    if (url.endsWith('generate-ice-servers')) return new Response('not here', { status: 404 });
+    return new Response(JSON.stringify({ iceServers: { urls: ['turn:turn.cloudflare.com:3478?transport=udp'], username: 'u', credential: 'c' } }));
+  };
+  const body = await (await handleIce({ CF_TURN_KEY_ID: ' KEY \n', CF_TURN_API_TOKEN: 'TOK\n' }, fake)).json();
+  assert.deepEqual(seen, ['generate-ice-servers', 'generate']);
+  assert.equal(body.relay, 'cloudflare');
+  _resetCache();
+  const bad = await (await handleIce({ CF_TURN_KEY_ID: 'K', CF_TURN_API_TOKEN: 'T' }, async () => new Response('', { status: 401 }))).json();
+  assert.equal(bad.cloudflareStatus, 401);
+  assert.equal(bad.hint, 'check CF_TURN_API_TOKEN');
+  assert.ok(!JSON.stringify(bad).includes('"T"'), 'never echoes the key');
+});
