@@ -187,7 +187,19 @@ export class HostRoom extends Emitter {
       }
       if (!playerId) return;
       const p = this.players.get(playerId);
-      if (!p || p.link !== conn) return;
+      if (!p || p.kicked) return;
+      if (p.link !== conn) {
+        // We gave up on this player (no word for 15 s: a phone switched apps or locked), but
+        // their connection is still open and talking again: take them back in.
+        if (p.link || !conn.open) return;
+        p.link = conn;
+        p.connected = true;
+        p.lastSeen = Date.now();
+        this.#system(`${p.name} is back`);
+        this.#broadcastLobby();
+        if (this.started) this.#sendState(p, null);
+        this.schedule();
+      }
       p.lastSeen = Date.now();
       this.handle(playerId, msg);
     });
@@ -224,11 +236,13 @@ export class HostRoom extends Emitter {
       lastSeen: Date.now(),
     });
     conn.send({ t: 'welcome', playerId: p.id, token: p.token, gameId: this.game.id, code: this.code });
-    // a newcomer takes an open seat while we're in the lobby
+    // a newcomer takes an open seat while we're in the lobby; with none left, the seat of
+    // someone whose connection dropped (often the same friend, back on another phone or browser)
     if (!this.started && this.seatOf(p.id) == null) {
       const order = this.game.joinOrder || this.seats.map((_, i) => i);
-      const open = order.find((i) => this.seats[i]?.kind === 'open');
-      if (open != null) this.seats[open] = { kind: 'human', playerId: p.id };
+      let seat = order.find((i) => this.seats[i]?.kind === 'open');
+      if (seat == null) seat = this.#ghostSeat(order);
+      if (seat != null) this.seats[seat] = { kind: 'human', playerId: p.id };
     }
     this.#system(`${p.name} ${this.seatOf(p.id) != null ? 'joined' : 'is watching'}`);
     this.#broadcastLobby();
@@ -241,6 +255,7 @@ export class HostRoom extends Emitter {
   #drop(p) {
     if (!p.connected) return;
     p.connected = false;
+    p.droppedAt = Date.now();
     p.link = null;
     p.voice = null;
     this.#system(`${p.name} disconnected`);
@@ -277,6 +292,31 @@ export class HostRoom extends Emitter {
     const pool = BOT_NAMES.filter((n) => !used.has(n));
     const name = pool[(seat * 5 + Math.floor(Math.random() * pool.length)) % pool.length];
     return { kind: 'bot', name, hue: BOT_HUES[(seat * 3 + name.length) % BOT_HUES.length], level: this.settings.botLevel };
+  }
+
+  // Lobby only: the seat of a guest who has been offline a while (longest first), for a newcomer
+  // to take when the table is full. The person who left watches if they come back; the host
+  // can seat them again.
+  #ghostSeat(order) {
+    const now = Date.now();
+    const ghosts = order
+      .map((i) => ({ i, p: this.seats[i]?.kind === 'human' ? this.players.get(this.seats[i].playerId) : null }))
+      .filter(({ p }) => p && !p.isHost && !p.device && !p.connected && now - (p.droppedAt || 0) > 5000)
+      .sort((a, b) => (a.p.droppedAt || 0) - (b.p.droppedAt || 0));
+    return ghosts[0]?.i ?? null;
+  }
+
+  // Lobby only: people watching (connected, not seated) take any open seats, first come first.
+  #seatWatchers() {
+    if (this.started || !this.online) return;
+    const order = this.game.joinOrder || this.seats.map((_, i) => i);
+    for (const p of this.players.values()) {
+      if (p.isHost || p.kicked || p.device || !p.connected || this.seatOf(p.id) != null) continue;
+      const open = order.find((i) => this.seats[i]?.kind === 'open');
+      if (open == null) return;
+      this.seats[open] = { kind: 'human', playerId: p.id };
+      this.#system(`${p.name} took ${this.game.seatLabels?.[open] || `seat ${open + 1}`}`);
+    }
   }
 
   seatOf(playerId) {
@@ -346,6 +386,7 @@ export class HostRoom extends Emitter {
     const seat = this.seatOf(id);
     if (seat != null) this.seats[seat] = this.started ? this.#newBot(seat) : this.online ? { kind: 'open' } : this.#newBot(seat);
     this.players.delete(id);
+    this.#seatWatchers();
     this.#broadcastLobby();
     if (this.started) {
       this.#broadcastState(this.lastEvent);
@@ -413,6 +454,7 @@ export class HostRoom extends Emitter {
     if (this.started) return;
     this.options[key] = value;
     this.#resizeSeats();
+    this.#seatWatchers();
     this.#broadcastLobby();
   }
 
@@ -444,10 +486,20 @@ export class HostRoom extends Emitter {
       if (this.started) return; // a started game never has empty chairs
       this.seats[seat] = { kind: 'open' };
     } else if (kind === 'human') {
+      const p = this.players.get(playerId);
+      if (!p || p.kicked) return;
       const from = this.seatOf(playerId);
-      if (from != null) this.seats[from] = this.started ? this.#newBot(from) : { kind: 'open' };
-      this.seats[seat] = { kind: 'human', playerId };
+      if (from === seat) return;
+      if (from != null && cur.kind === 'human' && !this.started) {
+        // moving onto someone else's seat before the game: the two trade places
+        [this.seats[from], this.seats[seat]] = [this.seats[seat], this.seats[from]];
+      } else {
+        if (from != null) this.seats[from] = this.started ? this.#newBot(from) : { kind: 'open' };
+        this.seats[seat] = { kind: 'human', playerId };
+      }
+      this.#system(`${p.name} is in ${this.game.seatLabels?.[seat] || `seat ${seat + 1}`}`);
     }
+    this.#seatWatchers();
     this.#broadcastLobby();
     if (this.started) {
       this.#broadcastState(this.lastEvent);
@@ -474,6 +526,7 @@ export class HostRoom extends Emitter {
     if (seat != null) this.seats[seat] = this.started ? this.#newBot(seat) : { kind: 'open' };
     setTimeout(() => p.link?.close(), 300);
     this.#system(`${p.name} was removed`);
+    this.#seatWatchers();
     this.#broadcastLobby();
     if (this.started) this.schedule();
   }
@@ -585,6 +638,13 @@ export class HostRoom extends Emitter {
       case 'rematch':
         this.#rematchVote(p);
         break;
+      case 'sit': {
+        // a guest picks an empty seat before the game starts (or moves to one)
+        const seat = Number(msg.seat);
+        if (this.started || p.device || this.seats[seat]?.kind !== 'open') return;
+        this.setSeat(seat, 'human', p.id);
+        break;
+      }
       case 'local-add':
         this.addLocalPlayer(p.id, msg.name, msg.seat ?? null);
         break;

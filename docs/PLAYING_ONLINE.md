@@ -13,19 +13,28 @@ home page, **Step-by-step guide** in the lobby, the **?** button at the table, o
 2. Tap **Invite** to text or email the link, or read the code out loud.
 3. Friends appear in seats as they join. In Rook the first friend sits across from you as
    your partner. Use **Sit here**, **Add computer** or **Remove** to arrange the table.
+   **Change seat…** on any seat moves people: seat someone who is watching there, or swap
+   two seats (to pick partners). If the table is full, a newcomer **watches**; give them a
+   seat from **Give a seat…** next to their name. When a seat frees up, the first person
+   watching takes it by themselves. Someone whose connection dropped gives up their seat if
+   a new person arrives while the table is full (usually the same friend on another phone).
 4. Tap **Start game**. Empty seats get computer players, so two people is enough.
 
 ## Join a table (everyone else)
 1. Tap the invite link — or open the Game Center, type the code into
    **Join a friend's table**, and tap **Join**.
-2. Pick a name and color the first time, then wait for the host to start.
+2. Pick a name and color the first time, then wait for the host to start. If there's an
+   empty seat you'd rather have, tap **Sit here** on it.
 
 ## During the game
 - **Chat** with the bubble at the top; quick reactions pop up over your seat.
 - If someone drops, a **computer player covers their seat** until they come back.
 - **Refresh or reopen** the link to get back to your seat. The home page also shows
   **Rejoin table**.
-- **Late arrivals** can join mid-game: the host seats them from **Settings → Players**.
+- **Late arrivals** can join mid-game. They watch, and the host sees a bar
+  "Sara is watching · **Give a seat**": tap it and pick **Seat a player…** next to a
+  computer player, or next to someone who went offline.
+- A phone that switched apps or locked for a moment comes back on its own ("Sara is back").
 - **Rematch** when a game ends: everyone keeps their seat and the same table code, so
   nobody has to rejoin. The host taps **Rematch — same players** to start. Anyone else taps
   **Rematch** to say they're in; the host's button then shows who's ready.
