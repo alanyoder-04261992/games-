@@ -1,27 +1,31 @@
 // Voice chat for online tables.
 //
-// Everyone who taps "Join voice" opens their microphone (always on, with a mute button) and
-// connects straight to every other person in voice — players and watchers alike, so a table
-// can have as many voices as it has people. Audio travels peer to peer over WebRTC, on the
-// same PeerJS connection the game uses; nothing is recorded or sent to a server.
+// Everyone at an online table hears voice chat without doing anything: they "listen" from the
+// moment they arrive (no microphone needed, nothing to allow). Tapping the mic button opens
+// their microphone so they can talk (always on, with a mute button). Players and watchers
+// alike, so a table can have as many voices as it has people. Audio travels peer to peer over
+// WebRTC (through the table's relay when a network needs it); nothing is recorded or stored.
+//
+// Who calls whom: someone with a mic calls everyone listening; between two people with mics,
+// the side with the smaller peer id dials. Two listeners don't need a call.
 //
 // The host can mute anyone for the whole table. A host-muted player's microphone is switched
 // off on their own device AND every other device stops playing their audio, so it holds even
 // if their app misbehaves.
 //
-// Signaling rides on the room: each client tells the host { t: 'voice', on, peerId, muted },
-// the host puts that in the lobby roster, and everyone calls everyone listed. To avoid two
-// calls between the same pair, only the side with the smaller peer id dials.
+// Signaling rides on the room: each client tells the host { t: 'voice', on, peerId, muted, mic },
+// the host puts that in the lobby roster, and everyone connects to everyone listed.
 import { Emitter, store } from './util.js';
 
 const SPEAK_LEVEL = 0.035; // RMS above this counts as talking
 const SPEAK_HOLD = 450; // ms a speaker stays "lit" after going quiet
+const CALL_TIMEOUT = 15000; // a call that hasn't connected by then is dialled again
 
 export class Voice extends Emitter {
   constructor(client) {
     super();
     this.client = client;
-    this.state = 'off'; // off | starting | on | error
+    this.state = 'off'; // off | listening (hears, no mic) | starting | on (mic) | error
     this.stream = null;
     this.muted = false; // muted by me
     this.hostMuted = false; // muted by the host
@@ -34,18 +38,15 @@ export class Voice extends Emitter {
     this.offs = [
       client.on('lobby', () => this.reconcile()),
       client.on('voice-force', (muted) => this.#forced(muted)),
-      client.on('welcome', () => this.state === 'on' && this.#announce()),
-      client.on('status', (s) => s === 'online' && this.state === 'on' && this.#announce()),
+      client.on('welcome', () => this.#announce()),
+      client.on('status', (s) => s === 'online' && this.#announce()),
     ];
     this.tick = setInterval(() => this.#measure(), 120);
     // phones may refuse to start audio until the next tap; retry then
     this.on('blocked', () =>
       window.addEventListener(
         'pointerdown',
-        () => {
-          this.ctx?.resume?.();
-          for (const c of this.calls.values()) c.audio?.play?.().catch(() => {});
-        },
+        () => this.unblock(),
         { once: true, capture: true },
       ),
     );
@@ -56,8 +57,37 @@ export class Voice extends Emitter {
     return !!navigator.mediaDevices?.getUserMedia && !!window.RTCPeerConnection;
   }
 
+  get hearing() {
+    return this.state === 'on' || this.state === 'listening';
+  }
+
+  // Hear everyone in voice, without a microphone. Called when an online table opens.
+  listen() {
+    if (this.hearing || this.state === 'starting') return;
+    store.set('gc.voice.listen', true);
+    this.#setState('listening');
+    this.#announce();
+    this.reconcile();
+  }
+
+  // Phones only play sound after a tap; voice calls this on the next tap anywhere.
+  unblock() {
+    this.ctx?.resume?.();
+    const plays = [...this.calls.values()].map((c) => c.audio?.play?.()).filter(Boolean);
+    Promise.allSettled(plays).then((res) => {
+      const still = res.some((r) => r.status === 'rejected');
+      if (still) this.emit('blocked'); // try again on the next tap
+      if (still !== !!this.blocked) {
+        this.blocked = still;
+        this.emit('change');
+      }
+    });
+  }
+
   async join() {
     if (this.state === 'on' || this.state === 'starting') return;
+    const before = this.state;
+    store.set('gc.voice.listen', true);
     if (!this.available) {
       this.#setState('error', 'This browser can’t do voice chat.');
       return;
@@ -70,7 +100,10 @@ export class Voice extends Emitter {
       });
     } catch (e) {
       const denied = e?.name === 'NotAllowedError' || e?.name === 'SecurityError';
-      this.#setState('error', denied ? 'Microphone permission was blocked. Allow it in your browser settings and try again.' : 'No microphone was found.');
+      this.#setState('error', denied ? 'Microphone permission was blocked. Allow it in your browser settings and try again. You can still hear everyone.' : 'No microphone was found. You can still hear everyone.');
+      // still hear everyone
+      this.state = before === 'off' ? 'off' : 'listening';
+      this.emit('change');
       return;
     }
     this.#audioContext();
@@ -81,7 +114,21 @@ export class Voice extends Emitter {
     this.reconcile();
   }
 
-  leave() {
+  // Turn my microphone off but keep hearing everyone.
+  stopTalking() {
+    if (this.state !== 'on') return;
+    this.stream?.getTracks().forEach((t) => t.stop());
+    this.stream = null;
+    this.meters.delete(this.client.playerId);
+    this.speaking.delete(this.client.playerId);
+    this.#setState('listening');
+    this.#announce();
+    this.reconcile();
+    this.emit('speaking', this.speaking);
+  }
+
+  // Stop voice chat altogether: no mic, and no sound from anyone.
+  leave(remember = true) {
     for (const peerId of [...this.calls.keys()]) this.#hangUp(peerId);
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
@@ -89,7 +136,8 @@ export class Voice extends Emitter {
     this.speaking.clear();
     const was = this.state;
     this.#setState('off');
-    if (was === 'on') this.client.send({ t: 'voice', on: false });
+    if (remember) store.set('gc.voice.listen', false); // stays off at the next table too
+    if (was === 'on' || was === 'listening') this.client.send({ t: 'voice', on: false });
     this.emit('speaking', this.speaking);
   }
 
@@ -121,14 +169,16 @@ export class Voice extends Emitter {
     this.client.send({ t: 'voice-force', playerId, muted: !!muted });
   }
 
-  // Everyone the host lists as being in voice (including me), with their state.
+  // Everyone the host lists as being in voice (including me), with their state. `mic` says
+  // whether they can talk; people without one are listening.
   roster() {
     const players = this.client.lobby?.players || [];
     return players
       .filter((p) => p.voice?.on || p.id === this.client.playerId)
       .map((p) => {
         const me = p.id === this.client.playerId;
-        const on = me ? this.state === 'on' : !!p.voice?.on;
+        const on = me ? this.hearing : !!p.voice?.on;
+        const mic = me ? this.state === 'on' : !!p.voice?.on && p.voice.mic !== false;
         const call = [...this.calls.values()].find((c) => c.playerId === p.id);
         return {
           id: p.id,
@@ -137,10 +187,12 @@ export class Voice extends Emitter {
           isHost: p.isHost,
           me,
           on,
+          mic,
           muted: me ? this.muted : !!p.voice?.muted,
           hostMuted: me ? this.hostMuted : !!p.hostMuted,
           localMuted: this.localMutes.has(p.id),
-          connected: me ? this.state === 'on' : !!call?.audio,
+          // a call is only needed when one of us has a mic
+          connected: me ? this.hearing : !!call?.live || (!mic && this.state !== 'on'),
           speaking: this.speaking.has(p.id),
         };
       })
@@ -148,7 +200,7 @@ export class Voice extends Emitter {
   }
 
   destroy() {
-    this.leave();
+    this.leave(false);
     clearInterval(this.tick);
     this.offs.forEach((off) => off());
     this.ctx?.close?.();
@@ -159,7 +211,8 @@ export class Voice extends Emitter {
     // the host remembers who it muted, even across someone leaving and rejoining voice
     const mine = this.client.lobby?.players?.find((p) => p.id === this.client.playerId);
     if (mine && !!mine.hostMuted !== this.hostMuted) this.#forced(!!mine.hostMuted, false);
-    if (this.state !== 'on') {
+    if (!this.hearing) {
+      for (const peerId of [...this.calls.keys()]) this.#hangUp(peerId);
       this.emit('change');
       return;
     }
@@ -167,20 +220,29 @@ export class Voice extends Emitter {
     if (!peer || peer.destroyed) return;
     this.#bindPeer(peer);
     const myId = peer.id;
-    const wanted = new Map();
+    const myMic = this.state === 'on' && !!this.stream;
+    const wanted = new Map(); // peerId -> { playerId, shape }
     for (const p of this.client.lobby?.players || []) {
       if (p.id === this.client.playerId || !p.voice?.on || !p.voice.peerId || !p.connected) continue;
-      wanted.set(p.voice.peerId, p.id);
+      const theirMic = p.voice.mic !== false;
+      if (!myMic && !theirMic) continue; // two listeners: nothing to send
+      wanted.set(p.voice.peerId, { playerId: p.id, shape: `${+myMic}${+theirMic}`, theirMic });
     }
-    for (const peerId of [...this.calls.keys()]) if (!wanted.has(peerId)) this.#hangUp(peerId);
-    for (const [peerId, playerId] of wanted) {
+    for (const [peerId, entry] of [...this.calls]) {
+      const want = wanted.get(peerId);
+      // gone, or someone turned a mic on or off: this call has to be made again
+      if (!want || entry.shape !== want.shape) this.#hangUp(peerId);
+    }
+    for (const [peerId, want] of wanted) {
       if (this.calls.has(peerId)) {
-        this.calls.get(peerId).playerId = playerId;
+        this.calls.get(peerId).playerId = want.playerId;
         continue;
       }
-      if (myId && myId < peerId) {
+      // whoever has a mic dials; with two mics, the smaller peer id does
+      const dial = myMic && (!want.theirMic || (myId && myId < peerId));
+      if (dial) {
         const call = peer.call(peerId, this.stream, { metadata: { playerId: this.client.playerId } });
-        if (call) this.#track(call, playerId);
+        if (call) this.#track(call, want.playerId, want.shape);
       }
     }
     this.#applyPlayback();
@@ -191,23 +253,43 @@ export class Voice extends Emitter {
     if (this.peerBound === peer) return;
     this.peerBound = peer;
     peer.on('call', (call) => {
-      if (this.state !== 'on' || !this.stream) {
+      if (!this.hearing) {
         call.close();
         return;
       }
       const roster = this.client.lobby?.players || [];
       const from = roster.find((p) => p.voice?.peerId === call.peer);
       if (this.calls.has(call.peer)) this.#hangUp(call.peer);
-      call.answer(this.stream);
-      this.#track(call, from?.id || call.metadata?.playerId || null);
+      const myMic = this.state === 'on' && !!this.stream;
+      // a listener answers without a microphone and just receives
+      if (myMic) call.answer(this.stream);
+      else call.answer();
+      this.#track(call, from?.id || call.metadata?.playerId || null, `${+myMic}1`);
     });
   }
 
-  #track(call, playerId) {
-    const entry = { call, playerId, audio: null };
+  #track(call, playerId, shape) {
+    const entry = { call, playerId, audio: null, shape, live: false };
     this.calls.set(call.peer, entry);
+    const theyTalk = shape?.[1] === '1';
+    // a call that never connects (a network that blocks it, a lost answer) is tried again
+    entry.timer = setTimeout(() => {
+      if (this.calls.get(call.peer) === entry && !entry.live) {
+        this.#hangUp(call.peer);
+        this.reconcile();
+      }
+    }, CALL_TIMEOUT);
+    // when only I talk, no sound comes back: the connection itself says it's working
+    call.on('iceStateChanged', (st) => {
+      if (this.calls.get(call.peer) !== entry) return;
+      if ((st === 'connected' || st === 'completed') && !theyTalk && !entry.live) {
+        entry.live = true;
+        this.emit('change');
+      }
+    });
     call.on('stream', (remote) => {
       if (this.calls.get(call.peer) !== entry) return;
+      entry.live = true;
       if (!entry.audio) {
         entry.audio = new Audio();
         entry.audio.autoplay = true;
@@ -217,7 +299,12 @@ export class Voice extends Emitter {
         document.body.append(entry.audio);
       }
       entry.audio.srcObject = remote;
-      entry.audio.play?.().catch(() => this.emit('blocked'));
+      entry.audio.play?.().catch(() => {
+        this.blocked = true;
+        this.emit('blocked');
+        this.emit('change');
+      });
+      this.#audioContext();
       if (entry.playerId) this.#meter(entry.playerId, remote);
       this.#applyPlayback();
       this.emit('change');
@@ -235,6 +322,7 @@ export class Voice extends Emitter {
     const entry = this.calls.get(peerId);
     if (!entry) return;
     this.calls.delete(peerId);
+    clearTimeout(entry.timer);
     try {
       entry.call.close();
     } catch {
@@ -249,13 +337,14 @@ export class Voice extends Emitter {
   }
 
   #announce() {
-    if (this.state !== 'on') return;
+    if (!this.hearing) return;
     const peerId = this.client.peer?.id;
     if (!peerId) {
-      setTimeout(() => this.#announce(), 800);
+      clearTimeout(this.announceTimer);
+      this.announceTimer = setTimeout(() => this.#announce(), 800);
       return;
     }
-    this.client.send({ t: 'voice', on: true, peerId, muted: this.muted });
+    this.client.send({ t: 'voice', on: true, peerId, muted: this.muted, mic: this.state === 'on' });
   }
 
   // ---------- muting ----------
@@ -303,7 +392,7 @@ export class Voice extends Emitter {
   }
 
   #measure() {
-    if (this.state !== 'on') return;
+    if (!this.hearing) return;
     const now = performance.now();
     const before = [...this.speaking].join();
     const players = this.client.lobby?.players || [];

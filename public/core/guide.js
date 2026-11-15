@@ -13,6 +13,7 @@ const I = {
   chat: '<svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
   robot: '<svg viewBox="0 0 24 24"><rect x="5" y="8" width="14" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3v5" stroke="currentColor" stroke-width="2"/><circle cx="9.5" cy="13" r="1.5" fill="currentColor"/><circle cx="14.5" cy="13" r="1.5" fill="currentColor"/></svg>',
   refresh: '<svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  sound: '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
   mic: '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
   phone: '<svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 18h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
 };
@@ -62,7 +63,8 @@ export function onlineGuide({ onHost, onJoin } = {}) {
 
     h('section.gd-section', h('h3', 'Talk while you play (voice chat)'),
       h('div.gd-tips',
-        tip('mic', 'Join voice', 'Tap the ', h('b', 'microphone'), ' at the top of the table (or ', h('b', 'Join voice'), ' in the lobby) and allow the microphone. Everyone in voice hears everyone — players and people watching.'),
+        tip('sound', 'Everyone hears, nobody has to join', 'Voice chat plays for everyone at the table on its own — no mic needed to listen. On iPhone, sound starts after your first tap (or tap ', h('b', 'Tap to hear'), ').'),
+        tip('mic', 'Talk', 'Tap the ', h('b', 'microphone'), ' at the top of the table (or ', h('b', 'Talk'), ' in the lobby) and allow the microphone. Everyone at the table hears you — players and people watching.'),
         tip('mic', 'Always on, with mute', 'Your mic stays on so you can just talk. Tap the green mic to mute; tap the red one to talk again. Whoever is talking lights up green.'),
         tip('seats', 'The host can mute anyone', 'The host taps the people button next to the mic and picks ', h('b', 'Mute for all'), '. That person can’t unmute until the host taps ', h('b', 'Allow to talk'), '.'),
         tip('chat', 'Too loud? Silence just for you', 'In the same list, ', h('b', 'Silence'), ' stops you hearing one person without muting them for anyone else.'),
@@ -84,8 +86,8 @@ export function onlineGuide({ onHost, onJoin } = {}) {
       qa('It says “Connecting…” and never joins', 'Try switching between Wi-Fi and cellular on the phone that is stuck. Some work, school and hotel networks block direct connections between devices; cellular data almost always works.'),
       qa('Someone shows “Reconnecting…”', 'Their device lost the connection or went to sleep. A computer player is covering for them — they just reopen the link or refresh to take their seat back.'),
       qa('The game froze for everybody', 'The host’s device probably went to sleep. Have the host unlock their screen and open the Game Center again.'),
-      qa('Voice chat: nobody can hear me', 'Check the mic at the top is green, not red. If it says the host muted you, ask them to tap Allow to talk. If the browser blocked the microphone, allow it in the browser’s site settings (on iPhone: Settings → Safari → Microphone) and tap Join voice again.'),
-      qa('Voice chat: I can’t hear anyone', 'Turn up the volume and make sure the phone isn’t on silent. On iPhone, tap the screen once — phones only start sound after a tap. If one person is missing, they may be on a network that blocks direct connections; switching them to cellular usually fixes it.'),
+      qa('Voice chat: nobody can hear me', 'Check the mic at the top is green, not red. If it says the host muted you, ask them to tap Allow to talk. If the browser blocked the microphone, allow it in the browser’s site settings (on iPhone: Settings → Safari → Microphone) and tap Talk again.'),
+      qa('Voice chat: I can’t hear anyone', 'Turn up the volume and make sure the phone isn’t on silent. On iPhone, tap the screen once (or Tap to hear) — phones only start sound after a tap. If the voice list says voice is off, tap Turn voice on. If one person is missing, they may be on a network that blocks direct connections; switching them to cellular usually fixes it.'),
             qa('Can I play from a computer and others on phones?', 'Yes — any mix of phones, tablets and computers works, in any modern browser (Safari, Chrome, Edge, Firefox).'),
     ),
 

@@ -229,6 +229,7 @@ export class HostRoom extends Emitter {
       }
     }
     Object.assign(p, {
+      voice: null, // a new connection announces its voice again right after 'welcome'
       name: String(msg.name || 'Player').slice(0, 20),
       hue: Number(msg.hue) || 0,
       connected: true,
@@ -256,8 +257,7 @@ export class HostRoom extends Emitter {
     if (!p.connected) return;
     p.connected = false;
     p.droppedAt = Date.now();
-    p.link = null;
-    p.voice = null;
+    p.link = null; // voice stays listed: a phone that comes back on the same connection keeps it
     this.#system(`${p.name} disconnected`);
     this.#broadcastLobby();
     this.schedule();
@@ -542,10 +542,13 @@ export class HostRoom extends Emitter {
   start() {
     if (this.started) return;
     for (let i = 0; i < this.seats.length; i++) if (this.seats[i].kind === 'open') this.seats[i] = this.#newBot(i);
+    const again = !!this.state; // a rematch
     this.state = this.game.engine.setup({ seed: (Math.random() * 2 ** 32) >>> 0, options: this.options });
     this.started = true;
     this.rematchVotes.clear();
-    this.seq = 0;
+    // Move numbers keep counting up through a rematch: screens drop updates older than the
+    // last one they drew, so starting again from 0 would hide the new game from everyone.
+    this.seq = again ? this.seq + 1 : 0;
     this.due = null;
     this.lastEvent = { type: 'start' };
     this.#broadcastLobby();
@@ -612,7 +615,7 @@ export class HostRoom extends Emitter {
       }
       case 'voice':
         // someone joined, left or muted themselves in voice chat (see core/voice.js)
-        p.voice = msg.on && msg.peerId ? { on: true, peerId: String(msg.peerId).slice(0, 80), muted: !!msg.muted } : null;
+        p.voice = msg.on && msg.peerId ? { on: true, peerId: String(msg.peerId).slice(0, 80), muted: !!msg.muted, mic: msg.mic !== false } : null;
         this.#broadcastLobby();
         break;
       case 'voice-force': {
