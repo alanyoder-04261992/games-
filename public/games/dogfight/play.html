@@ -2746,7 +2746,7 @@ function pitchCaps(p) {
   const qd = 0.5 * 1.225 * Math.exp(-Math.max(0, p.pos.y) / 8500) * V * V;
   const aG = ((8.5 * s.mass * 9.81) / (qd * s.S * (p.lkEff || 1)) - s.CL0 - p.flapT * (p.player ? 0.8 : 0.38)) / s.CLa;
   const aMax = Math.min(s.stallA * 0.9, aG);
-  return { hi: s.Cma * (aMax - s.trimA) / s.Ke, lo: s.Cma * (-s.stallA * 0.6 - s.trimA) / s.Ke };
+  return { hi: s.Cma * (aMax - s.trimA) / s.Ke, lo: s.Cma * (-s.stallA * 0.85 - s.trimA) / s.Ke }; // pushing over may go to about -3 g
 }
 function trimFor(p, nz) {
   const s = p.spec, V = Math.max(p.V, 25);
@@ -2792,14 +2792,19 @@ function assistStick(p, sx, sy, sz, out) {
   }
   const ff = trimFor(p, Math.cos(gamma) / Math.max(0.35, Math.cos(clamp(bank, -1.25, 1.25))));
   if (Math.abs(sy) > 0.06) {
-    out.pitch = ff * (1 - Math.abs(sy)) + sy; holdGamma = gamma; holdAlt = null;
+    // the stick asks for a pitch rate, the same pushing as pulling (about 40°/s at full deflection)
+    const wT = sy * 0.7;
+    out.pitch = ff * (1 - Math.abs(sy)) + sy * 0.8 + (wT - p.w.x) * 1.5; holdGamma = gamma; holdAlt = null;
     if (G.altLock != null && Math.abs(sy) > 0.3) { G.altLock = null; msg('Altitude lock off', 'info', 1.5); }
   } else {
     if (Math.abs(bank) > 1.4) { holdGamma = gamma; holdAlt = null; }
     let tg = holdGamma;
-    // let go of the stick nearly level and it holds that height; ALT (L) locks a height until you pull or push
+    // let go and it holds the climb or dive you were in (nearly level: it holds that height); ALT (L) locks a height
     if (G.altLock != null) tg = clamp((G.altLock - p.pos.y) * 0.004, -0.25, 0.25);
-    else if (Math.abs(holdGamma) < 0.26 && Math.abs(bank) < 1.4) { if (holdAlt == null) holdAlt = p.pos.y + p.vel.y * 2; tg = clamp((holdAlt - p.pos.y) * 0.003, -0.1, 0.1); } // a gentle climb or dive levels off
+    else if (Math.abs(holdGamma) < 0.09 && Math.abs(bank) < 1.4) { if (holdAlt == null) holdAlt = p.pos.y + p.vel.y * 2; tg = clamp((holdAlt - p.pos.y) * 0.003, -0.1, 0.1); }
+    // safety: hands off and heading into the ground within about five seconds, it pulls up
+    p.pullUp = false;
+    if (p.vel.y < -5) for (let t = 1; t <= 5; t++) { _a.copy(p.pos).addScaledVector(p.vel, t); if (_a.y < Math.max(groundH(_a.x, _a.z), waterLevelAt(_a.x, _a.z)) + 60) { tg = Math.max(tg, 0.2); holdGamma = Math.max(holdGamma, 0); p.pullUp = true; break; } }
     out.pitch = ff + (tg - gamma) * 3.0 - p.w.x * 0.3 * (Math.abs(bank) < 1.4 ? 1 : 0);
   }
   p.pullWant = Math.abs(sy) > 0.06 ? sy : 0;
@@ -4808,7 +4813,7 @@ function playerControl(dt) {
       if (!touch.tiltRef) touch.tiltRef = { ...touch.tilt };
       sx = clamp((touch.tilt.roll - touch.tiltRef.roll) / 28, -1, 1); sy = clamp((touch.tilt.pitch - touch.tiltRef.pitch) / 22, -1, 1);
       sx = dz(sx, 0.08); sy = dz(sy, 0.08);
-    } else { sx = expo(touch.sx); sy = expo(touch.sy); }
+    } else { sx = expo(touch.sx); sy = touch.sy * (0.6 + 0.4 * touch.sy * touch.sy); } // a softer curve for up and down
   }
   sy *= inv;
   if (mode === 'stick-manual') { inp.roll = sx; inp.pitch = sy; inp.yaw = sz; p.pullWant = sy; }
@@ -5298,6 +5303,7 @@ function drawHUD(rdt) {
   if (p.onFire) warns.push('FIRE'); if (p.fuel < 30 && p.fuel > 0) warns.push('LOW FUEL'); if (p.fuel <= 0) warns.push('FUEL OUT');
   if (Math.hypot(p.pos.x, p.pos.z) > COMBAT) warns.push('LEAVING SECTOR');
   if (p.gear && p.V > (p.spec.gearV || 115)) warns.push('GEAR SPEED');
+  if (p.pullUp) warns.unshift('PULL UP');
   if (threat) warns.unshift(isTouch ? 'MISSILE · BREAK AND FLARE' : 'MISSILE · BREAK HARD, F FOR FLARES');
   if (warns.length && (G.time * 3 % 1) < 0.7) warns.forEach((w, i) => txt(w, HW / 2, HH * 0.32 + i * 24, 20, '#e2553f', 'center', COND, 700));
   // flight data
