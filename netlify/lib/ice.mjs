@@ -20,9 +20,11 @@ const json = (body, maxAge = 0) => new Response(JSON.stringify(body), { headers:
 
 // GET /api/ice  →  { iceServers: [...], relay: 'cloudflare' | 'public' }
 export async function handleIce(env, fetchImpl = fetch, now = Date.now()) {
-  // trimmed: a key pasted with a space or line break is the commonest setup slip
-  const id = String(env.CF_TURN_KEY_ID || '').trim();
-  const token = String(env.CF_TURN_API_TOKEN || '').trim();
+  // cleaned: a key pasted with a space, a line break or quote marks round it is the commonest
+  // setup slip ("Bearer " pasted in front of the token, too)
+  const clean = (v) => String(v || '').trim().replace(/^["'`]+|["'`]+$/g, '').replace(/^Bearer\s+/i, '').trim();
+  const id = clean(env.CF_TURN_KEY_ID);
+  const token = clean(env.CF_TURN_API_TOKEN);
   if (!id || !token) return json({ iceServers: PUBLIC_ICE, relay: 'public' }, 3600);
   if (cache && cache.until > now) return json(cache.body, 3600);
   let status = 0;

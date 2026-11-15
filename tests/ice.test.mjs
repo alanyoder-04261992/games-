@@ -50,7 +50,7 @@ test('keys are trimmed, the older Cloudflare address is tried on 404, and failur
     if (url.endsWith('generate-ice-servers')) return new Response('not here', { status: 404 });
     return new Response(JSON.stringify({ iceServers: { urls: ['turn:turn.cloudflare.com:3478?transport=udp'], username: 'u', credential: 'c' } }));
   };
-  const body = await (await handleIce({ CF_TURN_KEY_ID: ' KEY \n', CF_TURN_API_TOKEN: 'TOK\n' }, fake)).json();
+  const body = await (await handleIce({ CF_TURN_KEY_ID: ' "KEY" \n', CF_TURN_API_TOKEN: "'Bearer TOK'\n" }, fake)).json();
   assert.deepEqual(seen, ['generate-ice-servers', 'generate']);
   assert.equal(body.relay, 'cloudflare');
   _resetCache();
