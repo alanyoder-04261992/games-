@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleTrack, handleInsights } from '../netlify/lib/insights.mjs';
 import { fileStore } from './dev-blobs.mjs';
+import { handleIce } from '../netlify/lib/ice.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const port = Number(process.env.PORT || process.argv[2] || 8080);
@@ -32,6 +33,7 @@ http.createServer((req, res) => {
   let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   if (p === '/api/track') return void api(req, res, (r) => handleTrack(r, insightsStore));
   if (p === '/api/insights') return void api(req, res, (r) => handleInsights(r, insightsStore, insightsKey));
+  if (p === '/api/ice') return void api(req, res, () => handleIce(process.env));
   if (p.endsWith('/')) p += 'index.html';
   const file = path.join(root, p);
   if (!file.startsWith(root) || file.includes(`${path.sep}node_modules${path.sep}`)) { res.writeHead(403).end(); return; }

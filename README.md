@@ -87,7 +87,9 @@ needs the owner's key, set as `INSIGHTS_KEY` in Netlify. See [docs/INSIGHTS.md](
 
 Step-by-step instructions for hosts and players: [docs/PLAYING_ONLINE.md](docs/PLAYING_ONLINE.md) — also built into the app (home page link, or `/#/help`).
 
-The host's browser runs the game; friends join with a 5-letter code or an invite link.
+The host's browser runs the game; friends join with the table code (a new one each time, or
+the host's own code that stays the same) or an invite link. A relay (`/api/ice`, see
+[docs/PLAYING_ONLINE.md](docs/PLAYING_ONLINE.md)) lets players on strict networks connect.
 Connections are peer-to-peer WebRTC through [PeerJS](https://peerjs.com), so there is no game
 server to run or pay for.
 

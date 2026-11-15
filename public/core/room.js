@@ -8,7 +8,7 @@
 //
 // Network: WebRTC data channels through PeerJS (https://peerjs.com). No server of our own is
 // needed, so the whole Game Center can be hosted as static files.
-import { Emitter, roomCode, store, uid } from './util.js';
+import { Emitter, roomCode, cleanCode, store, uid } from './util.js';
 
 const PEER_PREFIX = 'gamecenter-v1-';
 const BOT_NAMES = ['Maple', 'Hank', 'Ruth', 'Otis', 'June', 'Walt', 'Ivy', 'Gus', 'Pearl', 'Abe', 'Nell', 'Clem'];
@@ -20,7 +20,38 @@ export const SPEEDS = {
   turbo: { label: 'Turbo', factor: 0.25 },
 };
 
-function peerOptions() {
+// Connection help (STUN/TURN) from /api/ice (netlify/lib/ice.mjs): a relay lets players on
+// networks that block direct connections (often mobile data or strict Wi-Fi) still join.
+// Fetched once per page, with these public servers as the fallback.
+const PUBLIC_ICE = [
+  { urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
+];
+let icePromise = null;
+function iceServers() {
+  icePromise ??= (async () => {
+    try {
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 3500);
+      const res = await fetch(new URL('../api/ice', import.meta.url), { signal: ctl.signal, cache: 'no-store' });
+      clearTimeout(t);
+      const j = res.ok ? await res.json() : null;
+      if (Array.isArray(j?.iceServers) && j.iceServers.length) return j.iceServers;
+    } catch {
+      /* offline, or a host without /api: use the public list */
+    }
+    return PUBLIC_ICE;
+  })();
+  return icePromise;
+}
+
+async function peerOptions() {
+  const opts = peerServerOptions();
+  if (!opts.config) opts.config = { iceServers: await iceServers() };
+  return opts;
+}
+
+function peerServerOptions() {
   const params = new URLSearchParams(location.search);
   const custom = params.get('peer') || store.get('gc.peerServer');
   const opts = { debug: 1 };
@@ -52,11 +83,13 @@ function loadPeer() {
 // Host
 // =====================================================================
 export class HostRoom extends Emitter {
-  constructor({ game, profile, online = false, options = {}, settings = {}, saved = null }) {
+  constructor({ game, profile, online = false, options = {}, settings = {}, saved = null, code = null }) {
     super();
     this.game = game;
     this.online = online;
-    this.code = saved?.code || (online ? roomCode() : null);
+    // a code the host chose (or the one this table had before a refresh) is kept, never replaced
+    this.fixedCode = !!(saved?.code || cleanCode(code));
+    this.code = saved?.code || (online ? cleanCode(code) || roomCode() : null);
     this.peer = null;
     this.status = online ? 'connecting' : 'offline';
     this.players = new Map();
@@ -100,7 +133,9 @@ export class HostRoom extends Emitter {
       return;
     }
     if (this.destroyed) return;
-    const peer = new Peer(PEER_PREFIX + this.code, peerOptions());
+    const opts = await peerOptions();
+    if (this.destroyed) return;
+    const peer = new Peer(PEER_PREFIX + this.code, opts);
     this.peer = peer;
     peer.on('open', () => this.#setStatus('online'));
     peer.on('connection', (conn) => this.#accept(conn));
@@ -113,10 +148,13 @@ export class HostRoom extends Emitter {
       if (this.destroyed) return;
       if (err.type === 'unavailable-id') {
         peer.destroy();
-        if (this.started && attempt < 25) {
-          // our old connection is still registered after a refresh; it expires shortly
-          this.#setStatus('connecting', 'Re-opening the room…');
+        if ((this.started || this.fixedCode) && attempt < 25) {
+          // our old connection is still registered after a refresh (it expires within a
+          // minute or so), or the code is open on another device or tab: keep the code, retry
+          this.#setStatus('connecting', `Opening table ${this.code}… (if it stays here, the code is open somewhere else)`);
           setTimeout(() => this.#listen(attempt + 1), 3000);
+        } else if (this.fixedCode) {
+          this.#setStatus('error', `Table code ${this.code} is already in use. Close it on the other device or tab, or pick another code.`);
         } else if (!this.started) {
           this.code = roomCode();
           this.#listen(attempt + 1);
@@ -342,6 +380,7 @@ export class HostRoom extends Emitter {
       code: this.code,
       online: this.online,
       status: this.status,
+      statusDetail: this.statusDetail || '',
       gameId: this.game.id,
       options: this.options,
       settings: this.settings,
@@ -807,6 +846,7 @@ export class GuestClient extends Emitter {
     this.status = 'connecting';
     this.closed = false;
     this.retries = 0;
+    this.joinedAt = Date.now();
     this.#connect();
     this.ping = setInterval(() => this.send({ t: 'ping' }), 4000);
   }
@@ -821,7 +861,9 @@ export class GuestClient extends Emitter {
     }
     if (this.closed) return;
     if (!this.peer || this.peer.destroyed) {
-      this.peer = new Peer(undefined, peerOptions());
+      const opts = await peerOptions();
+      if (this.closed) return;
+      this.peer = new Peer(undefined, opts);
       this.peer.on('error', (err) => {
         if (this.closed) return;
         if (err.type === 'peer-unavailable') {
@@ -862,6 +904,12 @@ export class GuestClient extends Emitter {
   #retry() {
     if (this.closed || this.retryTimer) return;
     this.retries++;
+    // still never reached the host after a while: this network probably blocks the direct
+    // connection. Say so (the app offers Try again) but keep trying in the background.
+    if (!this.playerId && Date.now() - this.joinedAt > 25000 && !this.warned) {
+      this.warned = true;
+      this.#status('unreachable', 'Can’t reach the host from this network.');
+    }
     this.retryTimer = setTimeout(
       () => {
         this.retryTimer = null;
@@ -874,6 +922,21 @@ export class GuestClient extends Emitter {
   #status(s, detail = '') {
     this.status = s;
     this.emit('status', s, detail);
+  }
+
+  // the player tapped Try again: count the wait from now, and try straight away
+  retryNow() {
+    this.joinedAt = Date.now();
+    this.warned = false;
+    clearTimeout(this.retryTimer);
+    this.retryTimer = null;
+    try {
+      this.peer?.destroy();
+    } catch {
+      /* already gone */
+    }
+    this.peer = null;
+    this.#connect();
   }
 
   #receive(msg) {

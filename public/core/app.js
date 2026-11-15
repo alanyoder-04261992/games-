@@ -1,6 +1,6 @@
 // The Game Center shell: home page, game setup, online lobby, and the frame around a game
 // (back button, room code, chat, settings). Games plug in through games/index.js.
-import { $, h, store, toast, avatar, share, escapeHtml, ROBOT_SVG } from './util.js';
+import { $, h, store, toast, avatar, share, escapeHtml, ROBOT_SVG, cleanCode } from './util.js';
 import { sound } from './sound.js';
 import { HostRoom, GuestClient, SPEEDS } from './room.js';
 import { GAME_MODULES } from '../games/index.js';
@@ -63,7 +63,13 @@ function route() {
     if (guest && Date.now() - guest.at < 6 * 3600e3) return joinRoom(guest.code);
     return go('#/');
   }
-  if (page === 'lobby') return current ? showLobby() : go('#/');
+  if (page === 'lobby') {
+    if (current) return showLobby();
+    // a refresh while hosting a table that hasn't started: open it again with the same code
+    const t = store.get('gc.hostLobby');
+    if (t && Date.now() - t.at < 12 * 3600e3 && GAMES.has(t.gameId)) return hostOnline(GAMES.get(t.gameId), t.options, t.settings, t.code);
+    return go('#/');
+  }
   if (page === 'help') {
     leaveCurrent(false);
     showHome();
@@ -90,6 +96,7 @@ function leaveCurrent(ask = true) {
     if (started && !confirm(msg)) return false;
   }
   playEnded('leave');
+  if (current.mode === 'host' && !current.room?.started) store.del('gc.hostLobby');
   current.ui?.destroy?.();
   current.voice?.destroy();
   current.client.leave();
@@ -222,7 +229,7 @@ function showHome() {
   document.title = 'Game Center';
   const saves = [...GAMES.values()].map((g) => ({ g, s: store.get(`gc.save.${g.id}`) })).filter(({ s }) => s && !s.over);
   const guest = store.get('gc.guest');
-  const code = h('input.gc-input.code', { placeholder: 'ABCDE', maxlength: 5, autocapitalize: 'characters', spellcheck: false, 'aria-label': 'Game code' });
+  const code = h('input.gc-input.code', { placeholder: 'ABCDE', maxlength: 8, autocapitalize: 'characters', spellcheck: false, 'aria-label': 'Game code' });
   code.addEventListener('input', () => (code.value = code.value.toUpperCase().replace(/[^A-Z0-9]/g, '')));
 
   const tiles = [...GAMES.values()].map((g) =>
@@ -275,7 +282,7 @@ function showHome() {
           },
           h('label', 'Join a friend’s table'),
           h('div.gc-join-row', code, h('button.btn.gold', { type: 'submit' }, 'Join')),
-          h('small', 'Ask the host for the 5-letter code, or open their invite link. ', h('button.gc-link', { type: 'button', onclick: () => showGuide() }, 'How does online play work?')),
+          h('small', 'Ask the host for the table code, or open their invite link. ', h('button.gc-link', { type: 'button', onclick: () => showGuide() }, 'How does online play work?')),
         ),
       ),
       saves.length || (guest && Date.now() - guest.at < 6 * 3600e3)
@@ -466,8 +473,46 @@ function playSheet(game, mode) {
         where = v;
         prefs.set(`where.${game.id}`, v);
         drawNames();
+        paintCode();
       })
     : null;
+  // Online tables: a new code each time, or the host's own code that stays the same every time
+  let codeMode = prefs.get('codeMode') || 'new';
+  let myCode = prefs.get('myCode') || '';
+  const codeInput = h('input.gc-input.code.gc-mycode', {
+    value: myCode,
+    placeholder: 'e.g. ALAN',
+    maxlength: 8,
+    autocapitalize: 'characters',
+    autocomplete: 'off',
+    spellcheck: false,
+    'aria-label': 'Your table code, 4 to 8 letters or numbers',
+    oninput: (e) => {
+      e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      myCode = e.target.value;
+      prefs.set('myCode', myCode);
+    },
+  });
+  const codeNote = h('p.gc-play-note', 'The same code every time you host, so friends can keep it. 4 to 8 letters or numbers.');
+  const codeBox = h(
+    'div.gc-codebox',
+    seg2('Table code', () => codeMode, [
+      { value: 'new', label: 'New each time' },
+      { value: 'mine', label: 'My own code' },
+    ], (v) => {
+      codeMode = v;
+      prefs.set('codeMode', v);
+      paintCode();
+      if (v === 'mine' && !myCode) codeInput.focus();
+    }),
+    codeInput,
+    codeNote,
+  );
+  function paintCode() {
+    codeBox.hidden = solo || where === 'here';
+    codeInput.hidden = codeNote.hidden = codeMode !== 'mine';
+  }
+  paintCode();
   const save = solo ? store.get(`gc.save.${game.id}`) : null;
   const hasSave = save && !save.over;
   drawNames();
@@ -478,6 +523,7 @@ function playSheet(game, mode) {
       h('div.gc-play-head', h('span.gc-play-art', { html: game.tile }), h('div', h('h2', game.name), h('small', solo ? 'Single player · against the computer' : canShare ? 'Multiplayer · online or on this device' : 'Multiplayer · friends join with a code'), h('button.gc-link.gc-play-rules', { type: 'button', onclick: () => rulesSheet(game) }, 'How to play'))),
       whereField,
       namesBox,
+      codeBox,
       ...fields,
       hasSave ? h('p.gc-play-note', `Continue starts a new game and replaces your saved one from ${ago(save.savedAt)}.`) : null,
       h(
@@ -486,10 +532,15 @@ function playSheet(game, mode) {
           'button.btn.gold.big',
           {
             onclick: () => {
+              const code = !solo && where !== 'here' && codeMode === 'mine' ? cleanCode(myCode) : null;
+              if (!solo && where !== 'here' && codeMode === 'mine' && !code) {
+                toast('Type a table code of 4 to 8 letters or numbers', { kind: 'warn' });
+                return codeInput.focus();
+              }
               sheet.close();
               if (solo) startSolo(game, options, settings, { replace: true });
               else if (where === 'here') startLocal(game, options, settings, names.slice(0, seatTotal() - 1));
-              else hostOnline(game, options, settings);
+              else hostOnline(game, options, settings, code);
             },
           },
           'Continue',
@@ -594,12 +645,12 @@ function startLocal(game, options, settings, names) {
   go('#/table');
 }
 
-function hostOnline(game, options, settings) {
+function hostOnline(game, options, settings, code = null) {
   const saved = prefs.get(`setup.${game.id}`) || {};
   options = options || saved.options || {};
   settings = settings || { speed: saved.speed || 'normal', botLevel: saved.botLevel || 'normal' };
   leaveCurrent(false);
-  const room = new HostRoom({ game, profile: { ...profile(), name: displayName() }, online: true, options, settings });
+  const room = new HostRoom({ game, profile: { ...profile(), name: displayName() }, online: true, options, settings, code });
   current = { game, room, client: room.local, mode: 'host' };
   go('#/lobby');
 }
@@ -659,7 +710,8 @@ function joinRoom(code) {
       leaveCurrent(false);
       toast(`No table found with code ${code}. Check the code and that the host has the game open.`, { ms: 5000, kind: 'warn' });
       go('#/');
-    } else if (current?.client === client) updateConnBadge(s, detail);
+    } else if (s === 'unreachable' && current?.client === client && !current.game) showUnreachable(code, client);
+    else if (current?.client === client) updateConnBadge(s, detail);
   });
   client.on('welcome', (msg) => {
     if (current?.client !== client) return;
@@ -699,6 +751,29 @@ function showConnecting(code) {
   );
 }
 
+// The host's table exists but this device can't get through to it (usually a network that
+// blocks direct connections). Keep trying in the background; offer tips and Try again.
+function showUnreachable(code, client) {
+  app.replaceChildren(
+    h(
+      'div.gc-page.connecting',
+      topbar({ back: () => (leaveCurrent(false), go('#/')) }),
+      h(
+        'div.gc-center.gc-unreachable',
+        h('h2', `Can’t reach table ${code} yet`),
+        h('p', 'The table is open, but this network isn’t letting your device connect to the host’s. Still trying in the background. These usually fix it:'),
+        h(
+          'ul',
+          h('li', 'Switch between Wi-Fi and mobile data on this device, then tap ', h('b', 'Try again'), '.'),
+          h('li', 'Make sure the host’s screen is on and the Game Center is open.'),
+          h('li', 'Turn off a VPN, or “Limit IP address tracking” / Private Relay for this network.'),
+        ),
+        h('div.gc-actions', h('button.btn.gold.big', { onclick: () => (showConnecting(code), client.retryNow()) }, 'Try again'), h('button.btn.ghost', { onclick: () => (leaveCurrent(false), go('#/')) }, 'Back')),
+      ),
+    ),
+  );
+}
+
 function updateConnBadge(status, detail) {
   const el = $('.gc-conn-detail');
   if (el) el.textContent = detail || (status === 'online' ? 'Connected' : 'Connecting…');
@@ -731,6 +806,8 @@ function showLobby() {
     }
     const url = `${location.origin}${location.pathname}#/join/${lobby.code}`;
     const isHost = client.isHost;
+    // remembered so a refresh reopens this table with the same code (see route)
+    if (isHost) store.set('gc.hostLobby', { gameId: game.id, options: lobby.options, settings: lobby.settings, code: lobby.code, at: Date.now() });
     const seatCard = (s) => {
       const label = game.seatLabels?.[s.seat] || `Seat ${s.seat + 1}`;
       const team = game.teams ? game.teams.findIndex((t) => t.includes(s.seat)) : -1;
@@ -770,7 +847,7 @@ function showLobby() {
           h(
             'div.gc-conn-line',
             h('span.gc-conn', { dataset: { status: client.isHost ? lobby.status : client.status } }),
-            client.isHost ? (lobby.status === 'online' ? 'Open — friends can join now' : lobby.status === 'error' ? 'Could not open the table' : 'Opening the table…') : 'Connected to the host',
+            client.isHost ? (lobby.status === 'online' ? 'Open — friends can join now' : lobby.status === 'error' ? lobby.statusDetail || 'Could not open the table' : lobby.statusDetail || 'Opening the table…') : 'Connected to the host',
           ),
           h(
             'div.gc-invite-actions',
