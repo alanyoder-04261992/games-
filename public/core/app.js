@@ -1041,21 +1041,47 @@ async function showTable() {
   const stage = h('div.gc-stage');
   const online = client.isHost ? current.room.online : true;
   const chatPanel = online ? chatBox(client) : null;
-  const drawer = online ? h('aside.gc-drawer', h('div.gc-drawer-head', h('strong', 'Table chat'), h('button.gc-x', { onclick: () => drawer.classList.remove('open') }, '×')), chatPanel.el) : null;
+  // Chat drops down from the top bar as a small see-through panel: type and read while the
+  // table stays in view. Closed, new messages show for a few seconds in a strip (the peek).
   const unread = h('span.gc-unread');
+  const peek = h('button.gc-chat-peek', { type: 'button', 'aria-live': 'polite', onclick: () => openChat(true) });
+  let peekTimer = null;
+  const openChat = (open) => {
+    drawer.classList.toggle('open', open);
+    if (open) {
+      unread.textContent = '';
+      unread.classList.remove('show');
+      peek.classList.remove('show');
+    }
+  };
+  const drawer = online
+    ? h('aside.gc-drawer', { 'aria-label': 'Table chat' }, h('div.gc-drawer-head', h('strong', 'Table chat'), h('button.gc-x', { type: 'button', 'aria-label': 'Close chat', onclick: () => openChat(false) }, '×')), chatPanel.el)
+    : null;
   if (online) {
     client.on('chat', (m) => {
-      if (!drawer.classList.contains('open') && !m.replay && !m.system) {
-        unread.textContent = String((Number(unread.textContent) || 0) + 1);
-        unread.classList.add('show');
-      }
+      if (drawer.classList.contains('open') || m.replay || m.system) return;
+      unread.textContent = String((Number(unread.textContent) || 0) + 1);
+      unread.classList.add('show');
+      peek.replaceChildren(h('b', { style: { '--hue': m.hue } }, m.name), ' ', m.text);
+      peek.classList.add('show');
+      clearTimeout(peekTimer);
+      peekTimer = setTimeout(() => peek.classList.remove('show'), 5000);
     });
+    // when a game ends, the chat opens so everyone can talk about a rematch (on a phone it
+    // would cover the results, so there the Chat button beside Rematch opens it instead)
+    let wasOver = false;
+    client.on('state', (msg) => {
+      if (msg.over && !wasOver && msg.event && innerWidth >= 760) setTimeout(() => stage.isConnected && client.lastState?.over && openChat(true), 1800);
+      wasOver = !!msg.over;
+    });
+    const onChatAsk = () => (stage.isConnected ? openChat(true) : document.removeEventListener('gc:chat', onChatAsk));
+    document.addEventListener('gc:chat', onChatAsk);
   }
   const code = client.isHost ? current.room.code : client.code;
   const bar = h(
     'div.gc-gamebar',
     h('button.gc-icon-btn', { onclick: () => leaveCurrent() && go('#/'), title: 'Back to Game Center', 'aria-label': 'Back' }, h('span', { html: ICON.back })),
-    h('div.gc-gamebar-title', h('strong', game.name), online ? h('button.gc-room-chip', { onclick: () => inviteSheet(game, code) }, h('span.gc-conn', { dataset: { status: client.isHost ? current.room.status : client.status } }), code) : null, online ? voiceStrip() : null),
+    h('div.gc-gamebar-title', h('strong', game.name), online ? h('button.gc-room-chip', { onclick: () => inviteSheet(game, code) }, h('span.gc-conn', { dataset: { status: client.isHost ? current.room.status : client.status } }), code) : null, online ? talkingPill() : null),
     h(
       'div.gc-gamebar-right',
       online ? micButton() : null,
@@ -1064,11 +1090,8 @@ async function showTable() {
             'button.gc-icon-btn',
             {
               title: 'Chat',
-              onclick: () => {
-                drawer.classList.toggle('open');
-                unread.textContent = '';
-                unread.classList.remove('show');
-              },
+              'aria-label': 'Chat',
+              onclick: () => openChat(!drawer.classList.contains('open')),
             },
             h('span', { html: ICON.chat }),
             unread,
@@ -1080,7 +1103,7 @@ async function showTable() {
     ),
   );
   const offline = h('div.gc-offline-banner');
-  app.replaceChildren(h('div.gc-table-page', bar, stage, offline, drawer));
+  app.replaceChildren(h('div.gc-table-page', bar, stage, offline, drawer, online ? peek : null));
   client.on('status', (s, detail) => {
     $('.gc-gamebar .gc-conn')?.setAttribute('data-status', s);
     offline.textContent = s === 'online' || s === 'offline' ? '' : detail || 'Reconnecting…';
@@ -1198,7 +1221,7 @@ function rematchFallback(stage, client) {
       if (!stage.isConnected || !client.lastState?.over || stage.querySelector('.gc-rematch, [data-own-rematch]')) return;
       bar = h('div.gc-rematch-bar', rematchControl(client));
       stage.append(bar);
-    }, 1500); // give the game's own end screen time to appear first
+    }, 3500); // give the game's own end screen time to appear first
   });
 }
 
@@ -1242,8 +1265,11 @@ function voiceFor() {
     const voice = new Voice(current.client);
     voice.on('state', (state, detail) => state === 'error' && toast(detail, { kind: 'warn', ms: 5000 }));
     voice.on('forced', (muted) => toast(muted ? 'The host muted your microphone' : 'The host unmuted you — you can talk again', { kind: muted ? 'warn' : '' }));
-    voice.on('blocked', () => toast('Tap anywhere to hear voice chat'));
+    let blockedToast = false;
+    voice.on('blocked', () => !blockedToast && ((blockedToast = true), toast('Tap anywhere to hear voice chat', { ms: 6000 })));
     current.voice = voice;
+    // everyone at an online table hears voice chat the whole time; the mic is tap to talk
+    voice.listen();
   }
   return current.voice;
 }
@@ -1276,17 +1302,15 @@ function onSpeaking(el, fn) {
 }
 
 function micState(voice) {
-  if (voice.state === 'starting') return { cls: 'starting', icon: ICON.mic, label: 'Starting voice…' };
-  if (voice.state !== 'on') return { cls: 'off', icon: ICON.micPlus, label: 'Join voice chat' };
-  if (voice.hostMuted) return { cls: 'host-muted', icon: ICON.micOff, label: 'The host muted you' };
-  if (voice.muted) return { cls: 'muted', icon: ICON.micOff, label: 'You are muted — tap to talk' };
-  return { cls: 'live', icon: ICON.mic, label: 'Your mic is on — tap to mute' };
+  if (voice.state === 'starting') return { cls: 'starting', icon: ICON.mic, label: 'Starting your mic…', text: 'Starting…' };
+  if (voice.hostMuted) return { cls: 'host-muted', icon: ICON.micOff, label: 'The host muted you', text: 'Muted by host' };
+  if (voice.talking) return { cls: 'live', icon: ICON.mic, label: 'You’re talking — tap to stop', text: 'Stop talking' };
+  return { cls: 'off', icon: ICON.mic, label: 'Tap to talk (you always hear everyone)', text: 'Tap to talk' };
 }
 
 function pressMic(voice) {
-  if (voice.state === 'on') {
-    if (!voice.toggleMute()) toast('The host muted you. Ask them to unmute you.');
-  } else voice.join();
+  if (voice.hostMuted) return toast('The host muted you. Ask them to let you talk.');
+  voice.toggleTalk();
 }
 
 function micButton() {
@@ -1296,38 +1320,47 @@ function micButton() {
     const st = micState(voice);
     return [
       h(`button.gc-icon-btn.gc-mic.${st.cls}`, { title: st.label, 'aria-label': st.label, onclick: () => pressMic(voice) }, h('span', { html: st.icon }), h('i.gc-mic-level')),
-      voice.state === 'on' ? h('button.gc-icon-btn.gc-mic-more', { title: 'Voice chat', 'aria-label': 'Voice chat people', onclick: () => voicePanel() }, h('span', { html: ICON.people })) : null,
+      h('button.gc-icon-btn.gc-mic-more', { title: 'Voice chat', 'aria-label': 'Voice chat people', onclick: () => voicePanel() }, h('span', { html: ICON.people })),
+      voice.blocked ? h('button.btn.gold.chip.gc-tap-hear', { onclick: () => voice.unblock() }, 'Tap to hear') : null,
     ];
   });
 }
 
-function voiceStrip() {
-  const el = h('button.gc-voice-strip', { title: 'Voice chat', onclick: () => voicePanel() });
-  return live(
-    el,
-    (voice) =>
-    voice.roster().map((r) =>
+// Who is talking right now, under the top bar: everyone whose mic is on, glowing while their
+// voice is heard. Your own chip says you're live and stops talking when tapped.
+function talkingPill() {
+  const el = h('div.gc-talking-pill', { 'aria-live': 'polite' });
+  live(el, (voice) => {
+    const people = voice.roster().filter((r) => r.live);
+    el.hidden = !people.length;
+    return people.map((r) =>
       h(
-        'span.gc-vs-face' + (r.speaking ? '.speaking' : '') + (r.muted || r.hostMuted || r.localMuted ? '.muted' : ''),
-        { title: `${r.name}${r.me ? ' (you)' : ''}${r.hostMuted ? ' — muted by host' : r.muted ? ' — muted' : ''}` },
+        'button.gc-tp-face' + (r.speaking ? '.speaking' : '') + (r.me ? '.me' : ''),
+        { type: 'button', dataset: { id: r.id }, title: r.me ? 'You’re talking — tap to stop' : `${r.name} is talking`, onclick: () => (r.me ? pressMic(voice) : voicePanel()) },
         avatar(r.name, r.hue, { size: 'sm' }),
-        r.muted || r.hostMuted || r.localMuted ? h('i', { html: ICON.micOff }) : null,
+        h('span', r.me ? 'You' : r.name),
+        h('i', { html: ICON.mic }),
       ),
-    ),
-    ['change', 'speaking'],
-  );
+    );
+  });
+  // the glow follows their voice without rebuilding the buttons
+  onSpeaking(el, (speaking) => el.querySelectorAll('.gc-tp-face').forEach((b) => b.classList.toggle('speaking', speaking.has(b.dataset.id))));
+  return el;
 }
 
 function voiceBox() {
   const el = h('div.gc-voice-box');
   return live(el, (voice) => {
     const st = micState(voice);
-    const people = voice.roster();
+    const talkers = voice.roster().filter((r) => r.live && !r.me);
     return [
-      voice.state === 'on'
-        ? h('div.gc-voice-row', h(`button.btn.${st.cls === 'live' ? 'ghost' : 'gold'}`, { onclick: () => pressMic(voice) }, h('span', { html: st.icon }), st.cls === 'live' ? 'Mute' : st.cls === 'host-muted' ? 'Muted by host' : 'Unmute'), h('button.btn.text', { onclick: () => voicePanel() }, `${people.length} in voice`), h('button.btn.text', { onclick: () => voice.leave() }, 'Leave'))
-        : h('div.gc-voice-row', h('button.btn.gold', { onclick: () => voice.join(), disabled: voice.state === 'starting' }, h('span', { html: ICON.mic }), voice.state === 'starting' ? 'Starting…' : 'Join voice'), people.length ? h('small', `${people.length} talking now`) : h('small', 'Talk while you play. Your mic stays on; mute any time.')),
-      people.length ? h('div.gc-voice-faces', voiceStrip()) : null,
+      h(
+        'div.gc-voice-row',
+        h(`button.btn.${st.cls === 'live' ? 'gc-talking' : 'gold'}`, { onclick: () => pressMic(voice), disabled: voice.state === 'starting' }, h('span', { html: st.icon }), st.text),
+        h('small', st.cls === 'live' ? 'Everyone hears you. Tap again when you’re done.' : talkers.length ? `Talking now: ${talkers.map((r) => r.name).join(', ')}` : 'You always hear everyone. Tap to talk.'),
+        h('button.btn.text', { onclick: () => voicePanel() }, 'People'),
+      ),
+      voice.blocked ? h('button.btn.gold.gc-tap-hear', { onclick: () => voice.unblock() }, h('span', { html: ICON.sound }), 'Tap to hear voice') : null,
     ];
   });
 }
@@ -1342,12 +1375,11 @@ function voicePanel() {
     const roster = voice.roster();
     const inVoice = new Set(roster.map((r) => r.id));
     const others = (current?.client.lobby?.players || []).filter((p) => !inVoice.has(p.id) && p.connected);
-    const status = (r) =>
-      r.hostMuted ? 'Muted by host' : r.muted ? 'Muted' : !r.connected ? 'Connecting…' : r.speaking ? 'Talking' : r.me ? 'Mic on' : 'Listening';
+    const status = (r) => (r.hostMuted ? 'Muted by host' : r.live ? (r.speaking ? 'Talking' : 'Mic on') : r.me ? 'Listening — tap Talk to speak' : !r.connected ? 'Connecting…' : 'Listening');
     statusOf = status;
     return [
       h('h2', 'Voice chat'),
-      h('p.gc-hint', 'Everyone in voice hears everyone else. ', isHost ? 'As the host you can mute anyone for the whole table.' : 'Mute someone just for yourself with the speaker button.'),
+      h('p.gc-hint', 'Everyone always hears whoever is talking. Tap to talk, tap again when you’re done. ', isHost ? 'As the host you can mute anyone for the whole table.' : 'Silence someone just for yourself with the speaker button.'),
       h(
         'div.gc-voice-list',
         roster.map((r) =>
@@ -1359,18 +1391,19 @@ function voicePanel() {
             h(
               'div.gc-voice-actions',
               r.me
-                ? h(`button.btn.chip${voice.muted ? '.on' : ''}`, { disabled: voice.hostMuted, onclick: () => voice.toggleMute() }, h('span', { html: voice.muted || voice.hostMuted ? ICON.micOff : ICON.mic }), voice.muted ? 'Unmute' : 'Mute')
+                ? h(`button.btn.chip${voice.talking ? '.on' : '.gold'}`, { disabled: voice.hostMuted, onclick: () => pressMic(voice) }, h('span', { html: ICON.mic }), voice.talking ? 'Stop talking' : 'Talk')
+                : !r.mic
+                ? null
                 : h(`button.btn.chip${r.localMuted ? '.on' : ''}`, { title: 'Only you stop hearing them', onclick: () => voice.setLocalMute(r.id, !r.localMuted) }, h('span', { html: r.localMuted ? ICON.mute : ICON.sound }), r.localMuted ? 'Hear' : 'Silence'),
-              isHost && !r.me ? h(`button.btn.chip${r.hostMuted ? '.on' : '.danger'}`, { onclick: () => voice.hostMute(r.id, !r.hostMuted) }, r.hostMuted ? 'Allow to talk' : 'Mute for all') : null,
+              isHost && !r.me && r.mic ? h(`button.btn.chip${r.hostMuted ? '.on' : '.danger'}`, { onclick: () => voice.hostMute(r.id, !r.hostMuted) }, r.hostMuted ? 'Allow to talk' : 'Mute for all') : null,
             ),
           ),
         ),
       ),
-      others.length ? h('p.gc-hint', `Not in voice: ${others.map((p) => p.name).join(', ')}`) : null,
+      others.length ? h('p.gc-hint', `Still connecting: ${others.map((p) => p.name).join(', ')}`) : null,
       isHost && others.some((p) => p.hostMuted) ? h('p.gc-hint', 'Players you muted stay muted if they rejoin voice.') : null,
       h(
         'div.gc-actions',
-        voice.state === 'on' ? h('button.btn.ghost', { onclick: () => (voice.leave(), sheet.close()) }, 'Leave voice') : h('button.btn.gold', { onclick: () => voice.join() }, h('span', { html: ICON.mic }), 'Join voice'),
         h('button.btn.ghost', { onclick: () => sheet.close() }, 'Done'),
       ),
     ];

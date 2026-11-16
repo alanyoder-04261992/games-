@@ -27,7 +27,9 @@ home page, **Step-by-step guide** in the lobby, the **?** button at the table, o
    empty seat you'd rather have, tap **Sit here** on it.
 
 ## During the game
-- **Chat** with the bubble at the top; quick reactions pop up over your seat.
+- **Chat** with the bubble at the top: a small see-through panel drops down so you can
+  type and still see the table. New messages flash under the top bar for a few seconds
+  while it's closed. Chat opens by itself when a game ends, to talk about a rematch.
 - If someone drops, a **computer player covers their seat** until they come back.
 - **Refresh or reopen** the link to get back to your seat. The home page also shows
   **Rejoin table**.
@@ -52,11 +54,14 @@ Most turn-based games let people share a phone or tablet:
   plays at once.
 
 ## Voice chat
-- Tap the **microphone** at the top of the table (or **Join voice** in the lobby) and allow
-  the microphone. Everyone in voice hears everyone — players and watchers, as many as are at
-  the table.
-- The mic is **always on**. Tap the green mic to mute, the red one to talk again. Whoever is
-  talking lights up green.
+- **Everyone at the table hears voice chat automatically, the whole time**: nobody has to
+  tap anything or allow a microphone just to listen. (On an iPhone, sound starts after the
+  first tap on the screen; a **Tap to hear** button shows until then.)
+- **Tap to talk:** tap the **microphone** at the top of the table (or **Tap to talk** in the
+  lobby). The first time, allow the microphone. The mic turns green and everyone hears you;
+  tap it again when you're done. Players and watchers alike.
+- **Who's talking** shows in the top bar: a face for everyone whose mic is on, glowing while
+  their voice comes through. Tap your own face to stop talking.
 - **The host can mute anyone for everybody:** people button → **Mute for all**. That person
   can't unmute until the host taps **Allow to talk**. Their audio also stops playing on
   everyone else's device, so it holds even if their app misbehaves.
@@ -77,8 +82,8 @@ Most turn-based games let people share a phone or tablet:
 | "No table found" | Check the code (made-up codes never use I, O, 0 or 1; your own code can be anything). Make sure the host still has the table open. |
 | "Can't reach table … yet" / stuck on "Connecting…" | That network is blocking the direct connection. Switch between Wi-Fi and mobile data and tap **Try again**; turn off a VPN or iCloud Private Relay. For the host: set up the free relay below so this stops happening. |
 | A player shows "Reconnecting…" | Their device slept or lost signal. A computer covers; they reopen the link to take over. |
-| Nobody hears me (voice) | Make sure the mic is green. If the host muted you, ask them to allow you. If the browser blocked the mic, allow it in site settings and tap Join voice again. |
-| I can't hear anyone (voice) | Turn the volume up and the silent switch off; on iPhone tap the screen once. |
+| Nobody hears me (voice) | Tap the mic so it's green (tap to talk). If the host muted you, ask them to allow you. If the browser blocked the mic, allow it in site settings and tap again. Everyone hears you without doing anything. |
+| I can't hear anyone (voice) | Turn the volume up and the silent switch off; on iPhone tap the screen once (or **Tap to hear**). Someone is only heard while their face shows in the top bar (their mic is on). |
 | Everything froze | The host's device went to sleep — have the host unlock and reopen the Game Center. |
 
 ## For the host: a relay so everyone can connect

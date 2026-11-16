@@ -25,6 +25,8 @@ export function rematchControl(client, { big = false, label } = {}) {
     const names = humans.filter((p) => ready.has(p.id)).map((p) => p.name);
     const host = players.find((p) => p.isHost);
     const seated = humans.some((p) => p.id === client.playerId);
+    // talk it over: opens the table chat (online tables only)
+    const chat = lobby?.online ? h('button.btn.ghost.gc-rematch-chat', { type: 'button', onclick: () => document.dispatchEvent(new CustomEvent('gc:chat')) }, 'Chat') : null;
     const btn = (text, opts = {}) => h(`button.btn.gold${big ? '.big' : ''}.gc-rematch-btn`, { type: 'button', ...opts }, text);
     if (client.isHost) {
       const waiting = humans.filter((p) => !p.isHost && p.connected && !ready.has(p.id)).length;
@@ -33,13 +35,15 @@ export function rematchControl(client, { big = false, label } = {}) {
           onclick: () => client.send({ t: 'rematch' }),
           title: solo ? 'Start a new game' : 'Start a new game with everyone at this table, same seats and room code',
         }),
+        chat,
         solo ? null : h('small.gc-rematch-note', names.length ? `${list(names)} ${names.length === 1 ? 'is' : 'are'} in${waiting ? ` · waiting on ${waiting} more` : ''}` : 'Starts a new game for everyone here'),
       );
     } else if (!seated) {
-      el.replaceChildren(h('small.gc-rematch-note', `Watching · ${host?.name || 'the host'} can start a rematch`));
+      el.replaceChildren(h('small.gc-rematch-note', `Watching · ${host?.name || 'the host'} can start a rematch`), chat);
     } else if (sent || ready.has(client.playerId)) {
       el.replaceChildren(
         btn("You're in ✓", { disabled: true }),
+        chat,
         h('small.gc-rematch-note', `Waiting for ${host?.name || 'the host'} to start${names.length > 1 ? ` · ${list(names.filter((n) => n !== myName(players, client)))} also in` : ''}`),
       );
     } else {
@@ -52,6 +56,7 @@ export function rematchControl(client, { big = false, label } = {}) {
           },
           title: `Tell ${host?.name || 'the host'} you're in for another game with the same players`,
         }),
+        chat,
         h('small.gc-rematch-note', `Same players and seats · ${host?.name || 'the host'} starts it`),
       );
     }
@@ -66,7 +71,11 @@ export function rematchControl(client, { big = false, label } = {}) {
     offLobby();
     offState();
   };
-  requestAnimationFrame(() => (el.dataset.mounted = '1'));
+  requestAnimationFrame(() => {
+    el.dataset.mounted = '1';
+    // the game drew its own Rematch button after the table's stand-in bar appeared: one is enough
+    for (const bar of document.querySelectorAll('.gc-rematch-bar')) if (!bar.contains(el)) bar.remove();
+  });
   paint();
   return el;
 }
