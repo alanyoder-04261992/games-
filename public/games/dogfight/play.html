@@ -19,6 +19,7 @@
   color-scheme:dark;
 }
 [hidden]{display:none!important}
+:root{--sl:env(safe-area-inset-left,0px);--sr:env(safe-area-inset-right,0px);--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);--L:max(16px,var(--sl));--R:max(16px,var(--sr));--B:max(14px,var(--sb));--T:max(10px,var(--st))}
 html,body{height:100%;margin:0;background:var(--sky);overflow:hidden;overscroll-behavior:none}
 body{font-family:var(--f-ui);font-size:16px;color:var(--ink);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:none}
 canvas#gl,canvas#hud{position:fixed;inset:0;width:100%;height:100%;display:block}
@@ -37,7 +38,7 @@ a.btn:hover{border-color:var(--ink)}
 .board td:not(:first-child),.board th:not(:first-child){text-align:right;font-family:var(--f-data)}
 .board tr.me td{color:var(--amber)}
 .board small{color:var(--ink-dim);font-size:.75rem}
-.screen{position:fixed;inset:0;z-index:10;display:grid;place-items:center;background:linear-gradient(180deg,rgba(14,18,14,.35),rgba(14,18,14,.78));padding:max(12px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+.screen{position:fixed;inset:0;z-index:10;display:grid;place-items:center;background:linear-gradient(180deg,rgba(14,18,14,.35),rgba(14,18,14,.78));padding:max(12px,var(--st)) max(16px,var(--sr)) max(12px,var(--sb)) max(16px,var(--sl))}
 .sheet{width:min(760px,100%);max-height:100%;overflow:auto;touch-action:pan-y;background:var(--panel);border:1px solid var(--line);padding:22px 26px;box-sizing:border-box;display:flex;flex-direction:column;gap:14px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 .eyebrow{font-family:var(--f-data);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--amber)}
 h1{font-family:var(--f-display);font-weight:800;font-size:clamp(2.6rem,8vw,4.6rem);line-height:.9;margin:0;letter-spacing:.02em;text-wrap:balance}
@@ -105,83 +106,66 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
 #loadbar{width:min(320px,70vw);height:4px;background:rgba(241,232,210,.15);margin-top:10px}
 #loadbar i{display:block;height:100%;width:0;background:var(--amber);transition:width .2s}
 /* touch controls */
-#touch{position:fixed;inset:0;z-index:5;pointer-events:none}
+/* touch controls. Units scale with --u (bigger on a tablet); --L/--R/--B/--T keep them inside the safe area
+   (on an iPhone the Dynamic Island sits on one side in landscape). Left thumb: the stick (and rudder pedals beside it).
+   Right thumb: FIRE in the corner, the other weapons spaced around it, the throttle beside them.
+   Top right: MAP, ••• (everything else, in a tray) and pause. GEAR and BAIL appear on their own when they are needed. */
+#touch{position:fixed;inset:0;z-index:5;pointer-events:none;--u:1}
+.tablet #touch{--u:1.22}
 #touch > *{pointer-events:auto}
-#stickZone{position:absolute;left:0;top:18%;bottom:0;width:46%}
+#stickZone{position:absolute;left:0;top:22%;bottom:0;width:46%}
 #touch.aim #stickZone{width:100%;top:12%}
-#stickBase{position:absolute;width:132px;height:132px;margin:-66px 0 0 -66px;border-radius:50%;border:2px solid rgba(241,232,210,.45);background:rgba(20,24,18,.25);pointer-events:none;left:calc(max(16px,env(safe-area-inset-left)) + 96px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 30px);top:auto}
+#stickBase{position:absolute;width:calc(var(--u)*132px);height:calc(var(--u)*132px);margin:calc(var(--u)*-66px) 0 0 calc(var(--u)*-66px);border-radius:50%;border:2px solid rgba(241,232,210,.45);background:rgba(20,24,18,.25);pointer-events:none;left:calc(var(--L) + var(--u)*82px);bottom:calc(var(--B) + var(--u)*14px);top:auto}
+#touch.rudder #stickBase{left:calc(var(--L) + var(--u)*144px)}
 #stickBase.live{bottom:auto}
-#stickKnob{position:absolute;left:50%;top:50%;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;background:rgba(241,232,210,.82);box-shadow:0 2px 8px rgba(0,0,0,.35)}
+#stickKnob{position:absolute;left:50%;top:50%;width:calc(var(--u)*58px);height:calc(var(--u)*58px);margin:calc(var(--u)*-29px) 0 0 calc(var(--u)*-29px);border-radius:50%;background:rgba(241,232,210,.82);box-shadow:0 2px 8px rgba(0,0,0,.35)}
 #touch.aim #stickBase{display:none}
-.tbtn{position:absolute;display:grid;place-items:center;border-radius:50%;border:2px solid rgba(241,232,210,.6);background:rgba(20,24,18,.42);color:var(--ink);font-family:var(--f-ui);font-weight:700;letter-spacing:.08em;font-size:.8rem;padding:0;width:58px;height:58px}
+.tbtn{position:absolute;display:grid;place-items:center;border-radius:50%;border:2px solid rgba(241,232,210,.6);background:rgba(20,24,18,.42);color:var(--ink);font-family:var(--f-ui);font-weight:700;letter-spacing:.06em;font-size:calc(var(--u)*.74rem);padding:0;width:calc(var(--u)*56px);height:calc(var(--u)*56px);touch-action:none}
 .tbtn.on{background:rgba(234,165,60,.55);border-color:var(--amber)}
-#tFire{width:104px;height:104px;font-size:1.05rem;right:calc(max(16px,env(safe-area-inset-right)) + 10px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 10px);border-color:rgba(226,85,63,.9);background:rgba(226,85,63,.35)}
-#tFire.on{background:rgba(226,85,63,.75)}
 .tbtn[hidden]{display:none}
-/* rudder: hold to yaw; above the stick, out of the corner map's way */
-.tbtn.rud{width:60px;height:46px;border-radius:10px;font-size:.72rem;bottom:calc(max(16px,env(safe-area-inset-bottom)) + 196px)}
-#tRudL{left:calc(max(16px,env(safe-area-inset-left)) + 4px)}
-#tRudR{left:calc(max(16px,env(safe-area-inset-left)) + 74px)}
-.tbtn.sq{width:46px;height:46px;border-radius:10px;font-size:.72rem;top:calc(max(10px,env(safe-area-inset-top)) + 4px)}
-#tPause{right:calc(max(16px,env(safe-area-inset-right)) + 12px);font-size:1rem}
-#tCam{right:calc(max(16px,env(safe-area-inset-right)) + 64px)}
-#tFlaps{right:calc(max(16px,env(safe-area-inset-right)) + 116px)}
-#tGear{right:calc(max(16px,env(safe-area-inset-right)) + 168px)}
-#tMap{right:calc(max(16px,env(safe-area-inset-right)) + 220px)}
-#tMsl{width:72px;height:72px;right:calc(max(16px,env(safe-area-inset-right)) + 26px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 124px);border-color:rgba(234,165,60,.95);background:rgba(234,165,60,.22);font-size:.85rem}
+/* right thumb: three columns from the corner, at least 12 px between any two buttons */
+#tFire{width:calc(var(--u)*100px);height:calc(var(--u)*100px);font-size:calc(var(--u)*1.05rem);right:var(--R);bottom:var(--B);border-color:rgba(226,85,63,.9);background:rgba(226,85,63,.35)}
+#tFire.on{background:rgba(226,85,63,.75)}
+#tFlr{width:calc(var(--u)*54px);height:calc(var(--u)*54px);right:calc(var(--R) + var(--u)*23px);bottom:calc(var(--B) + var(--u)*114px)}
+#tFlaps{right:calc(var(--R) + var(--u)*22px);bottom:calc(var(--B) + var(--u)*180px)}
+#tMsl{width:calc(var(--u)*70px);height:calc(var(--u)*70px);right:calc(var(--R) + var(--u)*112px);bottom:calc(var(--B) + var(--u)*4px);border-color:rgba(234,165,60,.95);background:rgba(234,165,60,.22);font-size:calc(var(--u)*.85rem)}
 #tMsl.locked{background:rgba(226,85,63,.7);border-color:#ffd0c0}
-#tBomb{width:62px;height:62px;right:calc(max(16px,env(safe-area-inset-right)) + 116px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 206px);font-size:.72rem;border-color:rgba(214,196,140,.95);background:rgba(120,110,70,.35)}
-#tRkt{width:56px;height:56px;right:calc(max(16px,env(safe-area-inset-right)) + 186px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 206px);font-size:.7rem;border-color:rgba(234,165,60,.8);background:rgba(110,70,30,.35)}
-#tWing{width:auto;min-width:64px;height:40px;padding:0 12px;border-radius:20px;font-size:.66rem;left:calc(max(16px,env(safe-area-inset-left)) + 4px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 250px);border-color:rgba(151,196,111,.9);background:rgba(60,90,40,.35)}
-/* ALT and FORM: on a phone they sit with WING in the gap right of the corner map, clear of the score and the messages */
-#touch .tbtn.pill{width:56px;height:34px;border-radius:17px;font-size:.64rem}
-#tForm{border-color:rgba(151,196,111,.9)}
-html:not(.tablet) #touch #tWing{height:34px;bottom:auto;left:calc(max(16px,env(safe-area-inset-left)) + 124px);top:calc(max(10px,env(safe-area-inset-top)) + 92px)}
-html:not(.tablet) #touch #tAlt{left:calc(max(16px,env(safe-area-inset-left)) + 124px);top:calc(max(10px,env(safe-area-inset-top)) + 132px)}
-html:not(.tablet) #touch #tForm{left:calc(max(16px,env(safe-area-inset-left)) + 188px);top:calc(max(10px,env(safe-area-inset-top)) + 132px)}
-html:not(.tablet) #touch #tRoute{left:calc(max(16px,env(safe-area-inset-left)) + 252px);top:calc(max(10px,env(safe-area-inset-top)) + 132px);width:64px}
-#tRoute{border-color:rgba(95,211,232,.9)}
-.tablet #touch #tRoute{right:calc(max(20px,env(safe-area-inset-right)) + 420px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 248px);width:80px}
-.tablet #touch .tbtn.pill{width:66px;height:48px;font-size:.76rem}
-.tablet #touch #tAlt{right:calc(max(20px,env(safe-area-inset-right)) + 36px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 340px)}
-.tablet #touch #tForm{right:calc(max(20px,env(safe-area-inset-right)) + 342px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 248px)}
-#tBail{width:72px;height:72px;left:50%;margin-left:-36px;bottom:calc(max(16px,env(safe-area-inset-bottom)) + 120px);font-size:.85rem;border-color:#ff8a6d;background:rgba(226,85,63,.45)}
-#tBail.on{background:rgba(255,120,90,.85)}
-#tFlr{width:56px;height:56px;right:calc(max(16px,env(safe-area-inset-right)) + 110px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 136px);font-size:.75rem}
+#tBomb{width:calc(var(--u)*60px);height:calc(var(--u)*60px);right:calc(var(--R) + var(--u)*117px);bottom:calc(var(--B) + var(--u)*88px);font-size:calc(var(--u)*.7rem);border-color:rgba(214,196,140,.95);background:rgba(120,110,70,.35)}
+#tRkt{width:calc(var(--u)*56px);height:calc(var(--u)*56px);right:calc(var(--R) + var(--u)*119px);bottom:calc(var(--B) + var(--u)*160px);font-size:calc(var(--u)*.68rem);border-color:rgba(234,165,60,.8);background:rgba(110,70,30,.35)}
+#tThr{position:absolute;right:calc(var(--R) + var(--u)*194px);bottom:var(--B);width:calc(var(--u)*50px);height:min(calc(var(--u)*150px),36vh);border:2px solid rgba(241,232,210,.6);background:rgba(20,24,18,.42);border-radius:8px;overflow:hidden;touch-action:none}
 #tThr b{position:absolute;left:0;right:0;top:0;height:13%;background:rgba(226,85,63,.35);border-bottom:1px dashed rgba(241,232,210,.6)}
 #tThr.boost b{background:rgba(226,85,63,.85)}
-#tThr{position:absolute;right:calc(max(16px,env(safe-area-inset-right)) + 138px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 4px);width:54px;height:min(150px,30vh);border:2px solid rgba(241,232,210,.6);background:rgba(20,24,18,.42);border-radius:8px;overflow:hidden}
-/* iPad and other tablets: bigger targets for thumbs, spaced out */
-.tablet #stickBase{width:164px;height:164px;margin:-82px 0 0 -82px;left:calc(max(20px,env(safe-area-inset-left)) + 120px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 120px)}
-.tablet #stickKnob{width:72px;height:72px;margin:-36px 0 0 -36px}
-.tablet .tbtn{width:68px;height:68px;font-size:.9rem}
-.tablet #tFire{width:132px;height:132px;font-size:1.2rem;right:calc(max(20px,env(safe-area-inset-right)) + 14px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 14px)}
-.tablet #tMsl{width:88px;height:88px;right:calc(max(20px,env(safe-area-inset-right)) + 34px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 160px)}
-.tablet #tFlr{width:68px;height:68px;right:calc(max(20px,env(safe-area-inset-right)) + 44px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 262px)}
-.tablet #tBomb{width:74px;height:74px;right:calc(max(20px,env(safe-area-inset-right)) + 166px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 236px)}
-.tablet #tRkt{width:68px;height:68px;right:calc(max(20px,env(safe-area-inset-right)) + 258px);bottom:calc(max(20px,env(safe-area-inset-bottom)) + 236px)}
-.tablet #tThr{right:calc(max(20px,env(safe-area-inset-right)) + 172px);width:64px;height:min(200px,30vh)}
-.tablet .tbtn.sq{width:58px;height:58px;font-size:.8rem}
-.tablet #tPause{right:calc(max(20px,env(safe-area-inset-right)) + 12px)}
-.tablet #tCam{right:calc(max(20px,env(safe-area-inset-right)) + 78px)}
-.tablet #tFlaps{right:calc(max(20px,env(safe-area-inset-right)) + 144px)}
-.tablet #tGear{right:calc(max(20px,env(safe-area-inset-right)) + 210px)}
-.tablet #tMap{right:calc(max(20px,env(safe-area-inset-right)) + 276px)}
-.tablet .tbtn.rud{width:72px;height:56px;bottom:calc(max(20px,env(safe-area-inset-bottom)) + 246px)}
-.tablet #tRudR{left:calc(max(20px,env(safe-area-inset-left)) + 88px)}
-.tablet #tWing{height:48px;font-size:.78rem;bottom:calc(max(20px,env(safe-area-inset-bottom)) + 320px)}
-.tablet #tBail{width:88px;height:88px;margin-left:-44px;bottom:calc(max(20px,env(safe-area-inset-bottom)) + 150px)}
-.tablet #missionBanner{top:calc(max(10px,env(safe-area-inset-top)) + 72px)}
-.tablet .sheet{width:min(900px,100%);font-size:17px}
 #tThr i{position:absolute;left:0;right:0;bottom:0;background:rgba(234,165,60,.72)}
 #tThr span{position:absolute;left:0;right:0;top:6px;text-align:center;font-family:var(--f-data);font-size:.65rem;letter-spacing:.06em;color:var(--ink)}
-#missionBanner{position:fixed;left:50%;top:calc(max(8px,env(safe-area-inset-top)) + 50px);transform:translateX(-50%);z-index:12;display:flex;align-items:center;gap:10px;background:var(--panel);border:2px solid var(--amber);padding:6px 8px 6px 14px;max-width:calc(100vw - 32px);box-shadow:0 4px 18px rgba(0,0,0,.35)}
+/* pills: FLAP in the right column, GEAR in the middle when you are near the ground */
+#touch .tbtn.pill{width:calc(var(--u)*58px);height:calc(var(--u)*36px);border-radius:calc(var(--u)*18px);font-size:calc(var(--u)*.68rem)}
+#tGearQ{left:50%;margin-left:calc(var(--u)*-29px);bottom:calc(var(--B) + var(--u)*52px)}
+#tBail{width:calc(var(--u)*72px);height:calc(var(--u)*72px);left:50%;margin-left:calc(var(--u)*-36px);bottom:calc(var(--B) + var(--u)*104px);font-size:.85rem;border-color:#ff8a6d;background:rgba(226,85,63,.45)}
+#tBail.on{background:rgba(255,120,90,.85)}
+/* rudder pedals: either side of the stick (Settings > Rudder buttons, or the ••• tray) */
+.tbtn.rud{width:calc(var(--u)*54px);height:calc(var(--u)*48px);border-radius:10px;font-size:calc(var(--u)*.7rem);bottom:calc(var(--B) + var(--u)*56px)}
+#tRudL{left:var(--L)}
+#tRudR{left:calc(var(--L) + var(--u)*222px)}
+/* top right: three square buttons, and the tray that ••• opens below them */
+.tbtn.sq{width:calc(var(--u)*48px);height:calc(var(--u)*44px);border-radius:10px;font-size:calc(var(--u)*.72rem);top:var(--T)}
+#tPause{right:var(--R);font-size:1rem}
+#tMore{right:calc(var(--R) + var(--u)*58px);font-size:calc(var(--u)*1rem);letter-spacing:.02em}
+#tMap{right:calc(var(--R) + var(--u)*116px)}
+#tTray{position:absolute;top:calc(var(--T) + var(--u)*52px);right:var(--R);display:grid;grid-template-columns:repeat(4,calc(var(--u)*82px));gap:calc(var(--u)*8px);padding:calc(var(--u)*8px);background:rgba(16,20,15,.82);border:1px solid rgba(241,232,210,.35);border-radius:12px;z-index:3}
+#tTray button{height:calc(var(--u)*46px);padding:0 4px;border-radius:9px;border:2px solid rgba(241,232,210,.55);background:rgba(20,24,18,.5);font-size:calc(var(--u)*.66rem);letter-spacing:.04em;line-height:1.15;touch-action:none}
+#tTray button small{display:block;font-size:.85em;color:var(--amber);letter-spacing:.02em}
+#tTray button.on{background:rgba(234,165,60,.55);border-color:var(--amber)}
+#tTray button:disabled{opacity:.35}
+#tMore.on{background:rgba(234,165,60,.45);border-color:var(--amber)}
+.tablet #missionBanner{top:calc(var(--T) + 72px)}
+.tablet .sheet{width:min(900px,100%);font-size:17px}
+#missionBanner{position:fixed;left:50%;top:calc(max(8px,var(--st)) + 50px);transform:translateX(-50%);z-index:12;display:flex;align-items:center;gap:10px;background:var(--panel);border:2px solid var(--amber);padding:6px 8px 6px 14px;max-width:calc(100vw - 32px);box-shadow:0 4px 18px rgba(0,0,0,.35)}
 #missionBanner[hidden]{display:none}
 #missionBanner span{font-weight:600;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 #missionBanner button{padding:.4em .9em;white-space:nowrap}
 #missionBanner #mbX{padding:.4em .6em;border-color:transparent}
-@media (pointer:coarse){ #missionBanner{top:calc(max(10px,env(safe-area-inset-top)) + 58px);max-width:min(440px,calc(100vw - 32px))} #missionBanner span{font-size:.85rem} }
-#portrait{position:fixed;left:50%;top:calc(max(10px,env(safe-area-inset-top)) + 64px);transform:translateX(-50%);z-index:6;background:var(--panel);border:1px solid var(--line);padding:8px 12px;font-size:.9rem;color:var(--ink-dim);max-width:80vw;text-align:center}
+@media (pointer:coarse){ #missionBanner{top:calc(max(10px,var(--st)) + 58px);max-width:min(440px,calc(100vw - 32px))} #missionBanner span{font-size:.85rem} }
+#portrait{position:fixed;left:50%;top:calc(max(10px,var(--st)) + 64px);transform:translateX(-50%);z-index:6;background:var(--panel);border:1px solid var(--line);padding:8px 12px;font-size:.9rem;color:var(--ink-dim);max-width:80vw;text-align:center}
 @media (max-height:500px){ .sheet{padding:12px 18px;gap:8px} h1{font-size:2.3rem} .lede,#ctrlHint,.pcard .stat{display:none} .settings{gap:8px 14px} .pcard{padding:8px 12px} .pcard b{font-size:1.3rem} .actions button,.row button{padding:.5em .9em} }
 @media (max-width:520px){ .planes{grid-template-columns:1fr} }
 @media (prefers-reduced-motion:reduce){ #loadbar i{transition:none} }
@@ -336,19 +320,20 @@ html:not(.tablet) #touch #tRoute{left:calc(max(16px,env(safe-area-inset-left)) +
   <button class="tbtn" id="tFlr">FLARE</button>
   <button class="tbtn" id="tBomb" hidden>BOMB</button>
   <button class="tbtn" id="tRkt" hidden>RKT</button>
-  <button class="tbtn" id="tWing" hidden>WING</button>
+  <button class="tbtn pill" id="tFlaps">FLAP</button>
+  <button class="tbtn pill" id="tGearQ" hidden>GEAR</button>
   <button class="tbtn" id="tBail" hidden>BAIL</button>
-  <button class="tbtn pill" id="tAlt">ALT</button>
-  <button class="tbtn pill" id="tForm" hidden>FORM</button>
-  <button class="tbtn pill" id="tRoute" hidden>ROUTE</button>
-  <button class="tbtn sq" id="tMap">MAP</button>
-  <button class="tbtn sq" id="tGear">GEAR</button>
-  <button class="tbtn sq" id="tFlaps">FLAP</button>
-  <button class="tbtn sq" id="tCam">CAM</button>
-  <button class="tbtn sq" id="tPause" aria-label="Pause">II</button>
   <button class="tbtn rud" id="tRudL" aria-label="Rudder left" hidden>◀ RUD</button>
   <button class="tbtn rud" id="tRudR" aria-label="Rudder right" hidden>RUD ▶</button>
+  <button class="tbtn sq" id="tMap">MAP</button>
+  <button class="tbtn sq" id="tMore" aria-label="More controls" aria-expanded="false">•••</button>
+  <button class="tbtn sq" id="tPause" aria-label="Pause">II</button>
+  <div id="tTray" hidden>
+    <button id="tGear">Gear</button><button id="tCam">Camera</button><button id="tAlt">Alt lock</button><button id="tRud">Rudder<small>off</small></button>
+    <button id="tWing">Wingmen</button><button id="tForm">Formation</button><button id="tRoute">Route</button><button id="tMapStyle">Corner map<small>radar</small></button>
+  </div>
 </div>
+<div id="safeProbe" aria-hidden="true" style="position:fixed;left:var(--L);right:var(--R);top:var(--T);bottom:var(--B);visibility:hidden;pointer-events:none"></div>
 <div id="portrait" hidden>Turn your phone sideways for a wider view. Tap to hide.</div>
 
 <!-- three.js comes from the Game Center's shared copy (public/vendor/three, see tools/update-three.mjs), never a CDN -->
@@ -2185,7 +2170,17 @@ class Plane {
     const cv = s.compV || 205, comp = V > cv ? clamp(1 - (V - cv) / (s.jet ? 120 : 70), 0.25, 1) : 1;
     // fly-by-wire: hold the stick back and a jet pulls to its g limit, no further
     let pc = this.ctrl.pitch;
-    if (s.gLimit && V > 30 && this.alive) { const aMax = (s.gLimit * s.mass * 9.81 / Math.max(1, qd * s.S * lk) - s.CL0) / s.CLa; const lim = Math.max(0.05, (aMax - s.trimA) * s.Cma / (s.Ke * Math.max(0.2, tailF * comp))); pc = clamp(pc, -lim * 0.45, lim); }
+    if (s.gLimit && V > 30 && this.alive) {
+      const den = Math.max(1, qd * s.S * lk), kE = s.Ke * Math.max(0.2, tailF * comp);
+      const aMax = (s.gLimit * s.mass * 9.81 / den - s.CL0) / s.CLa; const lim = Math.max(0.05, (aMax - s.trimA) * s.Cma / kE);
+      // pushing over: down to about -4 g, so at speed the nose comes down about as fast as it comes up. It allows for the extra
+      // elevator a steady push at that g needs against pitch damping (the rate it settles at, not the rate now, so it never
+      // runs away), and stays clear of the -5.5 g that overstresses the airframe
+      const nN = Math.min(4, s.gLimit * 0.45), wSS = (nN + 1) * 9.81 / V;
+      const aMin = (-nN * s.mass * 9.81 / den - s.CL0) / s.CLa;
+      const limN = Math.max(0.05, ((s.trimA - aMin) * s.Cma + s.Cmq * wSS * sq / Math.max(qn, 0.01)) / kE);
+      pc = clamp(pc, -limN, lim);
+    }
     let pA = qn * (s.Ke * pc * tailF * comp * (1 - 0.5 * stall) - s.Cma * (alpha - s.trimA)) - s.Cmq * this.w.x * sq;
     const rollFade = V > s.rollFadeV ? clamp(1 - (V - s.rollFadeV) / 130, 0.35, 1) : 1;
     let rA = -qn * s.Ka * (this.player ? 1.15 : 1) * (1 + 0.25 * flapK) * rollFade * comp * this.ctrl.roll - s.Clp * this.w.z * sq + qn * 3.0 * (fR - fL) * clamp(CL, -1.5, 1.5);
@@ -2746,7 +2741,11 @@ function pitchCaps(p) {
   const qd = 0.5 * 1.225 * Math.exp(-Math.max(0, p.pos.y) / 8500) * V * V;
   const aG = ((8.5 * s.mass * 9.81) / (qd * s.S * (p.lkEff || 1)) - s.CL0 - p.flapT * (p.player ? 0.8 : 0.38)) / s.CLa;
   const aMax = Math.min(s.stallA * 0.9, aG);
-  return { hi: s.Cma * (aMax - s.trimA) / s.Ke, lo: s.Cma * (-s.stallA * 0.85 - s.trimA) / s.Ke }; // pushing over may go to about -3 g
+  // pushing over: to the stall at low speed, and no harder than about -4.2 g at speed (-5.5 g overstresses the airframe)
+  const aN = Math.max(-s.stallA * 0.85, (-4.2 * s.mass * 9.81 / (qd * s.S * (p.lkEff || 1)) - s.CL0) / s.CLa);
+  // plus the elevator a steady push needs against pitch damping (at the rate it settles at), or it never gets there
+  const qn = qd / 7411, wN = (aN > -s.stallA * 0.85 ? 5.2 : 1 + Math.max(0, -(s.CL0 + s.CLa * aN) * qd * s.S * (p.lkEff || 1) / (s.mass * 9.81))) * 9.81 / V;
+  return { hi: s.Cma * (aMax - s.trimA) / s.Ke, lo: (s.Cma * (aN - s.trimA) - s.Cmq * wN * Math.sqrt(qn + 0.02) / qn) / s.Ke };
 }
 function trimFor(p, nz) {
   const s = p.spec, V = Math.max(p.V, 25);
@@ -3935,7 +3934,7 @@ function spawnWingmen(n) {
     else { const yaw = Math.atan2(-pl.fwd.x, -pl.fwd.z); w.place(pl.pos.x + pl.right.x * side * 45 - pl.fwd.x * (40 + i * 25), pl.pos.y + 5 + i * 5, pl.pos.z + pl.right.z * side * 45 - pl.fwd.z * (40 + i * 25), yaw, 0, pl.V || 130); }
     w.gear = w.gearT = 0; w.throttle = 0.85; G.planes.push(w); WING.list.push(w);
   }
-  msg(`${n === 1 ? WING_NAMES[0] + ' is' : 'Your wingmen are'} with you · ${isTouch ? 'WING button' : 'T / Y / U'} gives orders`, 'info', 5);
+  msg(`${n === 1 ? WING_NAMES[0] + ' is' : 'Your wingmen are'} with you · ${isTouch ? '••• › Wingmen' : 'T / Y / U'} gives orders`, 'info', 5);
 }
 function wingAlive() { return WING.list.filter(w => w.alive && !w.gone); }
 function bestTargetAhead() {
@@ -4335,6 +4334,10 @@ addEventListener('message', e => {
   else if (d.type === 'rt') handleNet(d.from, d.data);
   else if (d.type === 'over') showNetDebrief(d.results);
   else if (d.type === 'rematch') { NET.rm = d; rematchButton(); }
+  else if (d.type === 'safe') { // the page around the frame knows where the notch is; inside a frame env(safe-area-inset-*) is 0
+    const st = document.documentElement.style; for (const k of ['l', 'r', 't', 'b']) st.setProperty('--s' + k, Math.max(0, +d[k] || 0) + 'px');
+    resizeHUD();
+  }
 });
 function normOpts(o = {}) {
   return { mode: o.mode === 'versus' ? 'versus' : 'coop', difficulty: DIFF[o.difficulty] ? o.difficulty : 'normal', enemies: o.enemies ?? 'normal', waves: Number(o.waves) || 3, kills: Number(o.kills) || 5, wingmen: o.wingmen === 'on' ? 'on' : 'off', ff: o.ff === 'off' ? 'off' : 'on', tod: TOD_PRESETS[o.tod] ? o.tod : 'day' };
@@ -4692,15 +4695,28 @@ for (const [id, dir] of [['tRudL', -1], ['tRudR', 1]]) {
   b.addEventListener('pointerdown', e => { e.preventDefault(); touch.rud = dir; b.classList.add('on'); try { b.setPointerCapture(e.pointerId); } catch (err) { } });
   for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, () => { if (touch.rud === dir) touch.rud = 0; b.classList.remove('on'); });
 }
-function applyRudder() { $('tRudL').hidden = $('tRudR').hidden = settings.rudder !== 'on'; if (settings.rudder !== 'on') touch.rud = 0; }
+function applyRudder() { const on = settings.rudder === 'on'; $('tRudL').hidden = $('tRudR').hidden = !on; $('touch').classList.toggle('rudder', on); if (!on) touch.rud = 0; }
 $('tMsl').addEventListener('pointerdown', e => { e.preventDefault(); firePlayerMissile(); });
 $('tFlr').addEventListener('pointerdown', e => { e.preventDefault(); playerFlares(); });
 $('tBomb').addEventListener('pointerdown', e => { e.preventDefault(); dropPlayerBomb(); });
 $('tRkt').addEventListener('pointerdown', e => { e.preventDefault(); firePlayerRockets(); });
-$('tAlt').addEventListener('pointerdown', e => { e.preventDefault(); toggleAltLock(); });
-$('tForm').addEventListener('pointerdown', e => { e.preventDefault(); toggleForm(); });
-$('tRoute').addEventListener('pointerdown', e => { e.preventDefault(); toggleRoute(); });
-$('tWing').addEventListener('pointerdown', e => { e.preventDefault(); cycleWing(); });
+// ••• opens a tray with everything you need now and then; it closes after a choice, or after a few seconds
+const tTray = $('tTray'), tMore = $('tMore');
+let trayT = 0; // when the tray closes by itself (performance.now())
+function showTray(on) { tTray.hidden = !on; tMore.classList.toggle('on', on); tMore.setAttribute('aria-expanded', String(on)); trayT = on ? performance.now() + 6000 : 0; if (on) touchExtras(G.player); }
+tMore.addEventListener('pointerdown', e => { e.preventDefault(); showTray(tTray.hidden); });
+// each item: what it does, and whether the tray stays open for another tap (the ones you step through)
+for (const [id, fn, stay] of [['tGear', () => toggleGear(), false], ['tCam', () => cycleCam(), true], ['tAlt', () => toggleAltLock(), false], ['tRud', () => toggleRudderButtons(), false],
+  ['tWing', () => cycleWing(), true], ['tForm', () => toggleForm(), false], ['tRoute', () => toggleRoute(), false], ['tMapStyle', () => cycleMap(), true]]) {
+  $(id).addEventListener('pointerdown', e => { e.preventDefault(); if ($(id).disabled) return; fn(); if (stay) { trayT = performance.now() + 6000; touchExtras(G.player); } else showTray(false); });
+}
+// touching the stick or a weapon closes the tray
+for (const id of ['stickZone', 'tFire', 'tMsl', 'tFlr', 'tBomb', 'tRkt', 'tThr']) $(id).addEventListener('pointerdown', () => { if (!tTray.hidden) showTray(false); });
+function toggleRudderButtons() {
+  settings.rudder = settings.rudder === 'on' ? 'off' : 'on'; saveSettings(); applyRudder();
+  $('setRudder').value = $('optRudder').value = settings.rudder; msg(settings.rudder === 'on' ? 'Rudder pedals on, either side of the stick' : 'Rudder pedals off', 'info', 1.8);
+}
+$('tGearQ').addEventListener('pointerdown', e => { e.preventDefault(); toggleGear(); });
 $('tBail').addEventListener('pointerdown', e => { e.preventDefault(); if (G.player && G.player.alive && !G.bailWin) G.bailArm = Math.max(G.bailArm || 0, 0.01); bailOut(); });
 $('tMap').addEventListener('click', () => openBigMap()); // the corner map's style is chosen on the big map
 function cycleMap() {
@@ -4708,7 +4724,7 @@ function cycleMap() {
   $('optMap').value = $('setMap').value = settings.map;
   msg(settings.map === 'radar' ? 'Corner map: radar' : settings.map === 'sector' ? 'Corner map: whole sector' : 'Corner map off', 'info', 1.6);
 }
-$('tGear').addEventListener('click', toggleGear); $('tFlaps').addEventListener('click', toggleFlaps); $('tCam').addEventListener('click', cycleCam); $('tPause').addEventListener('click', () => pause(true));
+$('tFlaps').addEventListener('pointerdown', e => { e.preventDefault(); toggleFlaps(); }); $('tPause').addEventListener('click', () => pause(true));
 $('portrait').addEventListener('click', () => { $('portrait').hidden = true; G.portraitDismissed = true; });
 addEventListener('deviceorientation', e => {
   if (e.beta == null) return;
@@ -5135,11 +5151,14 @@ function updateCamera(dt, rdt) {
 // =====================================================================
 const hud = $('hud'), hx = hud.getContext('2d');
 let HW = 0, HH = 0, HDPR = 1, HUDK = 1;
+const SAFE = { l: 16, r: 16, t: 10, b: 14 }; // the touch controls' margins (at least 16 px, more beside a notch), in HUD units
 // on a tablet the HUD is drawn larger (HW and HH are the HUD's own units), and the touch controls grow too
 function resizeHUD() {
   HDPR = Math.min(devicePixelRatio || 1, 2); const tab = TABLET && isTouch; HUDK = tab ? 1.22 : 1;
   HW = innerWidth / HUDK; HH = innerHeight / HUDK; hud.width = innerWidth * HDPR; hud.height = innerHeight * HDPR;
   document.documentElement.classList.toggle('tablet', tab); STICK_R = tab ? 78 : 60;
+  const r = $('safeProbe').getBoundingClientRect();
+  if (r.width > 0) { SAFE.l = r.left / HUDK; SAFE.r = (innerWidth - r.right) / HUDK; SAFE.t = r.top / HUDK; SAFE.b = (innerHeight - r.bottom) / HUDK; }
 }
 const _pv = new V3();
 function proj(v) { _pv.copy(v).project(camera); return { x: (_pv.x + 1) / 2 * HW, y: (1 - _pv.y) / 2 * HH, ok: _pv.z < 1 && Math.abs(_pv.x) < 1.05 && Math.abs(_pv.y) < 1.05 }; }
@@ -5148,14 +5167,23 @@ const COND = '"Barlow Condensed", "Arial Narrow", sans-serif';
 function txt(s, x, y, size = 13, col = '#f1e8d2', align = 'left', font = MONO, weight = 600) {
   hx.font = `${weight} ${size}px ${font}`; hx.textAlign = align; hx.fillStyle = 'rgba(10,12,10,0.7)'; hx.fillText(s, x + 1, y + 1); hx.fillStyle = col; hx.fillText(s, x, y);
 }
+// text that must stay inside a width (between the buttons on a phone): smaller type first, then cut short
+function fitTxt(s, x, y, size, maxW, col, align = 'center', font = MONO, weight = 600) {
+  hx.font = `${weight} ${size}px ${font}`; let w = hx.measureText(s).width;
+  if (w > maxW) { size = Math.max(9, Math.floor(size * maxW / w)); hx.font = `${weight} ${size}px ${font}`; w = hx.measureText(s).width; }
+  if (w > maxW) { while (s.length > 4 && hx.measureText(s + '…').width > maxW) s = s.slice(0, -1); s += '…'; }
+  txt(s, x, y, size, col, align, font, weight);
+}
 function drawHUD(rdt) {
   hx.setTransform(HDPR * HUDK, 0, 0, HDPR * HUDK, 0, 0); hx.clearRect(0, 0, HW, HH);
   const p = G.player; if (!p || (G.state !== 'play' && G.state !== 'paused')) return;
-  const safeL = 16, safeT = 14;
+  // inside the safe area (the Game Center passes in the iPhone's notch or Dynamic Island, see ui.js)
+  const safeL = isTouch ? SAFE.l : 16, safeR = isTouch ? SAFE.r : 16, safeT = isTouch ? Math.max(14, SAFE.t + 4) : 14;
   touchExtras(p);
+  if (isTouch && !tTray.hidden && performance.now() > trayT) showTray(false);
   // vision effects
   if (p.alive) {
-    const gl = clamp((p.gs - 7.8) / 2.4, 0, 1), rl = clamp((-p.gs - 2.4) / 1.6, 0, 1);
+    const gl = clamp((p.gs - 7.8) / 2.4, 0, 1), rl = clamp((-p.gs - 3.5) / 2.5, 0, 1); // red-out: from -3.5 g, full at -6 g
     if (gl > 0 || rl > 0) { const g = hx.createRadialGradient(HW / 2, HH / 2, Math.min(HW, HH) * 0.15 * (1 - gl), HW / 2, HH / 2, Math.max(HW, HH) * 0.7); const col = rl > 0 ? `rgba(120,0,0,${rl * 0.95})` : `rgba(0,0,0,${gl * 0.97})`; g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, col); hx.fillStyle = g; hx.fillRect(0, 0, HW, HH); }
     let cl = 0; for (const c of cloudCenters) { const d = Math.hypot(camera.position.x - c.x, (camera.position.y - c.y) * 2.2, camera.position.z - c.z); if (d < c.r) cl = Math.max(cl, 1 - d / c.r); }
     if (cl > 0) { hx.fillStyle = `rgba(232,236,240,${Math.min(0.85, cl * 1.6)})`; hx.fillRect(0, 0, HW, HH); }
@@ -5279,21 +5307,30 @@ function drawHUD(rdt) {
   const m = G.mission;
   // objective, score
   const obj = !m ? '' : NET.on && !m.local ? netObjective() : m.phase === 'takeoff' ? liftOffText() : m.phase === 'combat' && m.kind && m.kind !== 'dogfight' ? missionLine(m) : !p.alive && G.chute && G.chute.who === p ? 'Bailed out · wait to be picked up' : m.phase === 'combat' ? (m.next !== null ? `Wave ${m.wave + 1} inbound in ${Math.ceil(m.next)} s` : `Wave ${m.wave} of ${WAVES.length} · ${enemies().length} bandit${enemies().length === 1 ? '' : 's'} remaining`) : m.phase === 'rtb' ? 'Return to base and land on the runway' : m.phase === 'landed' ? 'Landed' : '';
-  drawCompass(p, isTouch && !TABLET ? HW / 2 - 30 : HW / 2, safeT, Math.min(isTouch ? (TABLET ? 300 : 220) : 380, HW * 0.36));
-  txt(obj.toUpperCase(), HW / 2, safeT + 40, isTouch ? 13 : 15, '#f1e8d2', 'center', COND, 600);
+  if (isTouch) {
+    // the band between the corner map (with its damage diagram and horizon) and the MAP · ••• · II buttons
+    const bl = safeL + (settings.map === 'off' ? 150 : 254) + 10, br = HW - safeR - 164 - 12, bw = Math.max(120, br - bl);
+    const cw = Math.min(TABLET ? 300 : 220, bw), cx = clamp(HW / 2, bl + cw / 2, br - cw / 2);
+    drawCompass(p, cx, safeT, cw);
+    fitTxt(obj.toUpperCase(), (bl + br) / 2, safeT + 40, 13, bw, '#f1e8d2', 'center', COND, 600);
+  } else {
+    drawCompass(p, HW / 2, safeT, Math.min(380, HW * 0.36));
+    txt(obj.toUpperCase(), HW / 2, safeT + 40, 15, '#f1e8d2', 'center', COND, 600);
+  }
   // a named ace in the air: name and how much of the aircraft is left
   const bp = G.planes.find(e => e.boss && e.alive && !e.gone);
   if (bp) { const B = BOSSES[bp.boss], f = bossHealth(bp), w = 200, x0 = HW / 2 - w / 2, y0 = safeT + 50; hx.fillStyle = 'rgba(20,20,18,0.55)'; hx.fillRect(x0 - 2, y0 - 2, w + 4, 9); hx.fillStyle = bp.lastStand ? '#ff6a4d' : '#e2553f'; hx.fillRect(x0, y0, w * f, 5); txt(`${B.name.toUpperCase()} · ${B.call.toUpperCase()}`, HW / 2, y0 + 20, 11, '#ff8a6d', 'center', COND, 700); }
   // your wingmen's orders
   if (G.altLock != null || G.form) txt(G.form ? `FORMATION ON ${(G.form.label || 'WINGMAN').toUpperCase()}${isTouch ? '' : ' · O'}` : `ALT LOCK ${G.altLock} M${isTouch ? '' : ' · L'}`, HW / 2, HH - (isTouch ? 184 : 144), 11, '#eaa53c', 'center', COND, 700);
   const wl = wingAlive(); if (wl.length) txt(`WINGMEN ${wl.length} · ${WING_CMDS[WING.cmd].toUpperCase()}${isTouch ? '' : ' · T Y U'}`, HW / 2, HH - (isTouch ? 168 : 128), 11, '#97c46f', 'center', COND, 600);
-  // on phones the score sits under the button row
-  const scoreX = HW - safeL, scoreY = isTouch ? safeT + 66 : safeT;
-  txt(`SCORE ${String(G.stats.score).padStart(4, '0')}`, scoreX, scoreY + 18, 13, '#eaa53c', 'right');
-  txt(`KILLS ${G.stats.kills}`, scoreX, scoreY + 36, 12, '#f1e8d2', 'right');
+  // on phones the score is one line under the button row, with at most the top two online pilots (you always shown)
+  const scoreX = HW - safeR, scoreY = isTouch ? safeT + 44 : safeT;
+  if (isTouch) txt(`SCORE ${String(G.stats.score).padStart(4, '0')} · KILLS ${G.stats.kills}`, scoreX, scoreY + 18, 12, '#eaa53c', 'right');
+  else { txt(`SCORE ${String(G.stats.score).padStart(4, '0')}`, scoreX, scoreY + 18, 13, '#eaa53c', 'right'); txt(`KILLS ${G.stats.kills}`, scoreX, scoreY + 36, 12, '#f1e8d2', 'right'); }
   if (NET.on) {
-    const rows = Object.entries(NET.board).filter(([, b]) => b.flies).sort((a, b) => b[1].kills - a[1].kills);
-    rows.forEach(([seat, b], i) => txt(`${b.name.slice(0, 12).padEnd(12)} ${String(b.kills).padStart(2)} / ${b.deaths}`, scoreX, scoreY + 58 + i * 16, 11, +seat === NET.seat ? '#eaa53c' : '#c4bba3', 'right'));
+    let rows = Object.entries(NET.board).filter(([, b]) => b.flies).sort((a, b) => b[1].kills - a[1].kills);
+    if (isTouch && rows.length > 2) { const me = rows.findIndex(([seat]) => +seat === NET.seat); rows = me > 1 ? [rows[0], rows[me]] : rows.slice(0, 2); }
+    rows.forEach(([seat, b], i) => txt(`${b.name.slice(0, 12).padEnd(12)} ${String(b.kills).padStart(2)} / ${b.deaths}`, scoreX, scoreY + (isTouch ? 34 : 58) + i * (isTouch ? 14 : 16), 11, +seat === NET.seat ? '#eaa53c' : '#c4bba3', 'right'));
   }
   drawMsgs();
   // warnings
@@ -5312,10 +5349,13 @@ function drawHUD(rdt) {
   const ammoTxt = `${Object.entries(p.ammo).map(([k, v]) => `${GUN_LABEL[k] || k.toUpperCase()} ${v}`).join('  ')}  MSL ${p.missiles}  FLR ${p.flares}${p.rockets ? `  RKT ${p.rockets}` : ''}${p.bombs ? `  BOMB ${p.bombs}` : ''}`;
   const tb = $('tBomb'); tb.hidden = !(p.bombs > 0); if (!tb.hidden) tb.textContent = `BOMB ${p.bombs}`;
   if (isTouch) {
-    const line = `${Math.round(ias)} mph · ${Math.round(p.pos.y)} m · G ${p.gs.toFixed(1)} · THR ${Math.round(p.throttle * 100)}${p.boosting ? ' · BOOST' : ''} · WEP ${Math.round(p.wep * 100)}%`;
-    const lx = Math.min(HW / 2, (HW - 230) / 2 + 40);
-    txt(line, lx, HH - 34, 12, '#f1e8d2', 'center');
-    txt(`${ammoTxt} · FUEL ${Math.round(p.fuel / p.spec.fuel * 100)}%${p.gear ? ' · GEAR' : ''}${p.flaps ? ' · FLAPS' : ''}`, lx, HH - 16, 11, '#c4bba3', 'center');
+    // (missiles, flares, bombs and rockets are counted on their buttons, the throttle on its slider)
+    const line = `${Math.round(ias)} mph · ${Math.round(p.pos.y)} m · G ${p.gs.toFixed(1)}${p.boosting ? ' · BOOST' : ''}${p.wep < 0.995 ? ` · WEP ${Math.round(p.wep * 100)}%` : ''}`;
+    const guns = Object.entries(p.ammo).map(([k, v]) => `${GUN_LABEL[k] || k.toUpperCase()} ${v}`).join(' · ');
+    // between the stick (and its rudder pedals) and the right-hand buttons
+    const fl = safeL + (settings.rudder === 'on' ? 282 : 156), fr = HW - safeR - 252, fw = Math.max(150, fr - fl), lx = (fl + fr) / 2;
+    fitTxt(line, lx, HH - SAFE.b - 20, 12, fw, '#f1e8d2');
+    fitTxt(`${guns} · FUEL ${Math.round(p.fuel / p.spec.fuel * 100)}%${p.gear ? ' · GEAR' : ''}${p.flaps ? ' · FLAPS' : ''}`, lx, HH - SAFE.b - 4, 11, fw, '#c4bba3');
     const thr = $('tThr').querySelector('i'); thr.style.height = (p.throttle * 100).toFixed(0) + '%';
   } else {
     const x0 = safeL + 4, y0 = HH - 128;
@@ -5333,7 +5373,7 @@ function drawHUD(rdt) {
   const rx = isTouch ? safeL + R + 4 : HW - safeL - R, ry = isTouch ? safeT + R + 6 : safeT + 56 + R + boardH;
   let dmgX = isTouch ? safeL + 40 : HW - safeL - 46;
   if (settings.map === 'radar') { drawRadar(p, rx, ry, R); if (isTouch) dmgX = rx + R + 34; }
-  else if (settings.map === 'sector') { const S = isTouch ? 116 : 176; const mx = isTouch ? safeL + 4 : HW - safeL - S, my = isTouch ? safeT + 4 : safeT + 52 + boardH; drawSectorMap(p, mx, my, S); if (isTouch) dmgX = mx + S + 34; }
+  else if (settings.map === 'sector') { const S = isTouch ? 104 : 176; const mx = isTouch ? safeL + 4 : HW - safeL - S, my = isTouch ? safeT + 4 : safeT + 52 + boardH; drawSectorMap(p, mx, my, S); if (isTouch) dmgX = mx + S + 34; }
   drawDamage(p, dmgX, isTouch ? safeT + 40 : HH - 100);
   // artificial horizon (the cockpit panel has its own)
   if (!ck) { if (isTouch) drawAttitude(p, dmgX + 78, safeT + 40, 30); else drawAttitude(p, safeL + 4 + 200 + 52, HH - 72, 42); }
@@ -5403,15 +5443,28 @@ function drawLanding(p) {
   lines.forEach((l, i) => txt(l, HW / 2 + 70, HH / 2 - 18 + i * 16, 12, /ON THE|✓/.test(l) ? '#97c46f' : '#eaa53c', 'left', COND, 700)); // beside the reticle, clear of the aircraft
 }
 // the touch buttons that come and go: rockets, wingman orders, bail out
+const setText = (el, t) => { if (el.textContent !== t) el.textContent = t; };
+const setItem = (id, name, state, on, disabled) => { const b = $(id); const h = `${name}<small>${state}</small>`; if (b.dataset.h !== h) { b.innerHTML = h; b.dataset.h = h; } b.classList.toggle('on', !!on); b.disabled = !!disabled; };
 function touchExtras(p) {
-  if (!isTouch) return;
-  const rk = $('tRkt'), wg = $('tWing'), bl = $('tBail');
-  rk.hidden = !(p.alive && p.rockets > 0); if (!rk.hidden) rk.textContent = `RKT ${p.rockets}`;
-  $('tAlt').hidden = !p.alive || p.onGround; $('tAlt').classList.toggle('on', G.altLock != null);
-  $('tForm').hidden = !p.alive || p.onGround || (!G.form && !formLeaderFor(p)); $('tForm').classList.toggle('on', !!G.form);
-  $('tRoute').hidden = !p.alive || p.onGround || !G.route.wps.length; $('tRoute').classList.toggle('on', G.route.on);
-  const wl = wingAlive(); wg.hidden = !wl.length || !p.alive; if (!wg.hidden) wg.textContent = { cover: 'WING · COVER', attack: 'WING · ATTACK', ground: 'WING · GROUND' }[WING.cmd];
+  if (!isTouch || !p) return;
+  const rk = $('tRkt'), bl = $('tBail'), gq = $('tGearQ');
+  rk.hidden = !(p.alive && p.rockets > 0); if (!rk.hidden) setText(rk, `RKT ${p.rockets}`);
+  $('tFlaps').hidden = !p.alive;
+  // GEAR shows up by itself: with the wheels down in the air (to raise them) and low near the airfield (to lower them)
+  const nearAF = Math.hypot(p.pos.x - AF.x, p.pos.z - AF.z) < 6000;
+  gq.hidden = !p.alive || p.onGround || !(p.gear || (nearAF && p.agl() < 450 && p.V < (p.spec.gearV || 115) * 1.15));
+  if (!gq.hidden) { setText(gq, p.gear ? 'GEAR UP' : 'GEAR DOWN'); gq.classList.toggle('on', !p.gear && p.agl() < 160 && p.V < 75); }
   const bail = canBail(p) && (G.bailWin || (p.alive && playerInTrouble(p))); bl.hidden = !bail; bl.classList.toggle('on', !!G.bailWin && (G.time * 3) % 1 < 0.6);
+  if (tTray.hidden) return;
+  const air = p.alive && !p.onGround, wl = wingAlive();
+  setItem('tGear', 'Gear', p.gear ? 'down' : 'up', p.gear, !p.alive);
+  setItem('tCam', 'Camera', G.cam.mode === 'kill' ? 'kill cam' : G.cam.mode, false, false);
+  setItem('tAlt', 'Alt lock', G.altLock != null ? `${G.altLock} m` : 'off', G.altLock != null, !air);
+  setItem('tRud', 'Rudder', settings.rudder === 'on' ? 'on' : 'off', settings.rudder === 'on', false);
+  setItem('tWing', 'Wingmen', wl.length ? { attack: 'attack', cover: 'cover me', ground: 'ground' }[WING.cmd] : 'none', false, !wl.length || !p.alive);
+  setItem('tForm', 'Formation', G.form ? 'on' : formLeaderFor(p) ? 'off' : 'no one near', !!G.form, !air || (!G.form && !formLeaderFor(p)));
+  setItem('tRoute', 'Route', G.route.wps.length ? (G.route.on ? 'on' : 'off') : 'no waypoints', G.route.on, !air || !G.route.wps.length);
+  setItem('tMapStyle', 'Corner map', settings.map, false, false);
 }
 function liftOffText() { const p = G.player, v = p ? Math.round(p.stallSpeed() * 1.15 * 2.237 / 5) * 5 : 100; return `Take off · full throttle${p && p.spec.jet ? ', afterburner helps' : ''}, lift off near ${v} mph`; }
 function drawMsgs() {
@@ -5528,7 +5581,7 @@ function pause(on) {
 function fillSettings() {
   $('setControl').value = settings.control; $('setQuality').value = settings.quality; $('setVolume').value = settings.volume; $('setInvert').checked = settings.invert; $('setKill').checked = settings.killcam;
   const help = isTouch ? [
-    ['Steer (stick)', 'left thumb'], ['Throttle', 'slider'], ['Boost', 'drag into the red top of the slider'], ['Fire all guns', 'FIRE'], ['Missile', 'MSL (wait for the lock)'], ['Flares', 'FLARE'], ['Big map, waypoints', 'MAP (corner map style is chosen there)'], ['Fly the route', 'ROUTE'], ['Gear / flaps', 'GEAR · FLAP'], ['Camera', 'CAM'], ['Pause', 'II'], ['Drop a bomb', 'BOMB'], ['Rockets', 'RKT (fires a pair)'], ['Wingmen', 'WING cycles cover / attack / ground'], ['Bail out', 'BAIL (shows when you are hit)'], ['Hold this height', 'ALT (push or pull to release)'], ['Fly on a friend\'s wing', 'FORM (move the stick to take over)'], ['Stick', 'part-way holds a bank angle, all the way rolls'], ['Rudder', 'hold ◀ RUD / RUD ▶ (turn on in settings)'],
+    ['Steer (stick)', 'left thumb'], ['Throttle', 'slider'], ['Boost', 'drag into the red top of the slider'], ['Fire all guns', 'FIRE'], ['Missile', 'MSL (wait for the lock)'], ['Flares', 'FLARE'], ['Big map, waypoints', 'MAP'], ['Flaps (tight turns, landing)', 'FLAP'], ['Drop a bomb', 'BOMB'], ['Rockets', 'RKT (fires a pair)'], ['Pause', 'II'], ['Everything else', '••• opens a tray, top right'], ['Gear', 'GEAR shows by itself low near the airfield · or ••• › Gear'], ['Camera', '••• › Camera'], ['Hold this height', '••• › Alt lock (push or pull to release)'], ['Rudder pedals', '••• › Rudder: hold ◀ RUD / RUD ▶ beside the stick'], ['Wingmen', '••• › Wingmen: cover / attack / ground'], ['Fly on a friend\'s wing', '••• › Formation (move the stick to take over)'], ['Fly the route', '••• › Route'], ['Corner map', '••• › Corner map: radar / sector / off'], ['Bail out', 'BAIL (shows when you are hit)'], ['Stick', 'part-way holds a bank angle, all the way rolls'],
     ['Stick, assisted', 'auto-levels, holds height'], ['Touch-drag aim', 'drag anywhere, plane follows'], ['Tilt', 'tilt to steer · tap the left side to re-centre'],
   ] : [
     ['Aim (mouse mode)', 'move mouse'], ['Fire', 'click · Space'], ['Missile', 'right click · X'], ['Flares', 'F'], ['Pitch', 'W / S'], ['Roll', 'A / D'], ['Rudder', 'Q / E'], ['Throttle', 'Shift / Z · wheel · 1–0'],

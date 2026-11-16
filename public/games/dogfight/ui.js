@@ -58,11 +58,33 @@ export function mount(ctx) {
   });
   const offRt = ctx.client.on('rt', (m) => ready && post({ type: 'rt', from: m.from, data: m.data }));
 
+  // Inside a frame, env(safe-area-inset-*) is always 0, so the game cannot see an iPhone's notch or
+  // Dynamic Island. Measure the safe area here and tell the game how far it reaches into the frame.
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;inset:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
+  document.body.append(probe);
+  const sendSafe = () => {
+    if (!ready) return;
+    const cs = getComputedStyle(probe), f = frame.getBoundingClientRect();
+    const px = (k) => parseFloat(cs[k]) || 0;
+    post({
+      type: 'safe',
+      l: Math.max(0, px('paddingLeft') - f.left),
+      r: Math.max(0, px('paddingRight') - (innerWidth - f.right)),
+      t: Math.max(0, px('paddingTop') - f.top),
+      b: Math.max(0, px('paddingBottom') - (innerHeight - f.bottom)),
+    });
+  };
+  const onResize = () => setTimeout(sendSafe, 250); // after the rotation has settled
+  window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', onResize);
+
   const onMessage = (e) => {
     if (e.source !== frame.contentWindow || !e.data?.df) return;
     const d = e.data;
     if (d.type === 'ready') {
       ready = true;
+      sendSafe();
       init();
     } else if (d.type === 'rt') ctx.client.send({ t: 'rt', data: d.data });
     else if (d.type === 'finish' && ctx.client.isHost) ctx.client.act({ type: 'finish', results: d.results });
@@ -78,6 +100,9 @@ export function mount(ctx) {
       offLobby();
       offRt();
       window.removeEventListener('message', onMessage);
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+      probe.remove();
       frame.remove();
     },
   };
