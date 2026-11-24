@@ -218,6 +218,19 @@ export class HostRoom extends Emitter {
       return null;
     }
     if (!p) {
+      // Not recognised (another browser, a home-screen app restarted with its own storage, a
+      // new phone): someone with the same name whose seat is waiting for them is surely the
+      // same person coming back, so they get their seat and score instead of watching.
+      const name = String(msg.name || '').trim().toLowerCase();
+      // (A phone checks in every 4 s, so one silent for 8 s is gone even if we haven't
+      // noticed yet: someone who comes straight back still gets their seat.)
+      const gone = (x) => !x.connected || Date.now() - (x.lastSeen || 0) > 8000;
+      p = name
+        ? [...this.players.values()].find((x) => !x.isHost && !x.device && !x.kicked && gone(x) && String(x.name || '').trim().toLowerCase() === name && this.deviceSeats(x.id).length)
+        : null;
+      if (p) p.token = msg.token || uid(16);
+    }
+    if (!p) {
       p = { id: uid(8), token: msg.token || uid(16), autopilot: false };
       this.players.set(p.id, p);
     }
@@ -905,7 +918,8 @@ export class GuestClient extends Emitter {
     this.isHost = false;
     this.playerId = null;
     const saved = store.get('gc.guest');
-    this.token = saved?.code === this.code ? saved.token : uid(16);
+    // the same identity at the same table code, even after leaving it on purpose
+    this.token = (saved?.code === this.code ? saved.token : null) || store.get('gc.tokens', {})[this.code] || uid(16);
     this.status = 'connecting';
     this.closed = false;
     this.retries = 0;
@@ -1009,6 +1023,8 @@ export class GuestClient extends Emitter {
       this.token = msg.token;
       this.gameId = msg.gameId;
       store.set('gc.guest', { code: this.code, token: this.token, gameId: msg.gameId, at: Date.now() });
+      const tokens = Object.entries(store.get('gc.tokens', {})).filter(([c]) => c !== this.code).slice(-9);
+      store.set('gc.tokens', Object.fromEntries([...tokens, [this.code, this.token]]));
       this.#status('online');
       this.emit('welcome', msg);
       return;
