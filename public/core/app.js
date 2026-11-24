@@ -41,11 +41,42 @@ async function boot() {
   const mods = await Promise.all(GAME_MODULES.map((load) => load().catch((e) => (console.error('Game failed to load', e), null))));
   for (const m of mods) if (m?.default) GAMES.set(m.default.id, m.default);
   window.addEventListener('hashchange', route);
-  route();
+  if (!backToTable()) route();
+  setInterval(markActive, 10000);
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
   // "update ready" bar + pull to refresh (not at the table: dragging there belongs to the game)
   startUpdates({ games: GAMES, allowPull: () => !/^#\/?table/.test(location.hash) });
   track('open');
+}
+
+// Phones often restart a home-screen app from its start page after a few minutes away. If
+// this device was at an online table moments ago and didn't leave it, go straight back.
+const ACTIVE = 'gc.active';
+function markActive() {
+  const online = current && (current.client.isHost ? current.room?.online : true);
+  if (!online || !current.game) return;
+  const host = current.client.isHost;
+  const role = host ? (current.client.lobby?.started ? 'host' : 'hostLobby') : 'guest';
+  store.set(ACTIVE, { role, code: host ? current.room.code : current.client.code, gameId: current.game.id, at: Date.now() });
+}
+function backToTable() {
+  const a = store.get(ACTIVE);
+  const atStart = !location.hash || location.hash === '#' || location.hash === '#/';
+  if (!a || !atStart || Date.now() - a.at > 10 * 60e3) return false;
+  if (a.role === 'guest' && a.code) {
+    location.hash = `#/join/${a.code}`;
+    return true;
+  }
+  if (a.role === 'hostLobby') {
+    location.hash = '#/lobby'; // reopens the same table and code (see route)
+    return true;
+  }
+  const save = a.role === 'host' && GAMES.has(a.gameId) ? store.get(`gc.save.${a.gameId}`) : null;
+  if (save?.online && !save.over && save.code === a.code) {
+    resumeHost(GAMES.get(a.gameId), save);
+    return true;
+  }
+  return false;
 }
 
 function go(hash) {
@@ -96,6 +127,7 @@ function leaveCurrent(ask = true) {
     if (started && !confirm(msg)) return false;
   }
   playEnded('leave');
+  store.del(ACTIVE); // left on purpose: don't bring them back to this table by itself
   if (current.mode === 'host' && !current.room?.started) store.del('gc.hostLobby');
   current.ui?.destroy?.();
   current.voice?.destroy();

@@ -32,7 +32,11 @@ home page, **Step-by-step guide** in the lobby, the **?** button at the table, o
   while it's closed. Chat opens by itself when a game ends, to talk about a rematch.
 - If someone drops, a **computer player covers their seat** until they come back.
 - **Refresh or reopen** the link to get back to your seat. The home page also shows
-  **Rejoin table**.
+  **Rejoin table**. Went to the home screen and the app started over? It goes straight back
+  to the table by itself (within 10 minutes, unless you left the table on purpose); the host's
+  app does the same and reopens the table.
+- Came back on **another browser or phone**? Join with the **same name** and you get your
+  seat back instead of watching.
 - **Late arrivals** can join mid-game. They watch, and the host sees a bar
   "Sara is watching · **Give a seat**": tap it and pick **Seat a player…** next to a
   computer player, or next to someone who went offline.
