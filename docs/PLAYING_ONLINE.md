@@ -41,9 +41,21 @@ home page, **Step-by-step guide** in the lobby, the **?** button at the table, o
   "Sara is watching · **Give a seat**": tap it and pick **Seat a player…** next to a
   computer player, or next to someone who went offline.
 - A phone that switched apps or locked for a moment comes back on its own ("Sara is back").
+  A connection that went dead without anyone noticing (a phone that slept, or moved from
+  Wi-Fi to mobile data) is noticed within about 20 seconds and remade by itself, and the
+  host's device keeps trying to get back online after it loses signal, so everyone can come back.
+- In the **racing and flying games** a dropped connection doesn't end your race or flight:
+  you keep driving or flying and the others reappear when you're back. If the app closed,
+  reopening it puts you straight back into the race where your car was.
 - **Rematch** when a game ends: everyone keeps their seat and the same table code, so
   nobody has to rejoin. The host taps **Rematch — same players** to start. Anyone else taps
   **Rematch** to say they're in; the host's button then shows who's ready.
+- **A different game, same people:** the host taps **Different game** on the game-over screen
+  (or Back, then **Pick another game for everyone**). Everyone stays connected and sees
+  "Alan is picking the next game". The host taps **Multiplayer** on any game; each person
+  gets a pop-up, "Alan wants to play Pinochle", with **Join** or **Not this time** and a
+  minute to answer. Join takes a seat in the new lobby; no answer in time counts as not this
+  time. Nobody types a code. The host has 10 minutes to pick before the table closes.
 
 ## Several people on one device (pass and play)
 Most turn-based games let people share a phone or tablet:

@@ -36,7 +36,10 @@ export function mount(ctx) {
     last = msg;
     if (!ready) return;
     if (!prev) return init();
-    if (msg.event?.type === 'start') return init(); // a new round (rematch) resets the game
+    // A new round (rematch) resets the game. The table repeats its last event to anyone who
+    // reconnects or when seats change, so only a 'start' with a new move number is a new round:
+    // the same one again must not throw a player who just came back out of the race.
+    if (msg.event?.type === 'start' && msg.seq !== prev.seq) return init();
     post({ type: 'roster', roster: roster(msg.seats), seat: msg.seat });
     if (msg.view.over && !wasOver) {
       post({ type: 'over', results: msg.view.results });

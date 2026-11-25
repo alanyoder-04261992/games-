@@ -11,6 +11,10 @@
 import { Emitter, roomCode, cleanCode, store, uid } from './util.js';
 
 const PEER_PREFIX = 'gamecenter-v1-';
+// The next game with the same people (see HostRoom.pickNext): how long the host has to pick
+// one, and how long each guest has to answer the invite to it.
+export const PICK_MS = 10 * 60e3;
+export const INVITE_MS = 60e3;
 const BOT_NAMES = ['Maple', 'Hank', 'Ruth', 'Otis', 'June', 'Walt', 'Ivy', 'Gus', 'Pearl', 'Abe', 'Nell', 'Clem'];
 const BOT_HUES = [12, 140, 265, 45, 190, 320, 95, 225];
 export const SPEEDS = {
@@ -120,7 +124,10 @@ export class HostRoom extends Emitter {
     }
     this.local = new LocalClient(this);
     if (online) this.#listen();
-    this.heartbeat = setInterval(() => this.#checkAlive(), 3000);
+    this.heartbeat = setInterval(() => {
+      this.#checkAlive();
+      this.#checkPeer();
+    }, 3000);
   }
 
   // ---------- networking ----------
@@ -137,17 +144,29 @@ export class HostRoom extends Emitter {
     if (this.destroyed) return;
     const peer = new Peer(PEER_PREFIX + this.code, opts);
     this.peer = peer;
-    peer.on('open', () => this.#setStatus('online'));
+    peer.on('open', () => {
+      this.everOpen = true;
+      this.#setStatus('online');
+    });
     peer.on('connection', (conn) => this.#accept(conn));
     peer.on('disconnected', () => {
       if (this.destroyed) return;
-      this.#setStatus('connecting');
-      setTimeout(() => !this.destroyed && !peer.destroyed && peer.reconnect(), 1500);
+      this.#setStatus('connecting', 'Reconnecting the table…');
+      this.reconnectAt = Date.now() + 1500; // #checkPeer tries then, and keeps trying
     });
     peer.on('error', (err) => {
       if (this.destroyed) return;
+      if (err.type === 'unavailable-id' && this.everOpen && !peer.destroyed) {
+        // Back from a network drop, but the server still holds our old registration for a
+        // little while. Keep this peer (its open connections to the players survive) and
+        // try again until the server lets the code go.
+        this.#setStatus('connecting', 'Reconnecting the table…');
+        this.reconnectAt = Date.now() + 3000;
+        return;
+      }
       if (err.type === 'unavailable-id') {
         peer.destroy();
+        this.peer = null;
         if ((this.started || this.fixedCode) && attempt < 25) {
           // our old connection is still registered after a refresh (it expires within a
           // minute or so), or the code is open on another device or tab: keep the code, retry
@@ -155,7 +174,7 @@ export class HostRoom extends Emitter {
           setTimeout(() => this.#listen(attempt + 1), 3000);
         } else if (this.fixedCode) {
           this.#setStatus('error', `Table code ${this.code} is already in use. Close it on the other device or tab, or pick another code.`);
-        } else if (!this.started) {
+        } else if (!this.started && !this.everOpen) {
           this.code = roomCode();
           this.#listen(attempt + 1);
           this.#broadcastLobby();
@@ -164,10 +183,38 @@ export class HostRoom extends Emitter {
       }
       if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(err.type)) {
         this.#setStatus('connecting', 'Network trouble, retrying…');
+        this.reconnectAt = Math.min(this.reconnectAt || Infinity, Date.now() + 2000);
         return;
       }
       console.warn('peer error', err.type, err);
     });
+  }
+
+  // Runs every few seconds (and when the phone wakes or gets its network back): a host that
+  // lost the signalling server keeps trying to get back on it, so players can reconnect.
+  // PeerJS tries once by itself; on a phone that is often too soon.
+  #checkPeer(now = Date.now()) {
+    if (!this.online || this.destroyed) return;
+    const peer = this.peer;
+    if (!peer) return; // a fresh #listen is already on its way
+    if (peer.destroyed) {
+      this.peer = null;
+      setTimeout(() => !this.destroyed && !this.peer && this.#listen(), 1000);
+      return;
+    }
+    if (!peer.disconnected || now < (this.reconnectAt || 0)) return;
+    this.reconnectAt = now + 4000;
+    try {
+      peer.reconnect();
+    } catch {
+      /* destroyed meanwhile: the next check opens a new one */
+    }
+  }
+
+  // the page came back to the front, or the network came back: check straight away
+  wake() {
+    this.reconnectAt = 0;
+    this.#checkPeer();
   }
 
   #setStatus(status, detail = '') {
@@ -252,15 +299,18 @@ export class HostRoom extends Emitter {
     conn.send({ t: 'welcome', playerId: p.id, token: p.token, gameId: this.game.id, code: this.code });
     // a newcomer takes an open seat while we're in the lobby; with none left, the seat of
     // someone whose connection dropped (often the same friend, back on another phone or browser)
-    if (!this.started && this.seatOf(p.id) == null) {
+    if (!this.started && this.seatOf(p.id) == null && !p.invited && !this.picking) {
       const order = this.game.joinOrder || this.seats.map((_, i) => i);
       let seat = order.find((i) => this.seats[i]?.kind === 'open');
       if (seat == null) seat = this.#ghostSeat(order);
       if (seat != null) this.seats[seat] = { kind: 'human', playerId: p.id };
     }
-    this.#system(`${p.name} ${this.seatOf(p.id) != null ? 'joined' : 'is watching'}`);
+    this.#system(`${p.name} ${this.seatOf(p.id) != null ? 'joined' : p.invited || this.picking ? 'is back' : 'is watching'}`);
     this.#broadcastLobby();
-    if (this.started) this.#sendState(p, this.lastEvent);
+    // back while the host picks the next game, or before answering the invite to it
+    if (this.picking) this.#send(p, { t: 'picking', host: this.players.get('host').name, until: this.picking });
+    else if (p.invited) this.#send(p, this.#invite(p.invited));
+    else if (this.started) this.#sendState(p, this.lastEvent);
     for (const entry of this.chatLog.slice(-30)) this.#send(p, { t: 'chat', ...entry, replay: true });
     this.schedule();
     return p.id;
@@ -324,7 +374,7 @@ export class HostRoom extends Emitter {
     if (this.started || !this.online) return;
     const order = this.game.joinOrder || this.seats.map((_, i) => i);
     for (const p of this.players.values()) {
-      if (p.isHost || p.kicked || p.device || !p.connected || this.seatOf(p.id) != null) continue;
+      if (p.isHost || p.kicked || p.device || p.invited || !p.connected || this.seatOf(p.id) != null) continue;
       const open = order.find((i) => this.seats[i]?.kind === 'open');
       if (open == null) return;
       this.seats[open] = { kind: 'human', playerId: p.id };
@@ -451,8 +501,10 @@ export class HostRoom extends Emitter {
           seat: this.seatOf(p.id),
           voice: p.voice || null,
           hostMuted: !!p.hostMuted,
+          invited: p.invited || null, // asked to the next game, not answered yet (until when)
         })),
       started: this.started,
+      picking: this.picking || null, // the host is choosing the next game (until when)
       // ids of players ready for a rematch (only after a game has ended)
       rematch: [...this.rematchVotes].filter((id) => this.players.has(id) && !this.players.get(id).kicked && this.deviceSeats(id).length),
     };
@@ -654,6 +706,22 @@ export class HostRoom extends Emitter {
       case 'rematch':
         this.#rematchVote(p);
         break;
+      case 'invite': {
+        // a guest's answer to the invite to the next game
+        if (!p.invited) return;
+        p.invited = null;
+        if (msg.yes) {
+          if (!this.started) {
+            const order = this.game.joinOrder || this.seats.map((_, i) => i);
+            const seat = order.find((i) => this.seats[i]?.kind === 'open');
+            if (seat != null) this.seats[seat] = { kind: 'human', playerId: p.id };
+          }
+          this.#system(`${p.name} is in`);
+          if (this.started) this.#sendState(p, null);
+        } else this.#forget(p, `${p.name} is sitting this one out`);
+        this.#broadcastLobby();
+        break;
+      }
       case 'sit': {
         // a guest picks an empty seat before the game starts (or moves to one)
         const seat = Number(msg.seat);
@@ -730,7 +798,7 @@ export class HostRoom extends Emitter {
   // Decide whether someone should move automatically, and when.
   schedule() {
     clearTimeout(this.timer);
-    if (!this.started || this.destroyed || !this.state) return;
+    if (!this.started || this.destroyed || !this.state || this.picking) return;
     const engine = this.game.engine;
     if (engine.isOver(this.state)) return;
 
@@ -798,6 +866,85 @@ export class HostRoom extends Emitter {
     }
   }
 
+  // ---------- the next game, with the same people ----------
+  // The host goes off to pick another game. Everyone stays connected to this table (same
+  // code), and sees "<host> is picking the next game". The table closes if nothing is picked
+  // within PICK_MS.
+  pickNext(ms = PICK_MS) {
+    if (!this.online || this.destroyed) return;
+    this.#persist(); // the game just played stays saved
+    clearTimeout(this.timer);
+    clearTimeout(this.inviteTimer);
+    clearTimeout(this.pickTimer);
+    this.picking = Date.now() + ms;
+    this.pickTimer = setTimeout(() => this.picking && this.close(), ms);
+    for (const p of this.#guests()) {
+      p.invited = null;
+      this.#send(p, { t: 'picking', host: this.players.get('host').name, until: this.picking });
+    }
+    this.#system(`${this.players.get('host').name} is picking the next game`);
+    this.#broadcastLobby();
+  }
+
+  // The host picked: this table now plays `game`, in a fresh lobby. Each guest gets an invite
+  // to answer within INVITE_MS. Yes takes an open seat; no, or no answer, leaves the table.
+  switchGame(game, options = {}, settings = {}) {
+    if (this.destroyed) return;
+    this.#persist();
+    for (const t of ['timer', 'pickTimer', 'inviteTimer']) clearTimeout(this[t]);
+    this.picking = null;
+    this.game = game;
+    this.options = { ...defaultOptions(game), ...options };
+    this.settings = { ...this.settings, ...settings };
+    this.state = this.prevState = this.lastEvent = this.due = null;
+    this.started = false;
+    this.claim = null;
+    this.seq = 0;
+    this.rematchVotes.clear();
+    for (const [id, p] of this.players) if (p.device) this.players.delete(id); // pass-and-play guests went with the old game
+    this.seats = [];
+    for (let i = 0; i < seatCount(game, this.options); i++) this.seats.push(i === 0 ? { kind: 'human', playerId: 'host' } : { kind: 'open' });
+    const until = Date.now() + INVITE_MS;
+    const guests = this.#guests();
+    for (const p of guests) p.invited = until;
+    this.inviteTimer = setTimeout(() => {
+      for (const p of this.#guests()) if (p.invited) this.#forget(p, `${p.name} didn’t answer in time`);
+      this.#broadcastLobby();
+    }, INVITE_MS + 2000);
+    this.#system(`Next game: ${game.name}`);
+    this.#broadcastLobby();
+    for (const p of guests) this.#send(p, this.#invite(until));
+  }
+
+  #invite(until) {
+    return { t: 'invite', gameId: this.game.id, name: this.game.name, host: this.players.get('host').name, until, code: this.code };
+  }
+
+  #guests() {
+    return [...this.players.values()].filter((p) => !p.isHost && !p.kicked && !p.device);
+  }
+
+  // someone who isn't playing the next game: off the table (they can join again with the code)
+  #forget(p, line) {
+    this.players.delete(p.id);
+    this.rematchVotes.delete(p.id);
+    const link = p.link;
+    p.link = null;
+    try {
+      if (link?.open) link.send({ t: 'closed', quiet: true });
+    } catch {
+      /* gone */
+    }
+    setTimeout(() => {
+      try {
+        link?.close();
+      } catch {
+        /* gone */
+      }
+    }, 300);
+    this.#system(line);
+  }
+
   #persist() {
     if (!this.started) return;
     store.set(`gc.save.${this.game.id}`, {
@@ -818,7 +965,7 @@ export class HostRoom extends Emitter {
 
   close({ keepSave = true } = {}) {
     this.destroyed = true;
-    clearTimeout(this.timer);
+    for (const t of ['timer', 'pickTimer', 'inviteTimer']) clearTimeout(this[t]);
     clearInterval(this.heartbeat);
     if (!keepSave) store.del(`gc.save.${this.game.id}`);
     this.#sendAll({ t: 'closed' });
@@ -902,7 +1049,13 @@ function dispatch(client, msg) {
       client.emit('kicked');
       break;
     case 'closed':
-      client.emit('closed');
+      client.emit('closed', msg);
+      break;
+    case 'picking':
+      client.emit('picking', msg);
+      break;
+    case 'invite':
+      client.emit('invite', msg);
       break;
   }
 }
@@ -924,8 +1077,55 @@ export class GuestClient extends Emitter {
     this.closed = false;
     this.retries = 0;
     this.joinedAt = Date.now();
+    this.lastHeard = Date.now();
     this.#connect();
-    this.ping = setInterval(() => this.send({ t: 'ping' }), 4000);
+    this.ping = setInterval(() => this.#tick(), 4000);
+  }
+
+  // Every 4 s: a ping (the host answers each one), and a check that the host is still there.
+  // A phone that slept or changed networks can be left holding a connection that looks open
+  // but carries nothing; 20 s of silence means it is gone, so make a new one. (Not sooner: a
+  // slow host device can be too busy drawing the table to answer for several seconds.)
+  #tick() {
+    if (this.closed) return;
+    this.send({ t: 'ping' });
+    if (this.peer && !this.peer.destroyed && this.peer.disconnected && Date.now() - (this.peerTry || 0) > 5000) {
+      this.peerTry = Date.now();
+      try {
+        this.peer.reconnect();
+      } catch {
+        /* a new peer is made on the next connect */
+      }
+    }
+    if (this.conn?.open && Date.now() - this.lastHeard > 20000) this.#lost();
+  }
+
+  #lost() {
+    const conn = this.conn;
+    this.conn = null;
+    try {
+      conn?.close();
+    } catch {
+      /* already closed */
+    }
+    this.#status('connecting', 'Lost connection, reconnecting…');
+    this.#retry();
+  }
+
+  // the page came back to the front or the network came back: is the host still answering?
+  wake() {
+    if (this.closed) return;
+    if (!this.conn?.open) {
+      // waiting to try again: try now (with no timer set, a try is already under way)
+      if (!this.retryTimer) return;
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+      return this.#connect();
+    }
+    const heard = this.lastHeard;
+    this.send({ t: 'ping' });
+    clearTimeout(this.wakeTimer);
+    this.wakeTimer = setTimeout(() => !this.closed && this.lastHeard === heard && this.conn?.open && this.#lost(), 6000);
   }
 
   async #connect() {
@@ -937,6 +1137,16 @@ export class GuestClient extends Emitter {
       return;
     }
     if (this.closed) return;
+    if (this.peer && !this.peer.destroyed && this.peer.disconnected) {
+      // lost the signalling server too: a new peer is quicker than waiting on the old one
+      // (the host knows us by our token, not by our peer id)
+      try {
+        this.peer.destroy();
+      } catch {
+        /* gone */
+      }
+      this.peer = null;
+    }
     if (!this.peer || this.peer.destroyed) {
       const opts = await peerOptions();
       if (this.closed) return;
@@ -951,11 +1161,26 @@ export class GuestClient extends Emitter {
           this.#retry();
         }
       });
-      this.peer.on('disconnected', () => !this.closed && setTimeout(() => !this.peer.destroyed && this.peer.reconnect(), 1500));
-      await new Promise((resolve) => {
-        if (this.peer.open) resolve();
-        else this.peer.once('open', resolve);
+      const peer = this.peer;
+      peer.on('disconnected', () => !this.closed && setTimeout(() => !peer.destroyed && peer.disconnected && peer.reconnect(), 1500));
+      const opened = await new Promise((resolve) => {
+        if (peer.open) return resolve(true);
+        peer.once('open', () => resolve(true));
+        peer.once('close', () => resolve(false));
+        setTimeout(() => resolve(peer.open), 10000);
       });
+      if (this.closed) return;
+      if (!opened || this.peer !== peer) {
+        if (this.peer === peer) {
+          try {
+            peer.destroy();
+          } catch {
+            /* gone */
+          }
+          this.peer = null;
+        }
+        return this.#retry();
+      }
     }
     if (this.closed) return;
     const conn = this.peer.connect(PEER_PREFIX + this.code, { reliable: true, serialization: 'json' });
@@ -966,9 +1191,13 @@ export class GuestClient extends Emitter {
     conn.on('open', () => {
       clearTimeout(timeout);
       this.retries = 0;
+      this.lastHeard = Date.now();
       conn.send({ t: 'hello', token: this.token, name: this.profile.name, hue: this.profile.hue });
     });
-    conn.on('data', (msg) => this.#receive(msg));
+    conn.on('data', (msg) => {
+      if (this.conn === conn) this.lastHeard = Date.now();
+      this.#receive(msg);
+    });
     conn.on('close', () => {
       if (this.conn === conn && !this.closed) {
         this.#status('connecting', 'Lost connection, reconnecting…');
@@ -1056,6 +1285,7 @@ export class GuestClient extends Emitter {
     this.closed = true;
     clearInterval(this.ping);
     clearTimeout(this.retryTimer);
+    clearTimeout(this.wakeTimer);
     store.del('gc.guest');
     try {
       this.conn?.close();
