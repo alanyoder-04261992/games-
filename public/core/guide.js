@@ -54,10 +54,11 @@ export function onlineGuide({ onHost, onJoin } = {}) {
       h('div.gd-tips',
         tip('chat', 'Chat and cheer', 'Tap the chat bubble at the top for messages and quick reactions. They pop up over your seat at the table.'),
         tip('robot', 'Nobody gets stuck waiting', 'If someone’s phone drops off, a computer player covers their seat after a few seconds. When they come back, they get their seat back.'),
-        tip('refresh', 'Lost connection? Just reopen', 'Refreshing or reopening the page puts you right back at your seat — the app even goes back to the table by itself after a trip to the home screen. On another browser or phone, join with the same name to get your seat back.'),
+        tip('refresh', 'Lost connection? Just reopen', 'A dropped connection reconnects by itself (in the racing and flying games you keep going). Refreshing or reopening the page puts you right back at your seat — the app even goes back to the table by itself after a trip to the home screen. On another browser or phone, join with the same name to get your seat back.'),
         tip('seats', 'Table full or game started?', 'A newcomer watches until the host gives them a seat. In the lobby: ', h('b', 'Give a seat…'), ' next to their name. During a game: tap ', h('b', 'Give a seat'), ' on the bar at the top and pick a computer player’s seat or someone who went offline.'),
         tip('seats', 'Share a device', 'Two people on one phone? In the lobby tap ', h('b', 'Add a player on this device'), '. They get their own seat, and in card and dice games a “Pass to …” screen hides your hand between turns. Everyone in one room can also pick ', h('b', 'This device (pass and play)'), ' after tapping Multiplayer.'),
         tip('play', 'Rematch with the same players', 'When a game ends, tap ', h('b', 'Rematch'), '. Same players, same seats, same table code — nobody rejoins. The host’s tap starts it; everyone else’s tells the host they’re in.'),
+        tip('seats', 'Another game, same people', 'The host taps ', h('b', 'Different game'), ' (or Back, then ', h('b', 'Pick another game for everyone'), ') and picks one. Everyone gets a pop-up to ', h('b', 'Join'), ', with a minute to answer. No new code to type.'),
       ),
     ),
 

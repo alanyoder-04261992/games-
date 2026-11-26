@@ -726,3 +726,32 @@ body.gc-reloading { opacity: 0.6; transition: opacity 0.2s; }
   .gc-tp-face { padding: 2px; gap: 0; }
   .gc-tp-face > span, .gc-tp-face > i { display: none; }
 }
+
+/* ---------- the next game with the same people ---------- */
+/* host: the bar on the home page while picking the next game for the table */
+.gc-group-bar {
+  display: flex; align-items: center; gap: 12px; margin: 10px auto 0; max-width: 1180px; width: calc(100% - 32px);
+  padding: 12px 14px; border-radius: 14px; background: rgba(240, 195, 90, 0.12); border: 1px solid rgba(240, 195, 90, 0.45);
+}
+.gc-group-bar > span { flex: none; width: 26px; height: 26px; color: var(--gold); }
+.gc-group-bar > span svg { width: 100%; height: 100%; }
+.gc-group-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.gc-group-text small { color: var(--muted); font-size: 13px; }
+.gc-group-time { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
+@media (max-width: 560px) { .gc-group-bar { flex-wrap: wrap; } .gc-group-bar .btn { margin-left: auto; } }
+.gc-group-note { color: var(--gold); }
+.gc-leave-sheet { display: grid; gap: 8px; max-width: 420px; }
+.gc-leave-sheet .gc-hint { margin: 0 0 6px; }
+/* guest: waiting while the host picks, and the invite pop-up */
+.gc-picking .gc-center { max-width: 520px; margin: 0 auto; }
+.gc-picking-chat { width: 100%; text-align: left; margin: 8px 0; }
+.gc-invite-sheet { display: grid; justify-items: center; gap: 10px; text-align: center; max-width: 400px; }
+.gc-invite-sheet .gc-play-art { width: 180px; height: 108px; border-radius: 14px; }
+.gc-invite-sheet h2 { margin: 4px 0 0; }
+.gc-invite-sheet .gc-hint { margin: 0; }
+.gc-invite-bar { width: 100%; height: 6px; border-radius: 99px; background: var(--panel-2); overflow: hidden; }
+.gc-invite-bar i { display: block; height: 100%; background: var(--accent, var(--gold)); transition: width 0.25s linear; }
+.gc-invite-left { margin: 0; color: var(--muted); font-size: 13px; }
+.gc-invite-time { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
+.gc-invite-sheet .gc-actions { justify-content: center; width: 100%; }
+.gc-invited { margin-top: 10px; }

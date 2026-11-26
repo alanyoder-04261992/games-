@@ -1881,7 +1881,7 @@ function msg(text, kind = 'info', dur = 3) { G.msgs.push({ text, kind, t: dur })
 //  Multiplayer (inside the Game Center): every device drives its own car and streams it;
 //  the host drives the computer cars, starts the race and collects finishing times.
 // =====================================================================
-const NET = { on: false, seat: null, host: false, roster: [], opts: {}, name: 'You', sendT: 0, fins: {}, firstFin: null, done: false, started: false, picks: {} };
+const NET = { on: false, seat: null, host: false, roster: [], opts: {}, name: 'You', sendT: 0, fins: {}, firstFin: null, done: false, started: false, picks: {}, last: {}, hiT: null };
 // colour picks travel with the menu, so two drivers never race the same colour
 function netPick() { if (NET.on && NET.seat != null) { NET.picks[NET.seat] = settings.color; netSend({ k: 'pick', seat: NET.seat, color: settings.color }); } }
 function netColours() {
@@ -1910,7 +1910,28 @@ function rematchButton() {
   else { b.textContent = "Rematch — I'm in"; b.disabled = false; }
 }
 function normOpts(o = {}) { return { track: TRACKS[o.track] ? o.track : 'ridgeline', laps: Number(o.laps) || 3, opponents: Number(o.opponents) || 0, difficulty: SKILL[o.difficulty] ? o.difficulty : 'normal' }; }
-function netInit(d) { NET.on = true; NET.host = !!d.isHost; NET.opts = normOpts(d.options); netRoster(d); NET.fins = {}; NET.firstFin = null; NET.done = false; NET.started = false; clearCars(); G.state = 'menu'; showScreen('menu'); $('touch').hidden = true; netMenu(); netPick(); if (curTrack !== NET.opts.track) buildCircuit(NET.opts.track); }
+function netInit(d) {
+  NET.on = true; NET.host = !!d.isHost; NET.opts = normOpts(d.options); netRoster(d); NET.fins = {}; NET.firstFin = null; NET.done = false; NET.started = false; NET.last = {}; clearCars(); G.state = 'menu'; showScreen('menu'); $('touch').hidden = true; netMenu(); netPick(); if (curTrack !== NET.opts.track) buildCircuit(NET.opts.track);
+  // A driver whose game reopened (the app restarted, or a reload) asks whether a race is on;
+  // the host answers with where their car was, so they drive on from there.
+  clearInterval(NET.hiT);
+  const hi = () => { if (NET.on && !NET.host && !NET.started && G.state === 'menu' && NET.seat != null) netSend({ k: 'hi', seat: NET.seat }); };
+  if (!NET.host) { setTimeout(hi, 400); NET.hiT = setInterval(hi, 2500); }
+}
+// the host's answer to 'hi': join the race that is already running
+async function lateJoin(d) {
+  NET.fins = { ...(d.fins || {}) }; NET.firstFin = null; NET.done = false; NET.started = true;
+  await startRace('race', true);
+  const me = RACE.player, a = d.at;
+  if (!me) return;
+  if (d.phase === 'countdown') RACE.count = Math.max(0.5, Number(d.count) || 0);
+  else { RACE.phase = 'racing'; RACE.count = 0; RACE.t = Number(d.t) || 0; for (const c of RACE.cars) c.lapStart = RACE.t; for (const l of START.lights) l && l.material.emissive.set(0x000000); }
+  if (a && Number.isInteger(a.i) && a.i >= 0 && a.i < T.N) {
+    me.place(a.i, 0, 0); me.prevIdx = me.idx; me.lap = Math.max(0, a.lap | 0); me.best = a.best ?? null;
+    me.cp = me.lap === 0 ? 7 : (me.idx >= T.N * 0.25 ? 1 : 0) | (me.idx >= T.N * 0.5 ? 2 : 0) | (me.idx >= T.N * 0.75 ? 4 : 0);
+    msg('Back in the race', 'good', 3);
+  } else if (d.phase !== 'countdown') msg('Joined the race in progress', 'good', 3);
+}
 function netRoster(d) { const n0 = NET.roster.length; NET.roster = d.roster || NET.roster; if ('seat' in d) NET.seat = d.seat; if (NET.roster.length !== n0) netPick(); const me = NET.roster.find(r => r.seat === NET.seat); NET.name = me ? me.name : 'You'; if (G.state === 'menu') netMenu(); }
 function netMenu() {
   const o = NET.opts, seated = NET.seat != null;
@@ -1927,6 +1948,8 @@ function handleNet(d) {
   if (d.k === 'start') { if (NET.seat == null) return; NET.fins = {}; NET.firstFin = null; NET.done = false; NET.started = true; startRace('race', true); }
   else if (d.k === 's') { for (const s of d.e || []) snapIn(s); }
   else if (d.k === 'pick') { if (Number.isInteger(d.seat) && Number.isInteger(d.color) && d.color >= 0 && d.color < COLORS.length && d.seat !== NET.seat) { const fresh = !(d.seat in NET.picks); NET.picks[d.seat] = d.color; if (fresh) netPick(); } }
+  else if (d.k === 'hi') { if (NET.host && NET.started && !NET.done && RACE.player && (G.state === 'race' || G.state === 'paused') && Number.isInteger(d.seat)) netSend({ k: 'join', to: d.seat, t: RACE.t, phase: RACE.phase === 'countdown' ? 'countdown' : 'racing', count: RACE.count, fins: NET.fins, at: NET.last[d.seat] || null }); }
+  else if (d.k === 'join') { if (d.to === NET.seat && !NET.host && !NET.started && G.state === 'menu') lateJoin(d); }
   else if (d.k === 'fin') { NET.fins[d.id] = d.t; if (NET.firstFin == null) NET.firstFin = 0; const c = RACE.cars.find(x => x.id === d.id); if (c && !c.finished) { c.finished = true; c.finishT = d.t; } }
 }
 function snap(c) { return { id: c.id, k: c.key, col: c.color, n: c.num, lb: c.label, st: c.seat, x: +c.x.toFixed(2), z: +c.z.toFixed(2), y: +c.y.toFixed(2), yaw: +c.yaw.toFixed(3), vx: +c.vx.toFixed(2), vz: +c.vz.toFixed(2), r: +c.r.toFixed(3), st2: +c.steer.toFixed(2), b: c.brk > 0.1 ? 1 : 0, lap: c.lap, i: c.idx, fin: c.finished ? 1 : 0, ft: c.finishT, best: c.best, rpm: c.rpm | 0, ...(c.tumble ? { tq: c.tumble.q.toArray().map(v => +v.toFixed(3)) } : {}), ...(c.air ? { a: 1, ap: +c.airPitch.toFixed(3) } : {}), ...(c.boosting ? { bo: 1 } : {}) }; }
@@ -1935,6 +1958,7 @@ function snapIn(s) {
   let c = RACE.cars.find(x => x.id === s.id);
   if (c && !c.remote) return;
   if (!c) { if (G.state !== 'race' && G.state !== 'paused' && G.state !== 'results') return; c = new Car(s.k, { remote: true, color: s.col, num: s.n, label: s.lb, id: s.id, seat: s.st }); c.x = s.x; c.z = s.z; c.yaw = s.yaw; RACE.cars.push(c); }
+  if (NET.host && Number.isInteger(s.st) && s.id === `p${s.st}`) NET.last[s.st] = { i: s.i, lap: s.lap, best: s.best };
   c.netSnap = { ...s, at: performance.now() }; c.lap = s.lap; c.idx = s.i; c.finished = !!s.fin; c.finishT = s.ft; c.best = s.best; c.brk = s.b; c.rpm = s.rpm;
 }
 function remoteStep(c, dt) {

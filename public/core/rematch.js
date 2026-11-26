@@ -36,6 +36,8 @@ export function rematchControl(client, { big = false, label } = {}) {
           title: solo ? 'Start a new game' : 'Start a new game with everyone at this table, same seats and room code',
         }),
         chat,
+        // the same people, another game: everyone gets an invite, nobody types a code
+        solo ? null : h('button.btn.ghost.gc-rematch-next', { type: 'button', onclick: () => document.dispatchEvent(new CustomEvent('gc:next')), title: 'Pick another game; everyone here gets an invite to join it' }, 'Different game'),
         solo ? null : h('small.gc-rematch-note', names.length ? `${list(names)} ${names.length === 1 ? 'is' : 'are'} in${waiting ? ` · waiting on ${waiting} more` : ''}` : 'Starts a new game for everyone here'),
       );
     } else if (!seated) {

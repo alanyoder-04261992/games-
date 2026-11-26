@@ -2,7 +2,7 @@
 // (back button, room code, chat, settings). Games plug in through games/index.js.
 import { $, h, store, toast, avatar, share, escapeHtml, ROBOT_SVG, cleanCode } from './util.js';
 import { sound } from './sound.js';
-import { HostRoom, GuestClient, SPEEDS } from './room.js';
+import { HostRoom, GuestClient, SPEEDS, INVITE_MS } from './room.js';
 import { GAME_MODULES } from '../games/index.js';
 import { onlineGuide } from './guide.js';
 import { Voice } from './voice.js';
@@ -43,6 +43,12 @@ async function boot() {
   window.addEventListener('hashchange', route);
   if (!backToTable()) route();
   setInterval(markActive, 10000);
+  // back from the home screen or a dead spot: check the table connection at once
+  const wake = () => (current?.client.isHost ? current.room : current?.client)?.wake?.();
+  document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && wake());
+  window.addEventListener('online', wake);
+  window.addEventListener('pageshow', wake);
+  document.addEventListener('gc:next', () => hostWithGuests() && nextGame()); // "Different game" on a game-over screen
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
   // "update ready" bar + pull to refresh (not at the table: dragging there belongs to the game)
   startUpdates({ games: GAMES, allowPull: () => !/^#\/?table/.test(location.hash) });
@@ -54,7 +60,7 @@ async function boot() {
 const ACTIVE = 'gc.active';
 function markActive() {
   const online = current && (current.client.isHost ? current.room?.online : true);
-  if (!online || !current.game) return;
+  if (!online || !current.game || current.picking) return;
   const host = current.client.isHost;
   const role = host ? (current.client.lobby?.started ? 'host' : 'hostLobby') : 'guest';
   store.set(ACTIVE, { role, code: host ? current.room.code : current.client.code, gameId: current.game.id, at: Date.now() });
@@ -88,6 +94,8 @@ function route() {
   const hash = location.hash.replace(/^#\/?/, '');
   const [page, arg] = hash.split('/');
   if (page === 'join' && arg) return joinRoom(arg);
+  if (current?.picking && (page === 'table' || page === 'lobby')) return go('#/'); // still picking the next game
+  if (current?.waiting && (page === 'table' || page === 'lobby')) return; // a guest between games: the invite comes here
   if (page === 'table') {
     if (current) return showTable();
     const guest = store.get('gc.guest');
@@ -102,7 +110,7 @@ function route() {
     return go('#/');
   }
   if (page === 'help') {
-    leaveCurrent(false);
+    leaveUnlessPicking();
     showHome();
     return showGuide();
   }
@@ -111,12 +119,28 @@ function route() {
     leaveCurrent(false);
     return import('./insights-dashboard.js').then((m) => m.showInsights({ app, games: GAMES, topbar, go }));
   }
-  leaveCurrent(false);
+  leaveUnlessPicking();
   showHome();
+}
+
+// While the host picks the next game (see nextGame) the table stays open in the background,
+// so browsing the home page and the game pages doesn't close it.
+function leaveUnlessPicking() {
+  if (!current?.picking) leaveCurrent(false);
+}
+
+// online host with other people at the table (connected or about to come back)
+function hostWithGuests() {
+  if (!current?.client.isHost || !current.room?.online) return false;
+  return (current.client.lobby?.players || []).some((p) => !p.isHost && !p.device);
 }
 
 function leaveCurrent(ask = true) {
   if (!current) return true;
+  if (ask && hostWithGuests() && !current.picking) {
+    hostLeaveSheet();
+    return false;
+  }
   if (ask) {
     const started = current.client.lobby?.started || current.client.lastState;
     const msg = current.client.isHost
@@ -259,7 +283,9 @@ function modal(content, { closable = true, cls = '' } = {}) {
 // ---------------------------------------------------------------------
 function showHome() {
   document.title = 'Game Center';
-  const saves = [...GAMES.values()].map((g) => ({ g, s: store.get(`gc.save.${g.id}`) })).filter(({ s }) => s && !s.over);
+  const saves = [...GAMES.values()]
+    .map((g) => ({ g, s: store.get(`gc.save.${g.id}`) }))
+    .filter(({ s }) => s && !s.over && !(current?.picking && s.online && s.code === current.room.code)); // not the table being picked for
   const guest = store.get('gc.guest');
   const code = h('input.gc-input.code', { placeholder: 'ABCDE', maxlength: 8, autocapitalize: 'characters', spellcheck: false, 'aria-label': 'Game code' });
   code.addEventListener('input', () => (code.value = code.value.toUpperCase().replace(/[^A-Z0-9]/g, '')));
@@ -299,6 +325,7 @@ function showHome() {
     h(
       'div.gc-page.home',
       topbar(),
+      groupBar(),
       h(
         'section.gc-hero',
         h('div.gc-hero-text', h('h1', 'Pull up a chair.'), h('p', 'Card and board games to play with friends and family online — or against computer players that actually play well.')),
@@ -460,7 +487,9 @@ function setupForm(game, { onChange = () => {} } = {}) {
 function playSheet(game, mode) {
   const solo = mode === 'solo';
   // Multiplayer in games that allow it: everyone on their own device, or pass this one around
-  const canShare = !solo && !!game.sameDevice;
+  // the host is picking the next game for the people at their table: same table and code
+  const group = !solo && current?.picking ? groupNames() : null;
+  const canShare = !solo && !!game.sameDevice && !group;
   let where = canShare ? prefs.get(`where.${game.id}`) || 'online' : 'online';
   const names = (prefs.get('localNames') || []).slice();
   const namesBox = h('div.gc-local');
@@ -541,7 +570,7 @@ function playSheet(game, mode) {
     codeNote,
   );
   function paintCode() {
-    codeBox.hidden = solo || where === 'here';
+    codeBox.hidden = solo || where === 'here' || !!group;
     codeInput.hidden = codeNote.hidden = codeMode !== 'mine';
   }
   paintCode();
@@ -552,7 +581,8 @@ function playSheet(game, mode) {
     h(
       'div.gc-play-sheet',
       { style: { '--accent': game.accent } },
-      h('div.gc-play-head', h('span.gc-play-art', { html: game.tile }), h('div', h('h2', game.name), h('small', solo ? 'Single player · against the computer' : canShare ? 'Multiplayer · online or on this device' : 'Multiplayer · friends join with a code'), h('button.gc-link.gc-play-rules', { type: 'button', onclick: () => rulesSheet(game) }, 'How to play'))),
+      h('div.gc-play-head', h('span.gc-play-art', { html: game.tile }), h('div', h('h2', game.name), h('small', solo ? 'Single player · against the computer' : group ? `Next game with ${group}` : canShare ? 'Multiplayer · online or on this device' : 'Multiplayer · friends join with a code'), h('button.gc-link.gc-play-rules', { type: 'button', onclick: () => rulesSheet(game) }, 'How to play'))),
+      group ? h('p.gc-play-note.gc-group-note', `Same table, code ${current.room.code}. ${group} ${group.includes(' and ') ? 'each get' : 'gets'} an invite to join, with ${INVITE_MS / 1000} seconds to answer.`) : null,
       whereField,
       namesBox,
       codeBox,
@@ -612,7 +642,7 @@ function seg2(label, value, choices, onchange) {
 }
 
 function showSetup(game) {
-  leaveCurrent(false);
+  leaveUnlessPicking();
   document.title = `${game.name} · Game Center`;
   const { fields, options, settings } = setupForm(game);
   const save = store.get(`gc.save.${game.id}`);
@@ -681,6 +711,14 @@ function hostOnline(game, options, settings, code = null) {
   const saved = prefs.get(`setup.${game.id}`) || {};
   options = options || saved.options || {};
   settings = settings || { speed: saved.speed || 'normal', botLevel: saved.botLevel || 'normal' };
+  if (current?.picking && !current.room.destroyed) {
+    // the next game with the same people: same table and code; each of them gets an invite
+    const { room } = current;
+    clearInterval(current.pickTick);
+    room.switchGame(game, options, settings);
+    current = { game, room, client: room.local, mode: 'host', voice: current.voice };
+    return go('#/lobby');
+  }
   leaveCurrent(false);
   const room = new HostRoom({ game, profile: { ...profile(), name: displayName() }, online: true, options, settings, code });
   current = { game, room, client: room.local, mode: 'host' };
@@ -731,7 +769,7 @@ function resumeHost(game, save) {
 function joinRoom(code) {
   code = code.toUpperCase();
   if (!profile().name) return editProfile(() => joinRoom(code));
-  if (current && !current.client.isHost && current.client.code === code) return current.client.lobby?.started ? showTable() : showLobby();
+  if (current && !current.client.isHost && current.client.code === code) return current.waiting ? undefined : current.client.lobby?.started ? showTable() : showLobby();
   leaveCurrent(false);
   const client = new GuestClient({ code, profile: { ...profile(), name: displayName() } });
   current = { game: null, client, mode: 'guest' };
@@ -754,8 +792,11 @@ function joinRoom(code) {
       return go('#/');
     }
   });
+  client.on('picking', (m) => showPicking(client, m));
+  client.on('invite', (m) => showInvite(client, m));
   client.on('lobby', (lobby) => {
     if (current?.client !== client || !current.game) return;
+    if (current.waiting || lobby.picking || lobby.gameId !== current.game.id) return; // between games: see showPicking
     if (lobby.started && !current.tableShown) {
       location.hash = '#/table';
       showTable();
@@ -766,11 +807,165 @@ function joinRoom(code) {
     leaveCurrent(false);
     go('#/');
   });
-  client.on('closed', () => {
-    toast('The host closed the table.', { kind: 'warn' });
+  client.on('closed', (m) => {
+    if (current?.client !== client) return;
+    if (!m?.quiet) toast('The host closed the table.', { kind: 'warn' });
     leaveCurrent(false);
     go('#/');
   });
+}
+
+// ---------------------------------------------------------------------
+// the next game with the same people
+// ---------------------------------------------------------------------
+// names of the other people at the host's table, for "Next game with Sara and Ben"
+function groupNames() {
+  const names = (current?.client.lobby?.players || []).filter((p) => !p.isHost && !p.device).map((p) => p.name);
+  return names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+}
+
+// The host taps Back at an online table with other people at it: pick another game for
+// everyone (they stay connected and get an invite: no new code), or close the table.
+function hostLeaveSheet() {
+  const sheet = modal(
+    h(
+      'div.gc-form.gc-leave-sheet',
+      h('h2', 'Leave this game?'),
+      h('p.gc-hint', `${groupNames()} ${groupNames().includes(' and ') ? 'are' : 'is'} still at your table.`),
+      h('button.btn.gold.big', { onclick: () => (sheet.close(), nextGame()) }, 'Pick another game for everyone'),
+      h('p.gc-hint', 'They stay connected and get an invite to the game you pick. Nobody types a code.'),
+      h('button.btn.ghost.big', { onclick: () => (sheet.close(), leaveCurrent(false), go('#/')) }, 'Close the table'),
+      h('p.gc-hint', 'Everyone is disconnected. The game is saved so you can reopen it later.'),
+      h('button.btn.text.gc-cancel', { onclick: () => sheet.close() }, 'Stay at the table'),
+    ),
+  );
+}
+
+// Host: off to the home page to pick the next game. The table stays open meanwhile (same
+// code); everyone else sees "<host> is picking the next game".
+function nextGame() {
+  if (!current?.client.isHost || !current.room?.online || current.room.destroyed) return;
+  playEnded('leave');
+  current.ui?.destroy?.();
+  const { room, voice } = current; // voice chat carries on into the next game
+  room.pickNext();
+  store.del(ACTIVE);
+  store.del('gc.hostLobby');
+  current = { game: current.game, room, client: room.local, mode: 'host', picking: room.picking, voice };
+  current.pickTick = setInterval(() => {
+    if (!current?.picking) return;
+    if (current.room.destroyed || Date.now() > current.picking) {
+      clearInterval(current.pickTick);
+      leaveCurrent(false);
+      toast('No game was picked in time, so the table closed.', { kind: 'warn', ms: 5000 });
+      return go('#/');
+    }
+    const t = $('.gc-group-bar .gc-group-time');
+    if (t) t.textContent = clock(current.picking - Date.now());
+  }, 1000);
+  document.body.classList.remove('in-game');
+  go('#/');
+}
+
+const clock = (ms) => {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+};
+
+// the bar along the top of the home page while the host picks the next game
+function groupBar() {
+  if (!current?.picking) return null;
+  return h(
+    'div.gc-group-bar',
+    h('span', { html: ICON.people }),
+    h('div.gc-group-text', h('strong', `Pick the next game for ${groupNames() || 'your table'}`), h('small', 'Tap Multiplayer on any game: they each get an invite to join. Table ', h('b', current.room.code), ' closes in ', h('span.gc-group-time', clock(current.picking - Date.now())), '.')),
+    h('button.btn.text', { onclick: () => (leaveCurrent(false), showHome()) }, 'Close the table'),
+  );
+}
+
+// Guest: the host is picking the next game. Stay connected; an invite pops up here.
+function showPicking(client, m) {
+  if (current?.client !== client) return;
+  current.ui?.destroy?.();
+  current.offLobby?.();
+  playEnded('leave');
+  current = { ...current, ui: null, tableShown: false, lobbyShown: false, waiting: true, play: null, offLobby: null };
+  document.body.classList.remove('in-game');
+  document.title = 'Next game · Game Center';
+  const chat = chatBox(client);
+  app.replaceChildren(
+    h(
+      'div.gc-page.connecting.gc-picking',
+      topbar({ back: () => (leaveCurrent(false), go('#/')) }),
+      h(
+        'div.gc-center',
+        h('div.gc-spinner'),
+        h('h2', `${m.host} is picking the next game`),
+        h('p', 'Stay here: an invite pops up as soon as it’s picked. You won’t need a code.'),
+        h('div.gc-picking-chat', chat.el),
+        h('button.btn.text', { onclick: () => (leaveCurrent(false), go('#/')) }, 'Leave the table'),
+      ),
+    ),
+  );
+}
+
+// Guest: the invite to the next game. Join, or not this time; no answer in time = not this time.
+function showInvite(client, m) {
+  if (current?.client !== client) return;
+  const game = GAMES.get(m.gameId);
+  if (!game) {
+    client.send({ t: 'invite', yes: false });
+    toast(`${m.host} picked ${m.name || 'a game'}, which this Game Center doesn’t have yet. Reload the page to get it.`, { kind: 'warn', ms: 6000 });
+    leaveCurrent(false);
+    return go('#/');
+  }
+  if (!current.waiting) showPicking(client, m); // the table behind the invite
+  document.querySelector('.gc-invite-sheet')?.closest('.gc-modal-wrap')?.remove();
+  let answered = false;
+  const time = h('span.gc-invite-time');
+  const bar = h('div.gc-invite-bar', h('i'));
+  const answer = (yes) => {
+    if (answered) return;
+    answered = true;
+    clearInterval(tick);
+    sheet.close();
+    if (current?.client !== client) return;
+    client.send({ t: 'invite', yes });
+    if (yes) {
+      current = { ...current, game, waiting: false, ui: null, tableShown: false, lobbyShown: false, play: null, joinTracked: false };
+      if (client.lobby?.started) {
+        location.hash = '#/table';
+        showTable();
+      } else showLobby();
+    } else {
+      setTimeout(() => (leaveCurrent(false), go('#/')), 300);
+      toast(`You left ${m.host}’s table.`);
+    }
+  };
+  const left = () => Math.max(0, m.until - Date.now() - 1500); // a little early: the host's clock may run ahead
+  const paint = () => {
+    time.textContent = clock(left());
+    bar.firstChild.style.width = `${(left() / INVITE_MS) * 100}%`;
+    if (left() <= 0) answer(false);
+  };
+  const tick = setInterval(paint, 250);
+  const sheet = modal(
+    h(
+      'div.gc-invite-sheet',
+      { style: { '--accent': game.accent } },
+      h('span.gc-play-art', { html: game.tile }),
+      h('h2', `${m.host} wants to play ${game.name}`),
+      h('p.gc-hint', game.tagline),
+      bar,
+      h('p.gc-invite-left', 'Answer in ', time),
+      h('div.gc-actions', h('button.btn.gold.big', { onclick: () => answer(true) }, 'Join'), h('button.btn.text', { onclick: () => answer(false) }, 'Not this time')),
+    ),
+    { closable: false, cls: 'invite' },
+  );
+  paint();
+  sound.turn();
+  navigator.vibrate?.([60, 40, 60]);
+  setTimeout(() => sheet.el.querySelector('.btn.gold')?.focus({ preventScroll: true }), 60);
 }
 
 function showConnecting(code) {
@@ -892,7 +1087,8 @@ function showLobby() {
         choices.map((c) => h('option', { value: c.value }, c.label)),
       );
     };
-    const watchers = lobby.players.filter((p) => p.seat == null);
+    const watchers = lobby.players.filter((p) => p.seat == null && !p.invited);
+    const invited = lobby.players.filter((p) => p.invited);
     const meWatching = !isHost && watchers.some((w) => w.id === client.playerId);
     const watchList = watchers.length
       ? h(
@@ -944,6 +1140,7 @@ function showLobby() {
             ? h('button.btn.ghost.gc-add-local', { onclick: () => addLocalSheet(game, client, room) }, '+ Add a player on this device')
             : null,
           watchList,
+          invited.length ? h('p.gc-hint.gc-invited', `Invited, waiting for an answer: ${invited.map((p) => p.name).join(', ')}`) : null,
         ),
         h(
           'section.gc-lobby-side',
@@ -1064,7 +1261,7 @@ function chatBox(client) {
 async function showTable() {
   if (!current) return go('#/');
   const { game, client } = current;
-  if (!game) return;
+  if (!game || current.waiting || current.picking) return;
   if (current.ui || current.tableShown) return;
   current.tableShown = true;
   document.title = `${game.name} · Game Center`;
@@ -1157,6 +1354,7 @@ async function showTable() {
     voice: online ? voiceFor() : null,
     rematch: (opts) => rematchControl(client, opts), // the shared Rematch button for game-over screens
     leave: () => {
+      if (hostWithGuests()) return hostLeaveSheet(); // pick another game for everyone, or close
       leaveCurrent(false);
       go('#/');
     },
