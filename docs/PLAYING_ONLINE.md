@@ -26,6 +26,31 @@ home page, **Step-by-step guide** in the lobby, the **?** button at the table, o
 2. Pick a name and color the first time, then wait for the host to start. If there's an
    empty seat you'd rather have, tap **Sit here** on it.
 
+## Nearby, with no internet
+For a table where nobody has internet (a shop, a barn, a trip). Everyone needs the Game
+Center opened once with internet first (see **Offline** below), and everyone on the same
+Wi-Fi, or one phone's hotspot with the others joined to it (it uses no mobile data for this).
+There is no Bluetooth option: web pages can't connect two phones over Bluetooth.
+1. The host taps **Multiplayer**, chooses **Nearby, no internet** under *Where is everyone?*,
+   and taps **Continue**. The lobby shows a square **join code** (a QR code).
+2. Each player taps **Join nearby · no internet** on the home page and points their camera
+   at the host's code. Their phone then shows a code of its own.
+3. The host taps **Scan their code** and points their camera at it. The player is seated.
+   The host's code changes for the next player.
+4. No camera? Under each code there's **Copy … code as text**; paste it into the box under
+   the camera.
+
+Everything works as online (seats, chat, rematch, another game for everyone) except voice
+chat. If a player's connection drops, there is no server to find the host again: their
+phone says so, and they scan the host's code again (the host taps **Add a player** at the
+top of the table to show it). They get their seat back.
+
+## Offline
+The first time the Game Center opens with internet, it quietly saves a copy of every game
+on the device (about 7 MB; after a new version, only what changed). From then on, with no
+internet: single player, pass and play, and nearby tables all work. Online tables need the
+internet.
+
 ## During the game
 - **Chat** with the bubble at the top: a small see-through panel drops down so you can
   type and still see the table. New messages flash under the top bar for a few seconds

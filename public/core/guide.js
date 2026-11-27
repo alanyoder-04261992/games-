@@ -41,6 +41,16 @@ export function onlineGuide({ onHost, onJoin } = {}) {
       onHost ? h('div.gd-cta', h('button.btn.gold', { onclick: onHost }, 'Host a Rook table now')) : null,
     ),
 
+    h('section.gd-section', h('h3', 'Nearby, with no internet'),
+      h('p', 'Everyone on the same Wi-Fi, or one phone turns on its hotspot and the others join it. No internet needed (open the Game Center once with internet first so it saves the games).'),
+      h('ol.gd-steps',
+        step(1, 'host', 'Host: choose “Nearby, no internet”', 'Tap ', h('b', 'Multiplayer'), ', pick ', h('b', 'Nearby, no internet'), ' and ', h('b', 'Continue'), '. A square join code appears.'),
+        step(2, 'code', 'Player: scan the host’s code', 'Tap ', h('b', 'Join nearby · no internet'), ' on the home page and point the camera at it. Your phone then shows a code.'),
+        step(3, 'seats', 'Host: scan the player’s code', 'Tap ', h('b', 'Scan their code'), ' and point the camera at their phone. They’re seated. Each player does the same.'),
+      ),
+      h('p.gd-note', 'Voice chat needs the internet. A player whose connection drops scans the host’s code again (the host taps Add a player at the top) and gets their seat back. No camera? Copy the code as text and paste it.'),
+    ),
+
     h('section.gd-section', h('h3', 'Join a table (everyone else)'),
       h('ol.gd-steps',
         step(1, 'link', 'Open the invite link', 'Tap the link the host sent. It opens the Game Center right at their table.'),

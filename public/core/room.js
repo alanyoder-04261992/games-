@@ -87,15 +87,18 @@ function loadPeer() {
 // Host
 // =====================================================================
 export class HostRoom extends Emitter {
-  constructor({ game, profile, online = false, options = {}, settings = {}, saved = null, code = null }) {
+  constructor({ game, profile, online = false, nearby = false, options = {}, settings = {}, saved = null, code = null }) {
     super();
     this.game = game;
     this.online = online;
+    // nearby play (core/nearby.js): online, but players connect by scanning QR codes over the
+    // local network, with no signalling server and no internet
+    this.nearby = !!(online && (nearby || saved?.nearby));
     // a code the host chose (or the one this table had before a refresh) is kept, never replaced
     this.fixedCode = !!(saved?.code || cleanCode(code));
     this.code = saved?.code || (online ? cleanCode(code) || roomCode() : null);
     this.peer = null;
-    this.status = online ? 'connecting' : 'offline';
+    this.status = this.nearby ? 'online' : online ? 'connecting' : 'offline';
     this.players = new Map();
     this.rematchVotes = new Set(); // players who said "I'm in" for a rematch after the game ended
     this.chatLog = saved?.chat || [];
@@ -123,7 +126,8 @@ export class HostRoom extends Emitter {
       this.started = false;
     }
     this.local = new LocalClient(this);
-    if (online) this.#listen();
+    if (online && !this.nearby) this.#listen();
+    else if (this.nearby) this.local.lobby = this.lobby(); // open at once: nothing to wait for
     this.heartbeat = setInterval(() => {
       this.#checkAlive();
       this.#checkPeer();
@@ -222,6 +226,11 @@ export class HostRoom extends Emitter {
     this.statusDetail = detail;
     this.local.emit('status', status, detail);
     this.#broadcastLobby();
+  }
+
+  // a connection made some other way (nearby play: QR codes) joins like any other
+  acceptLink(conn) {
+    if (!this.destroyed) this.#accept(conn);
   }
 
   #accept(conn) {
@@ -483,6 +492,7 @@ export class HostRoom extends Emitter {
     return {
       code: this.code,
       online: this.online,
+      nearby: this.nearby,
       status: this.status,
       statusDetail: this.statusDetail || '',
       gameId: this.game.id,
@@ -951,6 +961,7 @@ export class HostRoom extends Emitter {
       gameId: this.game.id,
       code: this.code,
       online: this.online,
+      nearby: this.nearby,
       options: this.options,
       settings: this.settings,
       seats: this.seats,
@@ -991,7 +1002,7 @@ class LocalClient extends Emitter {
     this.room = room;
     this.isHost = true;
     this.playerId = 'host';
-    this.status = room.online ? 'connecting' : 'offline';
+    this.status = room.status;
     this.on('status', (s) => (this.status = s));
   }
   get peer() {
@@ -1064,9 +1075,12 @@ function dispatch(client, msg) {
 // Guest
 // =====================================================================
 export class GuestClient extends Emitter {
-  constructor({ code, profile }) {
+  constructor({ code, profile, conn = null }) {
     super();
     this.code = code.toUpperCase();
+    // nearby play: the connection was made by swapping QR codes (core/nearby.js); if it
+    // drops there is no server to find the host again, so the player scans again
+    this.nearby = !!conn;
     this.profile = profile;
     this.isHost = false;
     this.playerId = null;
@@ -1078,7 +1092,8 @@ export class GuestClient extends Emitter {
     this.retries = 0;
     this.joinedAt = Date.now();
     this.lastHeard = Date.now();
-    this.#connect();
+    if (conn) this.#attach(conn);
+    else this.#connect();
     this.ping = setInterval(() => this.#tick(), 4000);
   }
 
@@ -1101,6 +1116,14 @@ export class GuestClient extends Emitter {
   }
 
   #lost() {
+    if (this.nearby) {
+      try {
+        this.conn?.close();
+      } catch {
+        /* gone */
+      }
+      return this.#gone();
+    }
     const conn = this.conn;
     this.conn = null;
     try {
@@ -1112,9 +1135,16 @@ export class GuestClient extends Emitter {
     this.#retry();
   }
 
+  // nearby play: the connection is gone for good; a new one takes a new pair of QR codes
+  #gone() {
+    this.conn = null;
+    this.#status('lost', 'Lost the connection to the host. Tap here, then scan the host’s join code again.');
+  }
+
   // the page came back to the front or the network came back: is the host still answering?
   wake() {
     if (this.closed) return;
+    if (!this.conn?.open && this.nearby) return;
     if (!this.conn?.open) {
       // waiting to try again: try now (with no timer set, a try is already under way)
       if (!this.retryTimer) return;
@@ -1184,10 +1214,17 @@ export class GuestClient extends Emitter {
     }
     if (this.closed) return;
     const conn = this.peer.connect(PEER_PREFIX + this.code, { reliable: true, serialization: 'json' });
+    this.#attach(conn);
+  }
+
+  #attach(conn) {
     this.conn = conn;
-    const timeout = setTimeout(() => {
-      if (!conn.open && this.conn === conn) this.#retry();
-    }, 9000);
+    // a nearby connection waits for the host to scan our code: no time limit on that
+    const timeout = this.nearby
+      ? null
+      : setTimeout(() => {
+          if (!conn.open && this.conn === conn) this.#retry();
+        }, 9000);
     conn.on('open', () => {
       clearTimeout(timeout);
       this.retries = 0;
@@ -1200,6 +1237,7 @@ export class GuestClient extends Emitter {
     });
     conn.on('close', () => {
       if (this.conn === conn && !this.closed) {
+        if (this.nearby) return this.#gone();
         this.#status('connecting', 'Lost connection, reconnecting…');
         this.#retry();
       }
@@ -1209,6 +1247,7 @@ export class GuestClient extends Emitter {
 
   #retry() {
     if (this.closed || this.retryTimer) return;
+    if (this.nearby) return this.#gone();
     this.retries++;
     // still never reached the host after a while: this network probably blocks the direct
     // connection. Say so (the app offers Try again) but keep trying in the background.
