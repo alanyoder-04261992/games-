@@ -10,6 +10,12 @@
   [headers.values]
     Cache-Control = "no-store"
 
+# the list of files for offline play (public/sw.js): always the current one
+[[headers]]
+  for = "/precache.json"
+  [headers.values]
+    Cache-Control = "no-store"
+
 # Play insights for the owner (docs/INSIGHTS.md): /api/track and /api/insights
 [functions]
   directory = "netlify/functions"

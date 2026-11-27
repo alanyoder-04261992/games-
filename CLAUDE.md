@@ -42,6 +42,15 @@ Games plug in as folders under `public/games/` — read `docs/ADDING_A_GAME.md` 
   game versions). Open pages notice a new deploy and show "Improved: <game> v1.8 — Tap to
   reload" (`public/core/updates.js`, which also does pull-to-refresh off the game table).
 
+## Offline and nearby play
+
+- Offline: `public/sw.js` downloads every file listed in `public/precache.json` (written at
+  deploy by `tools/stamp-build.mjs`, like `build.json`). Bump `VERSION` in sw.js to start over.
+- Nearby play (no internet): `public/core/nearby.js`. Players connect by swapping QR codes
+  (WebRTC offer/answer, deflated, base45); the connection then works like an online one
+  (`HostRoom.acceptLink`, `GuestClient({ conn })`). QR libraries are vendored in
+  `public/vendor/qr/`. No voice chat on nearby tables.
+
 ## Other house rules
 
 - Games register with one line in `public/games/index.js`; online play, chat, voice,

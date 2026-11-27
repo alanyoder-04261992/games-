@@ -49,7 +49,14 @@ async function boot() {
   window.addEventListener('online', wake);
   window.addEventListener('pageshow', wake);
   document.addEventListener('gc:next', () => hostWithGuests() && nextGame()); // "Different game" on a game-over screen
-  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  // offline mode: the helper keeps a copy of the whole Game Center on this device (sw.js);
+  // each visit with internet asks it to fetch whatever changed since
+  if ('serviceWorker' in navigator && location.protocol === 'https:')
+    navigator.serviceWorker
+      .register('sw.js')
+      .then(() => navigator.serviceWorker.ready)
+      .then((reg) => navigator.onLine && reg.active?.postMessage('precache'))
+      .catch(() => {});
   // "update ready" bar + pull to refresh (not at the table: dragging there belongs to the game)
   startUpdates({ games: GAMES, allowPull: () => !/^#\/?table/.test(location.hash) });
   track('open');
@@ -60,7 +67,7 @@ async function boot() {
 const ACTIVE = 'gc.active';
 function markActive() {
   const online = current && (current.client.isHost ? current.room?.online : true);
-  if (!online || !current.game || current.picking) return;
+  if (!online || !current.game || current.picking || current.client.nearby) return; // nearby: no server to find the host again
   const host = current.client.isHost;
   const role = host ? (current.client.lobby?.started ? 'host' : 'hostLobby') : 'guest';
   store.set(ACTIVE, { role, code: host ? current.room.code : current.client.code, gameId: current.game.id, at: Date.now() });
@@ -106,7 +113,7 @@ function route() {
     if (current) return showLobby();
     // a refresh while hosting a table that hasn't started: open it again with the same code
     const t = store.get('gc.hostLobby');
-    if (t && Date.now() - t.at < 12 * 3600e3 && GAMES.has(t.gameId)) return hostOnline(GAMES.get(t.gameId), t.options, t.settings, t.code);
+    if (t && Date.now() - t.at < 12 * 3600e3 && GAMES.has(t.gameId)) return hostOnline(GAMES.get(t.gameId), t.options, t.settings, t.code, { nearby: !!t.nearby });
     return go('#/');
   }
   if (page === 'help') {
@@ -155,6 +162,7 @@ function leaveCurrent(ask = true) {
   if (current.mode === 'host' && !current.room?.started) store.del('gc.hostLobby');
   current.ui?.destroy?.();
   current.voice?.destroy();
+  current.room?.nbHost?.close();
   current.client.leave();
   current = null;
   document.body.classList.remove('in-game');
@@ -341,6 +349,8 @@ function showHome() {
           },
           h('label', 'Join a friend’s table'),
           h('div.gc-join-row', code, h('button.btn.gold', { type: 'submit' }, 'Join')),
+          h('button.btn.ghost.gc-join-nearby', { type: 'button', onclick: () => needName(() => nearbyJoin()) }, 'Join nearby · no internet'),
+          navigator.onLine === false ? h('small.gc-offline-note', 'No internet right now. Single player, pass and play and ', h('b', 'Join nearby'), ' still work.') : null,
           h('small', 'Ask the host for the table code, or open their invite link. ', h('button.gc-link', { type: 'button', onclick: () => showGuide() }, 'How does online play work?')),
         ),
       ),
@@ -490,7 +500,10 @@ function playSheet(game, mode) {
   // the host is picking the next game for the people at their table: same table and code
   const group = !solo && current?.picking ? groupNames() : null;
   const canShare = !solo && !!game.sameDevice && !group;
-  let where = canShare ? prefs.get(`where.${game.id}`) || 'online' : 'online';
+  // where everyone is: own phones over the internet, own phones nearby with no internet
+  // (core/nearby.js), or (games that allow it) around this one device
+  let where = !solo && !group ? prefs.get(`where.${game.id}`) || 'online' : 'online';
+  if (where === 'here' && !canShare) where = 'online';
   const names = (prefs.get('localNames') || []).slice();
   const namesBox = h('div.gc-local');
   const { fields, options, settings } = setupForm(game, { onChange: () => drawNames() });
@@ -526,10 +539,11 @@ function playSheet(game, mode) {
       h('p.gc-play-note', game.sameDevice === 'private' ? 'Type a name for each person playing here; empty seats get computer players. Between turns the screen hides everyone\u2019s hand until the next player taps.' : 'Type a name for each person playing here; empty seats get computer players. Hand the device to whoever\u2019s turn it is.'),
     );
   }
-  const whereField = canShare
+  const whereField = !solo && !group
     ? seg2('Where is everyone?', () => where, [
         { value: 'online', label: 'Own phones (online)' },
-        { value: 'here', label: 'This device (pass and play)' },
+        { value: 'nearby', label: 'Nearby, no internet' },
+        ...(canShare ? [{ value: 'here', label: 'This device (pass and play)' }] : []),
       ], (v) => {
         where = v;
         prefs.set(`where.${game.id}`, v);
@@ -569,8 +583,13 @@ function playSheet(game, mode) {
     codeInput,
     codeNote,
   );
+  const nearbyNote = h(
+    'p.gc-play-note.gc-nearby-note',
+    'No internet needed. Everyone joins the same Wi-Fi, or one phone turns on its hotspot and the others join it. Each player scans a code on your screen, then you scan one on theirs.',
+  );
   function paintCode() {
-    codeBox.hidden = solo || where === 'here' || !!group;
+    codeBox.hidden = solo || where !== 'online' || !!group;
+    nearbyNote.hidden = where !== 'nearby' || !!group;
     codeInput.hidden = codeNote.hidden = codeMode !== 'mine';
   }
   paintCode();
@@ -581,10 +600,11 @@ function playSheet(game, mode) {
     h(
       'div.gc-play-sheet',
       { style: { '--accent': game.accent } },
-      h('div.gc-play-head', h('span.gc-play-art', { html: game.tile }), h('div', h('h2', game.name), h('small', solo ? 'Single player · against the computer' : group ? `Next game with ${group}` : canShare ? 'Multiplayer · online or on this device' : 'Multiplayer · friends join with a code'), h('button.gc-link.gc-play-rules', { type: 'button', onclick: () => rulesSheet(game) }, 'How to play'))),
+      h('div.gc-play-head', h('span.gc-play-art', { html: game.tile }), h('div', h('h2', game.name), h('small', solo ? 'Single player · against the computer' : group ? `Next game with ${group}` : canShare ? 'Multiplayer · online, nearby or on this device' : 'Multiplayer · online or nearby'), h('button.gc-link.gc-play-rules', { type: 'button', onclick: () => rulesSheet(game) }, 'How to play'))),
       group ? h('p.gc-play-note.gc-group-note', `Same table, code ${current.room.code}. ${group} ${group.includes(' and ') ? 'each get' : 'gets'} an invite to join, with ${INVITE_MS / 1000} seconds to answer.`) : null,
       whereField,
       namesBox,
+      nearbyNote,
       codeBox,
       ...fields,
       hasSave ? h('p.gc-play-note', `Continue starts a new game and replaces your saved one from ${ago(save.savedAt)}.`) : null,
@@ -594,15 +614,15 @@ function playSheet(game, mode) {
           'button.btn.gold.big',
           {
             onclick: () => {
-              const code = !solo && where !== 'here' && codeMode === 'mine' ? cleanCode(myCode) : null;
-              if (!solo && where !== 'here' && codeMode === 'mine' && !code) {
+              const code = !solo && where === 'online' && codeMode === 'mine' ? cleanCode(myCode) : null;
+              if (!solo && where === 'online' && codeMode === 'mine' && !code) {
                 toast('Type a table code of 4 to 8 letters or numbers', { kind: 'warn' });
                 return codeInput.focus();
               }
               sheet.close();
               if (solo) startSolo(game, options, settings, { replace: true });
               else if (where === 'here') startLocal(game, options, settings, names.slice(0, seatTotal() - 1));
-              else hostOnline(game, options, settings, code);
+              else hostOnline(game, options, settings, code, { nearby: where === 'nearby' });
             },
           },
           'Continue',
@@ -707,7 +727,7 @@ function startLocal(game, options, settings, names) {
   go('#/table');
 }
 
-function hostOnline(game, options, settings, code = null) {
+function hostOnline(game, options, settings, code = null, { nearby = false } = {}) {
   const saved = prefs.get(`setup.${game.id}`) || {};
   options = options || saved.options || {};
   settings = settings || { speed: saved.speed || 'normal', botLevel: saved.botLevel || 'normal' };
@@ -720,7 +740,7 @@ function hostOnline(game, options, settings, code = null) {
     return go('#/lobby');
   }
   leaveCurrent(false);
-  const room = new HostRoom({ game, profile: { ...profile(), name: displayName() }, online: true, options, settings, code });
+  const room = new HostRoom({ game, profile: { ...profile(), name: displayName() }, online: true, nearby, options, settings, code });
   current = { game, room, client: room.local, mode: 'host' };
   go('#/lobby');
 }
@@ -774,6 +794,11 @@ function joinRoom(code) {
   const client = new GuestClient({ code, profile: { ...profile(), name: displayName() } });
   current = { game: null, client, mode: 'guest' };
   showConnecting(code);
+  wireGuest(client, code);
+}
+
+// what a guest's screen does with what the table sends (online, or nearby via QR codes)
+function wireGuest(client, code) {
   const offStatus = client.on('status', (s, detail) => {
     if (s === 'notfound') {
       offStatus();
@@ -781,6 +806,7 @@ function joinRoom(code) {
       toast(`No table found with code ${code}. Check the code and that the host has the game open.`, { ms: 5000, kind: 'warn' });
       go('#/');
     } else if (s === 'unreachable' && current?.client === client && !current.game) showUnreachable(code, client);
+    else if (s === 'lost' && current?.client === client) nearbyLost(client);
     else if (current?.client === client) updateConnBadge(s, detail);
   });
   client.on('welcome', (msg) => {
@@ -968,6 +994,122 @@ function showInvite(client, m) {
   setTimeout(() => sheet.el.querySelector('.btn.gold')?.focus({ preventScroll: true }), 60);
 }
 
+// ---------------------------------------------------------------------
+// nearby play, no internet: joining by swapping QR codes (see core/nearby.js)
+// ---------------------------------------------------------------------
+const nearbyMod = () => import('./nearby.js');
+function isNearby() {
+  return !!(current?.room?.nearby || current?.client?.nearby);
+}
+
+async function copyText(text) {
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Code copied. Paste it on the other device.');
+  } catch {
+    prompt('Copy this code:', text);
+  }
+}
+
+// a pop-up with the camera reading a code (and a box to paste one); closes once onCode is happy
+async function scanSheet(title, onCode, intro = null) {
+  const m = await nearbyMod();
+  let sheet = null;
+  const sc = m.scanner({
+    onCode: async (text) => {
+      await onCode(text);
+      sheet?.close();
+    },
+  });
+  sheet = modal(h('div.gc-form.gc-scan-sheet', h('h2', title), intro, sc.el), { cls: 'scan' });
+  const stopWhenClosed = new MutationObserver(() => {
+    if (!sheet.el.isConnected) {
+      sc.stop();
+      stopWhenClosed.disconnect();
+    }
+  });
+  stopWhenClosed.observe(document.body, { childList: true });
+  return sheet;
+}
+
+// Host: the join code a player scans, and the button to scan the code on their screen. One
+// panel per table, kept across repaints of the lobby so the code on screen doesn't change.
+function nearbyPanel(room) {
+  if (room.nbPanel) return room.nbPanel;
+  const qr = h('div.gc-nb-qr', h('div.gc-spinner'));
+  let offer = null;
+  const fresh = async () => {
+    try {
+      const m = await nearbyMod();
+      room.nbHost ||= new m.NearbyHost(room);
+      offer = await room.nbHost.offer();
+      qr.replaceChildren(await m.qrCode(offer.text));
+    } catch (e) {
+      qr.replaceChildren(h('p.gc-hint.warn', e.message || 'Could not make a join code on this device.'));
+    }
+  };
+  const take = async (text) => {
+    const conn = await room.nbHost.answer(text); // a wrong or old code says why, and the camera keeps looking
+    toast('Connecting the player…');
+    const t = setTimeout(() => !conn.open && toast('Still connecting. Check you are both on the same Wi-Fi or hotspot.', { kind: 'warn', ms: 6000 }), 12000);
+    conn.on('open', () => clearTimeout(t));
+    fresh(); // the next player gets a new code
+  };
+  room.nbPanel = h(
+    'div.gc-nearby',
+    h('p.gc-nb-step', h('b', '1.'), ' The player taps ', h('b', 'Join nearby'), ' on their home page and scans this code:'),
+    qr,
+    h('p.gc-nb-step', h('b', '2.'), ' Their phone then shows a code. Scan it:'),
+    h('div.gc-actions', h('button.btn.gold', { onclick: () => scanSheet('Scan the player’s code', take) }, 'Scan their code'), h('button.btn.text.small', { onclick: () => copyText(offer?.text) }, 'Copy join code as text')),
+  );
+  fresh();
+  return room.nbPanel;
+}
+
+// Player: scan the host's join code, then show our own code for the host to scan.
+function nearbyJoin() {
+  if (!profile().name) return editProfile(() => nearbyJoin());
+  let sheet = null;
+  const intro = h('p.gc-hint', 'Be on the same Wi-Fi as the host, or join the host’s hotspot. Then scan the join code on the host’s screen.');
+  scanSheet('Join a nearby table', async (text) => {
+    const m = await nearbyMod();
+    const r = await m.answerOffer(text);
+    if (!GAMES.get(r.gameId)) throw new Error('That table plays a game this Game Center doesn’t have yet. Update it with internet first.');
+    leaveCurrent(false);
+    const client = new GuestClient({ code: r.code, profile: { ...profile(), name: displayName() }, conn: r.conn });
+    current = { game: null, client, mode: 'guest' };
+    wireGuest(client, r.code);
+    sheet = modal(
+      h(
+        'div.gc-form.gc-scan-sheet',
+        h('h2', `Now show this to ${r.host}`),
+        h('p.gc-hint', `${r.host} taps `, h('b', 'Scan their code'), ' and points their camera at your screen.'),
+        h('div.gc-nb-qr', await m.qrCode(r.text)),
+        h('button.btn.text.small', { onclick: () => copyText(r.text) }, 'Copy my code as text'),
+        h('p.gc-nb-wait', h('span.gc-spinner.small'), `Waiting for ${r.host}…`),
+      ),
+      { cls: 'scan' },
+    );
+    client.on('welcome', () => sheet?.close());
+  }, intro);
+}
+
+// a nearby connection dropped: there is no server to find the host again, so scan again
+function nearbyLost(client) {
+  if (client.lostShown) return;
+  client.lostShown = true;
+  const host = client.lobby?.players?.find((p) => p.isHost)?.name || 'the host';
+  const sheet = modal(
+    h(
+      'div.gc-form',
+      h('h2', 'Lost the connection'),
+      h('p', `Your phone lost its connection to ${host}. Your seat is kept: ask ${host} to tap Add a player at the top of their screen (in the lobby the join code is already showing), then scan it again.`),
+      h('div.gc-actions', h('button.btn.gold', { onclick: () => (sheet.close(), nearbyJoin()) }, 'Scan the join code again'), h('button.btn.text', { onclick: () => sheet.close() }, 'Not now')),
+    ),
+  );
+}
+
 function showConnecting(code) {
   app.replaceChildren(
     h(
@@ -1034,7 +1176,7 @@ function showLobby() {
     const url = `${location.origin}${location.pathname}#/join/${lobby.code}`;
     const isHost = client.isHost;
     // remembered so a refresh reopens this table with the same code (see route)
-    if (isHost) store.set('gc.hostLobby', { gameId: game.id, options: lobby.options, settings: lobby.settings, code: lobby.code, at: Date.now() });
+    if (isHost) store.set('gc.hostLobby', { gameId: game.id, options: lobby.options, settings: lobby.settings, code: lobby.code, nearby: !!lobby.nearby, at: Date.now() });
     const seatCard = (s) => {
       const label = game.seatLabels?.[s.seat] || `Seat ${s.seat + 1}`;
       const team = game.teams ? game.teams.findIndex((t) => t.includes(s.seat)) : -1;
@@ -1112,10 +1254,17 @@ function showLobby() {
         )
       : null;
     page.replaceChildren(
-      topbar({ back: () => leaveCurrent() && go('#/'), title: `${game.name} · online table` }),
+      topbar({ back: () => leaveCurrent() && go('#/'), title: `${game.name} · ${lobby.nearby ? 'nearby table' : 'online table'}` }),
       h(
         'div.gc-lobby',
-        h(
+        lobby.nearby
+          ? h(
+              'section.gc-invite.gc-invite-nearby',
+              h('small', 'Nearby table · no internet'),
+              isHost ? nearbyPanel(room) : h('div.gc-conn-line', h('span.gc-conn', { dataset: { status: client.status } }), 'Connected to the host'),
+              h('p.gc-hint', 'Everyone on the same Wi-Fi or the host’s hotspot. Empty seats get computer players when you start. ', h('button.gc-link', { onclick: () => showGuide() }, 'How nearby play works')),
+            )
+          : h(
           'section.gc-invite',
           h('small', 'Table code'),
           h('div.gc-code', lobby.code || '·····'),
@@ -1152,8 +1301,8 @@ function showLobby() {
             h('li', h('span', 'Speed'), h('strong', SPEEDS[lobby.settings.speed]?.label || '')),
           ),
           isHost ? h('button.btn.text', { onclick: () => lobbyOptions(game, room) }, 'Change rules') : null,
-          h('h2', 'Voice chat'),
-          voiceBox(),
+          lobby.nearby ? null : h('h2', 'Voice chat'),
+          lobby.nearby ? null : voiceBox(),
           h('h2', 'Chat'),
           chat.el,
         ),
@@ -1269,6 +1418,7 @@ async function showTable() {
   current.offLobby?.();
   const stage = h('div.gc-stage');
   const online = client.isHost ? current.room.online : true;
+  const talk = online && !isNearby(); // voice chat needs the internet's connection help
   const chatPanel = online ? chatBox(client) : null;
   // Chat drops down from the top bar as a small see-through panel: type and read while the
   // table stays in view. Closed, new messages show for a few seconds in a strip (the peek).
@@ -1310,10 +1460,10 @@ async function showTable() {
   const bar = h(
     'div.gc-gamebar',
     h('button.gc-icon-btn', { onclick: () => leaveCurrent() && go('#/'), title: 'Back to Game Center', 'aria-label': 'Back' }, h('span', { html: ICON.back })),
-    h('div.gc-gamebar-title', h('strong', game.name), online ? h('button.gc-room-chip', { onclick: () => inviteSheet(game, code) }, h('span.gc-conn', { dataset: { status: client.isHost ? current.room.status : client.status } }), code) : null, online ? talkingPill() : null),
+    h('div.gc-gamebar-title', h('strong', game.name), online ? h('button.gc-room-chip', { onclick: () => inviteSheet(game, code) }, h('span.gc-conn', { dataset: { status: client.isHost ? current.room.status : client.status } }), isNearby() ? (client.isHost ? 'Add a player' : 'Nearby') : code) : null, talk ? talkingPill() : null),
     h(
       'div.gc-gamebar-right',
-      online ? micButton() : null,
+      talk ? micButton() : null,
       online
         ? h(
             'button.gc-icon-btn',
@@ -1331,7 +1481,7 @@ async function showTable() {
       h('button.gc-icon-btn', { title: 'How to play', onclick: () => rulesSheet(game, online) }, h('span', { html: ICON.help })),
     ),
   );
-  const offline = h('div.gc-offline-banner');
+  const offline = h('div.gc-offline-banner', { onclick: () => client.nearby && client.status === 'lost' && nearbyJoin() });
   app.replaceChildren(h('div.gc-table-page', bar, stage, offline, drawer, online ? peek : null));
   client.on('status', (s, detail) => {
     $('.gc-gamebar .gc-conn')?.setAttribute('data-status', s);
@@ -1351,7 +1501,7 @@ async function showTable() {
     game,
     prefs,
     toast,
-    voice: online ? voiceFor() : null,
+    voice: talk ? voiceFor() : null,
     rematch: (opts) => rematchControl(client, opts), // the shared Rematch button for game-over screens
     leave: () => {
       if (hostWithGuests()) return hostLeaveSheet(); // pick another game for everyone, or close
@@ -1669,6 +1819,10 @@ function loadStyles(game) {
 }
 
 function inviteSheet(game, code) {
+  if (isNearby()) {
+    if (current.client.isHost) return modal(h('div.gc-form', h('h2', 'Add a player nearby'), nearbyPanel(current.room)));
+    return modal(h('div.gc-form', h('h2', 'Nearby table'), h('p', 'This table has no internet code. To bring someone in, the host taps Add a player at the top of their screen and shows them the join code to scan.')));
+  }
   const url = `${location.origin}${location.pathname}#/join/${code}`;
   modal(
     h(
